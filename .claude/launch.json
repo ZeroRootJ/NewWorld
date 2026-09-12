@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "generation-dashboard",
+      "runtimeExecutable": "D:\\WORKSPACE\\SPACEX\\.venv\\Scripts\\python.exe",
+      "runtimeArgs": ["subprojects/generation-dashboard/app.py"],
+      "port": 5050
+    }
+  ]
+}

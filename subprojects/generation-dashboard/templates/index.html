@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Truth Model Generation Dashboard</title>
+<style>
+  html, body { height: 100%; margin: 0; font-family: 'Segoe UI', system-ui, sans-serif; font-size: 13px; }
+  .app { display: flex; height: 100vh; background: #1a1c2e; }
+
+  /* ---- Sidebar (dark) ---- */
+  .sidebar { width: 300px; min-width: 300px; display: flex; flex-direction: column; height: 100vh;
+    background: #252840; color: #dde3f4; border-right: 1px solid #363a5a; }
+  .sb-header { padding: 14px 16px; background: #1a1c2e; border-bottom: 1px solid #363a5a; flex-shrink: 0; }
+  .sb-header h1 { font-size: 15px; margin: 0 0 2px 0; color: #a8d8ea; }
+  .sb-header p { font-size: 11px; margin: 0; color: #818aaa; }
+  .sb-body { flex: 1; overflow-y: auto; padding: 12px; }
+  .sb-footer { padding: 12px 14px; flex-shrink: 0; background: #1a1c2e; border-top: 1px solid #363a5a; }
+
+  .card { background: #2d3050; border: 1px solid #3b3f62; border-radius: 7px; padding: 11px 12px; margin-bottom: 10px; }
+  .card-title { font-size: 12px; font-weight: 700; color: #a8d8ea; margin-bottom: 8px; letter-spacing: 0.3px; }
+  .field { margin-bottom: 8px; }
+  .field:last-child { margin-bottom: 0; }
+  .field label { display: flex; justify-content: space-between; align-items: baseline; font-size: 11.5px; color: #c3c9e6; margin-bottom: 3px; }
+  .field label .code { font-family: Consolas, monospace; color: #a8d8ea; font-weight: 600; }
+  .field label .hint { color: #818aaa; font-size: 10.5px; font-weight: 400; }
+  .field input[type=number], .field input[type=text] {
+    width: 100%; box-sizing: border-box; padding: 5px 7px; border: 1px solid #464a6e; border-radius: 4px;
+    background: #1a1c2e; color: #dde3f4; font-size: 12px;
+  }
+  .field input[type=range] { width: 100%; }
+  .row2 { display: flex; gap: 8px; }
+  .row2 .field { flex: 1; }
+
+  .sim-btn { width: 100%; padding: 11px; border: none; border-radius: 6px;
+    background: linear-gradient(135deg, #a8d8ea, #7ec8c8); color: #1a1c2e; font-size: 13.5px; font-weight: 700;
+    cursor: pointer; letter-spacing: 0.3px; transition: opacity 0.15s, transform 0.1s; }
+  .sim-btn:hover:not(:disabled) { transform: translateY(-1px); }
+  .sim-btn:disabled { background: #444; color: #777; cursor: not-allowed; transform: none; }
+
+  .preset-row { display: flex; gap: 6px; margin-top: 8px; }
+  .preset-btn { flex: 1; padding: 7px; border: 1px solid #6d8fae; border-radius: 6px; background: transparent;
+    color: #a8d8ea; font-size: 11.5px; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+  .preset-btn:hover { background: #6d8fae; color: #1a1c2e; }
+  .preset-select { width: 100%; margin-top: 8px; padding: 5px 7px; border: 1px solid #464a6e; border-radius: 4px;
+    background: #1a1c2e; color: #dde3f4; font-size: 12px; }
+
+  /* ---- Main (light) ---- */
+  .main { flex: 1; height: 100vh; overflow-y: auto; background: #f0f2f8; display: flex; flex-direction: column; }
+  .top-bar { background: #fff; border-bottom: 1px solid #dde2ee; padding: 10px 20px; flex-shrink: 0;
+    display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+  .top-bar h2 { font-size: 14px; margin: 0; color: #2b2d42; }
+  .status { font-size: 11.5px; color: #818aaa; }
+  .content { padding: 20px; flex: 1; }
+
+  .result-img-wrap { background: #fff; border: 1px solid #dde2ee; border-radius: 8px; padding: 12px;
+    text-align: center; margin-bottom: 16px; }
+  .result-img-wrap img { max-width: 100%; height: auto; }
+  .placeholder { color: #9aa1bd; text-align: center; padding: 80px 20px; font-size: 13px; }
+
+  table.qc-table { width: 100%; border-collapse: collapse; background: #fff; border: 1px solid #dde2ee;
+    border-radius: 8px; overflow: hidden; }
+  table.qc-table th, table.qc-table td { padding: 8px 12px; text-align: right; font-size: 12px; border-bottom: 1px solid #eef0f7; }
+  table.qc-table th { background: #f7f8fc; color: #555b7a; text-align: right; }
+  table.qc-table th:first-child, table.qc-table td:first-child { text-align: left; }
+  table.qc-table caption { text-align: left; font-size: 12.5px; font-weight: 700; color: #2b2d42; padding: 4px 0 8px 0; caption-side: top; }
+
+  #toast { position: fixed; bottom: 18px; right: 18px; padding: 9px 14px; border-radius: 6px; background: #2b2d42;
+    color: #fff; font-size: 12px; z-index: 2000; opacity: 0; transition: opacity 0.28s; pointer-events: none; max-width: 380px;
+    box-shadow: 0 3px 12px rgba(0,0,0,0.25); }
+  #toast.show { opacity: 1; }
+  #toast.ok  { background: #2d6a4f; }
+  #toast.err { background: #c1121f; }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <div class="sidebar">
+    <div class="sb-header">
+      <h1>Truth Model Dashboard</h1>
+      <p>Single-facies porosity truth field (SGS)</p>
+    </div>
+
+    <div class="sb-body">
+
+      <div class="card">
+        <div class="card-title">Grid</div>
+        <div class="row2">
+          <div class="field">
+            <label><span class="code">nx</span><span class="hint">cells (X)</span></label>
+            <input type="number" id="p-nx" min="2" max="500" step="1" value="50">
+          </div>
+          <div class="field">
+            <label><span class="code">ny</span><span class="hint">cells (Y)</span></label>
+            <input type="number" id="p-ny" min="2" max="500" step="1" value="50">
+          </div>
+        </div>
+        <div class="field">
+          <label><span class="code">xsiz = ysiz</span><span class="hint">cell size (m), square cells only</span></label>
+          <input type="number" id="p-cell_size" min="0.1" step="1" value="20.0">
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Porosity distribution</div>
+        <div class="row2">
+          <div class="field">
+            <label><span class="code">mean</span></label>
+            <input type="number" id="p-mean" step="0.1" value="15.0">
+          </div>
+          <div class="field">
+            <label><span class="code">stdev</span></label>
+            <input type="number" id="p-stdev" min="0.001" step="0.1" value="3.0">
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Variogram (spherical, 1 structure)</div>
+        <div class="field">
+          <label><span class="code">nug</span><span class="hint">nugget, fraction of sill [0-1]</span></label>
+          <input type="range" id="p-nug-range" min="0" max="1" step="0.01" value="0.05"
+                 oninput="document.getElementById('p-nug').value=this.value">
+          <input type="number" id="p-nug" min="0" max="1" step="0.01" value="0.05"
+                 oninput="document.getElementById('p-nug-range').value=this.value">
+        </div>
+        <div class="row2">
+          <div class="field">
+            <label><span class="code">hmaj1</span><span class="hint">major range (m)</span></label>
+            <input type="number" id="p-hmaj1" min="0.1" step="10" value="300.0">
+          </div>
+          <div class="field">
+            <label><span class="code">hmin1</span><span class="hint">minor range (m)</span></label>
+            <input type="number" id="p-hmin1" min="0.1" step="10" value="300.0">
+          </div>
+        </div>
+        <div class="field">
+          <label><span class="code">azi1</span><span class="hint">azimuth of major axis (deg)</span></label>
+          <input type="number" id="p-azi1" min="0" max="360" step="5" value="0.0">
+        </div>
+        <div class="field" style="margin-top:4px;">
+          <span class="hint" style="font-size:10.5px;color:#818aaa;">hmaj1 = hmin1 -&gt; isotropic. Different values -&gt; anisotropic (ratio = hmaj1/hmin1).</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Realizations</div>
+        <div class="row2">
+          <div class="field">
+            <label><span class="code">seed</span><span class="hint">base seed</span></label>
+            <input type="number" id="p-seed" step="1" value="101">
+          </div>
+          <div class="field">
+            <label><span class="code">n_real</span><span class="hint">count (1-9)</span></label>
+            <input type="number" id="p-n_real" min="1" max="9" step="1" value="5">
+          </div>
+        </div>
+        <div class="field">
+          <span class="hint" style="font-size:10.5px;color:#818aaa;">Realizations use seeds seed, seed+1, ..., seed+n_real-1.</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-title">Presets</div>
+        <select class="preset-select" id="preset-select"></select>
+        <div class="preset-row">
+          <button class="preset-btn" onclick="loadPreset()">Load</button>
+          <button class="preset-btn" onclick="savePresetPrompt()">Save as...</button>
+        </div>
+      </div>
+
+    </div>
+
+    <div class="sb-footer">
+      <button class="sim-btn" id="sim-btn" onclick="runSimulate()">&#9654; Simulate</button>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="top-bar">
+      <h2>Result</h2>
+      <span class="status" id="status">idle</span>
+    </div>
+    <div class="content">
+      <div class="result-img-wrap" id="img-wrap">
+        <div class="placeholder">Set parameters on the left and click Simulate.</div>
+      </div>
+      <div id="qc-wrap"></div>
+    </div>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+const FIELD_IDS = ["nx", "ny", "cell_size", "mean", "stdev", "nug", "hmaj1", "hmin1", "azi1", "seed", "n_real"];
+
+function getParams() {
+  const p = {};
+  for (const id of FIELD_IDS) {
+    const el = document.getElementById("p-" + id);
+    p[id] = parseFloat(el.value);
+  }
+  return p;
+}
+
+function setParams(p) {
+  for (const id of FIELD_IDS) {
+    if (p[id] !== undefined && p[id] !== null) {
+      const el = document.getElementById("p-" + id);
+      el.value = p[id];
+      if (id === "nug") document.getElementById("p-nug-range").value = p[id];
+    }
+  }
+}
+
+function showToast(msg, ok) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.className = "show " + (ok ? "ok" : "err");
+  setTimeout(() => { t.className = ""; }, 3200);
+}
+
+function setStatus(s) {
+  document.getElementById("status").textContent = s;
+}
+
+async function runSimulate() {
+  const btn = document.getElementById("sim-btn");
+  btn.disabled = true;
+  setStatus("running simulation...");
+  try {
+    const resp = await fetch("/api/simulate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(getParams()),
+    });
+    const data = await resp.json();
+    if (!data.success) {
+      showToast("Simulation failed: " + data.error, false);
+      setStatus("error");
+      return;
+    }
+    renderResult(data);
+    setStatus("done (" + data.qc.length + " realization" + (data.qc.length > 1 ? "s" : "") + ")");
+    showToast("Simulation complete", true);
+  } catch (err) {
+    showToast("Request failed: " + err, false);
+    setStatus("error");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function renderResult(data) {
+  const wrap = document.getElementById("img-wrap");
+  wrap.innerHTML = "";
+  const img = document.createElement("img");
+  img.src = "data:image/png;base64," + data.image_base64;
+  wrap.appendChild(img);
+
+  const qcWrap = document.getElementById("qc-wrap");
+  let rows = data.qc.map(r =>
+    `<tr><td>Realization ${r.realization}</td><td>${r.seed}</td><td>${r.mean.toFixed(4)}</td><td>${r.stdev.toFixed(4)}</td></tr>`
+  ).join("");
+  qcWrap.innerHTML = `
+    <table class="qc-table">
+      <caption>QC statistics per realization (target mean=${data.params.mean}, stdev=${data.params.stdev})</caption>
+      <thead><tr><th>Realization</th><th>Seed</th><th>Actual mean</th><th>Actual stdev</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+async function refreshPresetList(selectName) {
+  const sel = document.getElementById("preset-select");
+  try {
+    const resp = await fetch("/api/presets");
+    const data = await resp.json();
+    sel.innerHTML = "";
+    if (data.success) {
+      for (const name of data.presets) {
+        const opt = document.createElement("option");
+        opt.value = name;
+        opt.textContent = name;
+        sel.appendChild(opt);
+      }
+      if (selectName) sel.value = selectName;
+    }
+  } catch (err) {
+    showToast("Failed to list presets: " + err, false);
+  }
+}
+
+async function loadPreset() {
+  const sel = document.getElementById("preset-select");
+  const name = sel.value;
+  if (!name) { showToast("No preset selected", false); return; }
+  try {
+    const resp = await fetch("/api/presets/load?name=" + encodeURIComponent(name));
+    const data = await resp.json();
+    if (!data.success) { showToast("Load failed: " + data.error, false); return; }
+    setParams(data.params);
+    showToast("Loaded preset '" + data.name + "'", true);
+  } catch (err) {
+    showToast("Request failed: " + err, false);
+  }
+}
+
+async function savePresetPrompt() {
+  const name = prompt("Preset name:");
+  if (!name) return;
+  try {
+    const resp = await fetch("/api/presets/save", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name, params: getParams() }),
+    });
+    const data = await resp.json();
+    if (!data.success) { showToast("Save failed: " + data.error, false); return; }
+    showToast("Saved preset '" + data.name + "'", true);
+    refreshPresetList(data.name);
+  } catch (err) {
+    showToast("Request failed: " + err, false);
+  }
+}
+
+// Initial load: populate preset list and load base_case by default.
+(async function init() {
+  await refreshPresetList("base_case");
+  const sel = document.getElementById("preset-select");
+  if ([...sel.options].some(o => o.value === "base_case")) {
+    sel.value = "base_case";
+    await loadPreset();
+  }
+})();
+</script>
+</body>
+</html>

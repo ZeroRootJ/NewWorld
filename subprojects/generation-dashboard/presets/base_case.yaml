@@ -1,0 +1,16 @@
+# Base case truth-model parameters.
+# Must match the DEFAULT_* constants in ../app.py and the base case
+# described in docs/experiment_context.md section 3 (isotropic, moderate
+# range, low nugget). Do not edit ad hoc -- if the base case changes,
+# update both this file and app.py's DEFAULT_* constants together.
+nx: 50
+ny: 50
+cell_size: 20.0
+mean: 15.0
+stdev: 3.0
+nug: 0.05
+hmaj1: 300.0
+hmin1: 300.0
+azi1: 0.0
+seed: 101
+n_real: 5
