@@ -1,0 +1,8 @@
+.idea/
+.venv/
+__pycache__/
+*.pyc
+
+# 원본 시뮬레이션 출력은 용량이 크고 재실행으로 재현 가능하므로 git에 올리지 않는다.
+# 가공 결과(results/processed, results/figures)는 논문에 직접 쓰이므로 추적한다.
+results/raw/
