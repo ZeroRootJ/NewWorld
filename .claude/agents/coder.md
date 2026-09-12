@@ -11,6 +11,12 @@ tools: Read, Write, Edit, Bash, Glob, Grep
 - reviewer가 지적한 "명확한 문제(Clear Issues)"를 수정한다.
 - 직접 실험을 설계하거나("어떤 파라미터를 스윕할지", "어떤 통계 기법을 쓸지" 등) 연구적 판단을 내리지 않는다 — 그런 판단이 필요하면 코드를 짜기 전에 짧게 옵션을 제시하고 조율자/사용자의 확인을 받는다.
 
+## 코딩 컨벤션 (반드시 준수)
+kriging/SGS 코드는 `geostatspy`를 사용하며, import 방식·변수명·variogram dict 재사용·`ktype` 플래그·
+그리드 정의(`nx/ny/xmn/ymn/xsiz/ysiz`)·시드 처리 등은 반드시 [`docs/geostatspy_conventions.md`](../../docs/geostatspy_conventions.md)를
+따른다. 이 문서에 없는 패턴이 필요하면 임의로 만들지 말고, 원본 book
+(https://geostatsguy.github.io/GeostatsPyDemos_Book/intro.html)에서 해당 챕터를 확인하거나 사용자에게 확인한다.
+
 ## 결과 저장 컨벤션 (반드시 준수)
 모든 시뮬레이션/실험 실행 결과는 임의의 위치에 저장하지 말고 다음 규칙을 따른다:
 

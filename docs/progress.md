@@ -9,8 +9,11 @@ Deliverable Order (설계 문서 7절 기준) — 각 단계는 이전 단계에
 - [ ] 3. Nugget 변화 실험
 - [ ] 4. Extrapolation / data configuration 변화 실험
 - [ ] 5. Anisotropy 변화 실험
+- [ ] TODO (신규, 미확정): axis 5 — sample count/sparsity 변화 실험. 구체적 단계는 base case 결과를
+      보고 결정 예정 ([experiment_context.md](./experiment_context.md) 3절 참고)
 
 ## 로그
 | 날짜 | 단계 | 상태 | 비고 |
 |---|---|---|---|
 | 2026-09-11 | - | 연구 handoff 문서 수령, 프로젝트에 반영 | 아직 구현 시작 전 |
+| 2026-09-12 | 1 | Base case 파라미터 확정: grid 50x50 (20m cell, 1000x1000m 도메인), porosity mean=15.0/stdev=3.0, isotropic range≈300m, low nugget, 100 samples(10x10 규칙 격자, interior) | axis 5(sample count) TODO 추가 |

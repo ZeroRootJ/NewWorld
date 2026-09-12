@@ -107,6 +107,13 @@ explicitly in the code as named constants so the variations are obvious diffs.
   ARD can in principle learn it, but with sparse data may learn the wrong
   direction — a failure mode worth showing explicitly.
 
+**5. Sample count / sparsity (TODO — added 2026-09-12, not yet specced)**
+- 별도 축으로: 샘플 **개수**를 base case(100) 대비 줄여가며(예: 100 → 50 → 25) sparsity 자체가
+  4개 방법의 calibration에 미치는 영향을 측정한다. Sample *위치/구성*(convex hull 안/밖)을 바꾸는
+  axis 3과는 분리한다 — axis 3은 여전히 샘플 개수를 base case와 동일하게 고정해서 "configuration
+  자체의 효과"만 보는 통제된 실험으로 유지한다 (밑에 원래 문구 그대로 둠).
+- 구체적인 sample count 단계, margin, 배치 규칙은 base case 결과를 본 뒤 정한다 — 지금은 TODO.
+
 ---
 
 ## 4. Methods to Compare

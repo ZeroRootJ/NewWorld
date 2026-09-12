@@ -33,6 +33,7 @@ tools: Read, Grep, Glob, Bash
 ## 그 외 체크리스트
 - 재현성: 랜덤 시드 고정 여부, 하드코딩된 절대경로, 환경/버전 의존성
 - 저장 컨벤션 준수: `results/raw/<experiment>/<timestamp>/manifest.json`이 생성되고 params/seed/git_commit이 기록되는지
+- geostatspy 컨벤션 준수: [`docs/geostatspy_conventions.md`](../../docs/geostatspy_conventions.md) 기준으로 variogram dict 공유, `ktype` 명시, 그리드 변수명, 이중 정규분포 변환 여부 등을 확인. 이 문서에 없는 패턴을 임의로 도입한 경우 "명확한 문제"가 아니라 "판단이 필요한 사항"으로 분류할지 검토 (원본 book과 명백히 다른 관행인지 애매하면 후자로).
 - 필요하면 Bash로 테스트나 정적 분석을 실행해서 근거를 확보한다 (파일을 수정하는 명령은 사용하지 않는다)
 
 ## 출력 형식
