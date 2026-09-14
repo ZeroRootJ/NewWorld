@@ -17,3 +17,5 @@ Deliverable Order (설계 문서 7절 기준) — 각 단계는 이전 단계에
 |---|---|---|---|
 | 2026-09-11 | - | 연구 handoff 문서 수령, 프로젝트에 반영 | 아직 구현 시작 전 |
 | 2026-09-12 | 1 | Base case 파라미터 확정: grid 50x50 (20m cell, 1000x1000m 도메인), porosity mean=15.0/stdev=3.0, isotropic range≈300m, low nugget, 100 samples(10x10 규칙 격자, interior) | axis 5(sample count) TODO 추가 |
+| 2026-09-13 | 1 | 샘플링 파라미터 변경: 이후 4개 방법 비교 실험(RBF+bootstrap, GP-MLE)에서는 100개(10x10 규칙 격자) 대신 500개(20%, 랜덤 interior sampling)로 변경됨 — 사용자 결정. `src/experiments/base_case_conditioning.py`의 `N_SAMPLES=500`이 단일 소스 | 위 100개 규칙 격자 기록은 base_case.py 자체(truth 생성)에는 영향 없음 — 참고용으로 유지 |
+| 2026-09-13 | 1 | RBF+bootstrap 방법론 확정: (A) bootstrap replicate 수는 파이프라인 검증 단계인 지금은 `N_BOOTSTRAP=10` 유지, 논문용 최종 결과 산출 시 100~1000으로 상향 예정 — 아직 미확정이므로 그때 다시 결정. (B) bootstrap replicate마다 RBF 하이퍼파라미터(ε, smoothing)를 재튜닝하지 않고, 원본 454개 샘플로 한 번 CV-MSE 튜닝한 값을 10개 replicate 전부에 고정 재사용 — "bootstrap은 샘플셋 변동성만 포착한다"는 `experiment_context.md`의 Claim 1 서술과 부합하는 설계로 최종 확정(사용자 결정, 재론 불필요) | RBF+bootstrap/GP-MLE 코드는 이 결정대로 이미 구현되어 있음 (변경 없음) |

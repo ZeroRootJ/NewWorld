@@ -25,7 +25,7 @@ import json
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 # Repo root = parent of the directory this file lives in (src/ -> repo root)
 _REPO_ROOT = Path(__file__).resolve().parent.parent
@@ -53,6 +53,41 @@ def get_git_commit(repo_dir: Optional[Union[str, Path]] = None) -> Optional[str]
         return None
     commit = result.stdout.strip()
     return commit if commit else None
+
+
+def get_git_status(repo_dir: Optional[Union[str, Path]] = None) -> Tuple[Optional[bool], List[str]]:
+    """Return (git_dirty, git_dirty_files) for the working tree at repo_dir.
+
+    ``git_dirty`` is True if ``git status --porcelain`` reports any changed/
+    untracked files relative to HEAD, False if the tree is clean, or None if
+    git status could not be determined (not a git repo, git unavailable,
+    etc.) -- mirrors ``get_git_commit``'s never-raise behavior so experiment
+    runs are never blocked by an incomplete git setup.
+
+    This exists so a manifest can record whether a run was produced from a
+    commit exactly as committed, or from a dirty working tree (e.g. "ran
+    before committing") -- without this, ``git_commit`` alone can be
+    misleading about what code actually produced the run.
+    """
+    repo_dir = Path(repo_dir) if repo_dir is not None else _REPO_ROOT
+    try:
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=str(repo_dir),
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except (OSError, FileNotFoundError):
+        return None, []
+    if result.returncode != 0:
+        return None, []
+    lines = [line for line in result.stdout.splitlines() if line.strip()]
+    # Each porcelain line is "XY <path>" (or "XY <path> -> <path>" for
+    # renames); strip the 2-char status code + separating space to keep just
+    # the path(s).
+    dirty_files = [line[3:] for line in lines]
+    return (len(lines) > 0), dirty_files
 
 
 def make_run_dir(experiment: str, output_dir: Union[str, Path] = "results/raw") -> Path:
@@ -107,10 +142,18 @@ def save_result(
         target_dir = Path(run_dir)
         target_dir.mkdir(parents=True, exist_ok=True)
 
+    git_dirty, git_dirty_files = get_git_status()
+
     manifest = {
         "experiment": experiment,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "git_commit": get_git_commit(),
+        # git_dirty / git_dirty_files: added fields, additive-only relative
+        # to the original manifest schema (existing fields unchanged), so
+        # scripts/consumers relying on the older schema are unaffected.
+        # git_dirty is None (not True/False) if it could not be determined.
+        "git_dirty": git_dirty,
+        "git_dirty_files": git_dirty_files,
         "params": params,
         "seed": seed_or_seeds,
         "code_entrypoint": code_entrypoint,
