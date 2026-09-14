@@ -25,7 +25,7 @@
 - 의존성은 `requirements.txt`에 고정한다 (`.venv` 기준, Python 3.8).
 
 ## 팀 구조
-이 프로젝트는 4개 역할로 나뉜다.
+이 프로젝트는 5개 역할로 나뉜다.
 
 | 역할 | 형태 | 하는 일 |
 |---|---|---|
@@ -33,21 +33,22 @@
 | `coder` | 서브에이전트 (`.claude/agents/coder.md`) | 시뮬레이션/분석 코드 작성, 저장 컨벤션 준수 |
 | `reviewer` | 서브에이전트 (`.claude/agents/reviewer.md`) | 코드 검수. **애매한 판단은 절대 스스로 내리지 않고 사용자에게 보고** |
 | `data-curator` | 서브에이전트 (`.claude/agents/data-curator.md`) | 누적된 결과 감사·집계·논문용 가공. 이것도 애매한 판단은 사용자에게 보고 |
+| `literature-scout` | 서브에이전트 (`.claude/agents/literature-scout.md`) | 논문 집필에 필요한 선행연구/참고문헌을 인터넷에서 조사해 `docs/references.md`에 정리. 관련성 판단은 사용자에게 보고 |
 
-기본 흐름: 사용자와 방향 논의 → `coder` 구현 → `reviewer` 검수 (문제 있으면 `coder`가 수정, 판단 필요 사항은 사용자에게 보고 후 확정) → 시뮬레이션 실행 → 결과 누적 → 필요 시 `data-curator`로 정리·가공.
+기본 흐름: 사용자와 방향 논의 → `coder` 구현 → `reviewer` 검수 (문제 있으면 `coder`가 수정, 판단 필요 사항은 사용자에게 보고 후 확정) → 시뮬레이션 실행 → 결과 누적 → 필요 시 `data-curator`로 정리·가공. 필요 시 `literature-scout`으로 관련 문헌 조사는 병행/독립적으로 진행.
 
 ## 디렉토리 구조
 ```
 SPACEX/
 ├── CLAUDE.md
-├── .claude/agents/          # coder, reviewer, data-curator 정의
+├── .claude/agents/          # coder, reviewer, data-curator, literature-scout 정의
 ├── src/                     # 시뮬레이션/분석 코드
 ├── results/
 │   ├── raw/                 # 원본 시뮬레이션 출력 (git 추적 안 함, 용량 큰 경우가 많음)
 │   │   └── <experiment>/<timestamp>/manifest.json
 │   ├── processed/           # data-curator가 가공한 논문용 데이터 (git 추적)
 │   └── figures/             # 논문용 그림 (git 추적)
-├── docs/                    # 논문 초안, 실험 노트
+├── docs/                    # 논문 초안, 실험 노트, references.md(참고문헌, literature-scout이 관리)
 └── tests/
 ```
 
@@ -55,5 +56,5 @@ SPACEX/
 모든 시뮬레이션 실행은 `results/raw/<experiment_name>/<timestamp>/`에 저장하고, 다음 필드를 포함한 `manifest.json`을 반드시 남긴다: `experiment`, `timestamp`, `git_commit`, `params`, `seed`, `code_entrypoint`, `output_files`. 자세한 내용은 `.claude/agents/coder.md` 참고.
 
 ## 원칙
-- `reviewer`와 `data-curator`는 확신이 없는 사안을 임의로 결론짓지 않는다. "명확한 문제/사실"과 "판단이 필요한 사항"을 분리해서 보고하고, 후자는 항상 사용자 확인을 거친다.
+- `reviewer`, `data-curator`, `literature-scout`은 확신이 없는 사안을 임의로 결론짓지 않는다. "명확한 문제/사실"과 "판단이 필요한 사항"을 분리해서 보고하고, 후자는 항상 사용자 확인을 거친다.
 - `results/raw/`는 원본이므로 어떤 에이전트도 사후에 수정하지 않는다. 가공은 항상 `results/processed/`에 새로 생성한다.
