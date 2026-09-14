@@ -105,19 +105,41 @@ RADIUS = 9999  # effectively unlimited search radius, combined with ndmax above
 KB2D_TMIN, KB2D_TMAX = -9999, 9999
 
 # --- Back-transform (normal-score -> physical porosity units) parameters -
-# +/-10 stdev (widened from +/-4, project decision 2026-09-14, reviewer-
-# flagged issue): src/evaluation.py's kriging_fraction_in back-transforms the
-# per-cell NS-space interval [kmap_ns + z_lo*std_ns, kmap_ns + z_hi*std_ns]
-# to physical units for every nominal probability p, and z_lo/z_hi -> +/-inf
-# as p -> 1. With only +/-4 stdev of "reach", any cell with a moderately
-# large kriging variance already saturates BACKTR_ZMIN/ZMAX at a p well
-# below 1, which pins its UMG accuracy-plot curve to the [ZMIN, ZMAX] clip
-# instead of tracking that cell's actual (possibly poorly calibrated) NS
-# interval -- an artifact of the clip's tightness, not of the kriging model
-# itself. This risk grows on the nugget/range axes planned in
-# docs/experiment_context.md (larger kriging variance cells), so the bound
-# is widened to +/-10 stdev to push the clip point much further out into
-# genuinely negligible-probability territory before it can bias fraction_in.
+# +/-4 stdev (reverted from +/-10, project decision 2026-09-14, second
+# reversal same day -- see docs/progress.md for both). History:
+#
+# (a) Originally +/-4 stdev. A 2026-09-14 review found that
+#     src/evaluation.py's kriging_fraction_in back-transforms the per-cell
+#     NS-space interval [kmap_ns + z_lo*std_ns, kmap_ns + z_hi*std_ns] to
+#     physical units for every nominal probability p, and z_lo/z_hi -> +/-inf
+#     as p -> 1. With only +/-4 stdev of "reach", any cell with a moderately
+#     large kriging variance already saturates BACKTR_ZMIN/ZMAX at a p well
+#     below 1, which pins its UMG accuracy-plot curve to the [ZMIN, ZMAX]
+#     clip instead of tracking that cell's actual (possibly poorly
+#     calibrated) NS interval -- an artifact of the clip's tightness, not of
+#     the kriging model itself. The bound was widened to +/-10 stdev
+#     ([-15, 45]) to push this clip point further into negligible-probability
+#     territory.
+# (b) Later the same day, adding the physical-units Monte Carlo kriging
+#     variance approximation (kriging_var_map_physical_mc.npy, see below)
+#     exposed the opposite failure mode of (a)'s fix: with zmax=45, cells
+#     whose predictive distribution (in normal-score space) has appreciable
+#     mass beyond the normal-score transform table's range (vrg in
+#     [-2.64, 2.64], i.e. physical [8.35, 22.07]) get back-transformed via
+#     the LINEAR tail extrapolation (LTAIL=UTAIL=1) all the way out to the
+#     now-much-more-permissive 45% bound, producing physically implausible
+#     draws and inflating that single cell's Monte Carlo physical-unit
+#     variance to ~61 %^2 (vs. <=5 %^2 everywhere else) and distorting the
+#     shared variance color scale in the truth/predictions figures.
+# (c) Project decision 2026-09-14: revert to +/-4 stdev ([3, 27]), accepting
+#     that (a)'s tail-clipping-bias risk in kriging_fraction_in/UMG may
+#     reappear (especially on the larger-kriging-variance nugget/range axes
+#     planned in docs/experiment_context.md) as the lesser of the two
+#     tradeoffs. Do not re-litigate this choice -- it has already been
+#     explained to and confirmed by the user; if the tail-clipping symptom in
+#     (a) resurfaces on a later axis, that is an accepted, known consequence
+#     of this reversion, not a new bug to silently "fix" by re-widening this
+#     constant again.
 #
 # NOT solved by any finite bound, and not intended to be: exactly at p=1
 # (z_lo=-inf, z_hi=+inf), the NS-space interval is unbounded regardless of
@@ -128,10 +150,128 @@ KB2D_TMIN, KB2D_TMAX = -9999, 9999
 # quantile back-transform table applied to an unbounded normal-score
 # interval, not a bug -- do not re-investigate "why kriging's curve/behavior
 # at p=1 looks different" without first re-reading this comment.
-BACKTR_ZMIN = POR_MEAN - 10 * POR_STDEV
-BACKTR_ZMAX = POR_MEAN + 10 * POR_STDEV
+BACKTR_ZMIN = POR_MEAN - 4 * POR_STDEV
+BACKTR_ZMAX = POR_MEAN + 4 * POR_STDEV
 LTAIL, LTPAR = 1, BACKTR_ZMIN
 UTAIL, UTPAR = 1, BACKTR_ZMAX
+
+# --- Monte Carlo physical-units kriging variance (project decision
+# 2026-09-14, see task description for the "Truth & predictions" figure
+# rework) ---------------------------------------------------------------
+# geostats.backtr_value only back-transforms a single scalar at a time, so
+# calling it directly inside a per-cell x per-MC-draw Python loop
+# (NX*NY*N_MC calls) would be far too slow. Since this project always uses
+# LTAIL=1, UTAIL=1 (linear tail extrapolation, see BACKTR_ZMIN/ZMAX/LTAIL/
+# UTAIL above), geostats.dpowint is always called with cpow=1.0 (pure linear
+# interpolation) -- backtr_value_vectorized below is a numpy-vectorized
+# reimplementation valid ONLY for that ltail=1/utail=1 case, verified
+# against the reference geostats.backtr_value in main() (see
+# "backtr_vectorized_max_abs_diff_vs_reference" in the manifest).
+KRIGING_VAR_MC_SEED = 80  # does not collide with TRUTH_SEED=101, SAMPLE_SEED=20,
+# CV_SEED=40, BOOTSTRAP_SEED=30, GP_RANDOM_STATE=50, GP_SAMPLE_SEED=55,
+# SGS_SEED=60, SGS_JITTER_SEED=70 used elsewhere in this comparison.
+BACKTR_VALIDATION_SEED = 85  # separate seed, only used to pick the random
+# kmap_ns test values compared against the reference geostats.backtr_value
+# below -- does not affect any saved result array, kept fixed/recorded
+# anyway for full reproducibility of the validation step itself.
+N_BACKTR_VALIDATION_SAMPLES = 500  # >= the 200 minimum specified in the task
+N_MC = 5000  # Monte Carlo draws per grid cell
+
+
+def _gcum_vectorized(x):
+    """Numpy-vectorized standard normal CDF, written to be numerically
+    identical to ``geostatspy.geostats.gcum`` (validated in main() below via
+    comparison against the scalar reference).
+
+    NOTE: this is deliberately NOT ``scipy.stats.norm.cdf`` -- geostats.gcum
+    is itself only a polynomial *approximation* to the normal CDF (accurate
+    to ~5 decimal places, per its own docstring), and geostats.backtr_value
+    calls THIS approximation, not the exact CDF. Substituting scipy's exact
+    CDF here would introduce a small but real discrepancy against the
+    reference this function must reproduce for the mandatory validation
+    below to pass at a tight tolerance. (Confirmed close to double-precision
+    agreement with geostats.gcum in ad hoc testing while developing this
+    function, well within the ~1e-5 accuracy geostats.gcum itself claims.)
+    """
+    x = np.asarray(x, dtype=float)
+    z = np.abs(x)
+    t = 1.0 / (1.0 + 0.231_641_9 * z)
+    poly = t * (
+        0.319_381_53
+        + t * (-0.356_563_782 + t * (1.781_477_937 + t * (-1.821_255_978 + t * 1.330_274_429)))
+    )
+    e2 = np.where(z <= 6, np.exp(-z * z / 2.0) * 0.398_942_280_3, 0.0)
+    gcum_pos = 1.0 - e2 * poly
+    return np.where(x >= 0.0, gcum_pos, 1.0 - gcum_pos)
+
+
+def backtr_value_vectorized(vrgs, vr, vrg, zmin, zmax, ltail, ltpar, utail, utpar):
+    """Numpy-vectorized equivalent of ``geostatspy.geostats.backtr_value``,
+    valid ONLY for ``ltail == 1 and utail == 1`` (linear tail extrapolation,
+    ``cpow=1.0`` in GSLIB's ``dpowint``) -- the only case this project's
+    kriging/SGS/RBF/GP back-transforms ever use. Raises ``NotImplementedError``
+    for any other ltail/utail rather than silently returning a wrong answer.
+
+    ``vrgs`` may be a scalar or an array of any shape; the return value has
+    the same shape.
+
+    Reproduces geostats.backtr_value's THREE distinct branches exactly
+    (verified against the scalar reference in main(), not merely assumed
+    equivalent):
+
+    1. Interior (``vrg[0] < vrgs < vrg[-1]``): GSLIB's own ``backtr_value``
+       source calls ``dlocate`` (whose ``bisect`` is applied to
+       ``vrg[1:nt-1]`` -- i.e. excluding BOTH endpoints -- with the resulting
+       0-indexed position then used, unmodified, as an index into the FULL
+       ``vrg``/``vr`` arrays, then clamped to ``[1, nt-2]``) to find the
+       bracketing table segment, then does a **plain linear interpolation
+       directly in raw normal-score (``vrg``) space** between that segment's
+       two table points -- it does NOT go through ``gcum`` at all for
+       interior points. This is intentionally reproduced below via
+       ``np.searchsorted(vrg[1:nt-1], vrgs, side="right")`` (``side="right"``
+       matches Python's ``bisect.bisect`` == ``bisect_right``, which is what
+       ``dlocate`` calls), clamped the same way, rather than via a single
+       global ``np.interp(vrgs, vrg, vr)`` -- a naive full-table
+       ``np.interp`` does NOT reproduce this because it uses the true
+       bracketing segment (including segments touching index 0 or nt-1),
+       whereas the reference's clamp silently discards the first and last
+       table segments as valid brackets. This was confirmed empirically
+       while implementing this function: naive ``np.interp`` disagreed with
+       the reference by up to ~0.75 (physical units) for a handful of test
+       points near the table's extremes, exactly the cells where this
+       clamping quirk changes which segment is used.
+    2. Lower tail (``vrgs <= vrg[0]``): linear interpolation in *gcum(vrgs)*
+       (CDF) space between (0.0, zmin) and (gcum(vrg[0]), vr[0]).
+    3. Upper tail (``vrgs >= vrg[-1]``): linear interpolation in *gcum(vrgs)*
+       space between (gcum(vrg[-1]), vr[-1]) and (1.0, zmax).
+    """
+    if ltail != 1 or utail != 1:
+        raise NotImplementedError(
+            "backtr_value_vectorized only implements/validates the ltail=1, "
+            f"utail=1 (linear tail) case used by this project; got "
+            f"ltail={ltail}, utail={utail}."
+        )
+    vrgs = np.asarray(vrgs, dtype=float)
+    nt = len(vr)
+
+    # --- Interior: replicate geostats.dlocate's exact (quirky) indexing --
+    sub = vrg[1 : nt - 1]
+    j_raw = np.searchsorted(sub, vrgs, side="right")
+    j = np.clip(j_raw, 1, nt - 2)
+    x0, x1 = vrg[j], vrg[j + 1]
+    y0, y1 = vr[j], vr[j + 1]
+    with np.errstate(invalid="ignore", divide="ignore"):
+        interior = y0 + (y1 - y0) * ((vrgs - x0) / (x1 - x0))
+
+    # --- Tails: linear extrapolation in gcum (CDF) space ------------------
+    cdfbt = _gcum_vectorized(vrgs)
+    cdflo = _gcum_vectorized(vrg[0])
+    lower = zmin + (vr[0] - zmin) * (cdfbt / cdflo)
+    cdfhi = _gcum_vectorized(vrg[nt - 1])
+    upper = vr[nt - 1] + (zmax - vr[nt - 1]) * ((cdfbt - cdfhi) / (1.0 - cdfhi))
+
+    return np.where(vrgs <= vrg[0], lower, np.where(vrgs >= vrg[nt - 1], upper, interior))
+
 
 EXPERIMENT_NAME = "kriging"
 CODE_ENTRYPOINT = "src/experiments/kriging.py"
@@ -203,7 +343,18 @@ def main():
 
     # --- Back-transform the point estimate to physical units -------------
     # Variance is intentionally NOT back-transformed here (see module
-    # docstring) -- vmap_ns is saved as-is, in normal-score units.
+    # docstring) -- vmap_ns is saved as-is, in normal-score units. This loop
+    # is left unchanged (still the scalar geostats.backtr_value, not the new
+    # vectorized version below) so kmap_physical always goes through the
+    # reference (non-vectorized) implementation directly -- the vectorized
+    # version is validated against this same reference call below before it
+    # is trusted for the Monte Carlo variance step. NOTE: kmap_physical's
+    # actual numeric values DO depend on BACKTR_ZMIN/BACKTR_ZMAX (see above
+    # for their current value and history) since cells whose NS estimate
+    # falls in either tail of the transform table are extrapolated out to
+    # those bounds -- so this map is NOT expected to be bit-for-bit identical
+    # across runs that used different BACKTR_ZMIN/ZMAX values (e.g. the
+    # earlier +/-10 stdev pinned run results/raw/kriging/20260914T144604Z).
     kmap_physical = np.empty((NY, NX))
     for iy in range(NY):
         for ix in range(NX):
@@ -218,6 +369,83 @@ def main():
                 utail=UTAIL,
                 utpar=UTPAR,
             )
+
+    # --- Validate backtr_value_vectorized against the reference scalar
+    # geostats.backtr_value (mandatory, per task spec -- do not proceed on
+    # mismatch) -----------------------------------------------------------
+    # Draw N_BACKTR_VALIDATION_SAMPLES (>= 200) values from the ACTUAL
+    # kmap_ns array (not synthetic values) -- these are exactly the kind of
+    # value the Monte Carlo step below will feed through this function millions
+    # of times, so validating on this array's own value range is the most
+    # direct test of correctness for this run.
+    validation_rng = np.random.default_rng(BACKTR_VALIDATION_SEED)
+    validation_values = validation_rng.choice(
+        kmap_ns.ravel(), size=N_BACKTR_VALIDATION_SAMPLES, replace=True
+    )
+    reference_backtr = np.array(
+        [
+            geostats.backtr_value(
+                v, vr, vrg, zmin=BACKTR_ZMIN, zmax=BACKTR_ZMAX,
+                ltail=LTAIL, ltpar=LTPAR, utail=UTAIL, utpar=UTPAR,
+            )
+            for v in validation_values
+        ]
+    )
+    vectorized_backtr = backtr_value_vectorized(
+        validation_values, vr, vrg, BACKTR_ZMIN, BACKTR_ZMAX, LTAIL, LTPAR, UTAIL, UTPAR
+    )
+    backtr_vectorized_max_abs_diff_vs_reference = float(
+        np.max(np.abs(reference_backtr - vectorized_backtr))
+    )
+    if not np.allclose(reference_backtr, vectorized_backtr, rtol=1e-8, atol=1e-8):
+        raise RuntimeError(
+            "backtr_value_vectorized does not match the reference "
+            "geostats.backtr_value within tolerance (max abs diff = "
+            f"{backtr_vectorized_max_abs_diff_vs_reference}) -- refusing to "
+            "proceed with the Monte Carlo variance step on an unvalidated "
+            "back-transform. See backtr_value_vectorized's docstring for the "
+            "known dlocate-indexing quirk this function must reproduce."
+        )
+    print(
+        f"backtr_value_vectorized validated against reference geostats.backtr_value "
+        f"on {N_BACKTR_VALIDATION_SAMPLES} samples drawn from kmap_ns "
+        f"(max abs diff = {backtr_vectorized_max_abs_diff_vs_reference:.3e})."
+    )
+
+    # --- Monte Carlo physical-units kriging variance (project decision
+    # 2026-09-14) -----------------------------------------------------------
+    # This is an APPROXIMATION (see kriging_var_map_physical_mc_note below),
+    # not an exact analytic back-transform of the variance: for each cell we
+    # assume NPor ~ N(kmap_ns[cell], sqrt(vmap_ns[cell])) in normal-score
+    # space (exactly the simple-kriging Gaussian posterior at that cell,
+    # ignoring spatial correlation across cells -- fine for a per-cell
+    # variance-only estimate), draw N_MC samples, back-transform every draw
+    # to physical units via the validated vectorized function, and take the
+    # per-cell sample variance of the back-transformed draws.
+    t_mc_start = time.time()
+    # vmap_ns can be a tiny negative number (~1e-15) at cells with essentially
+    # zero kriging variance, from floating-point roundoff in kb2d -- clip to
+    # 0 before sqrt (verified: only ever negative at magnitude ~1e-15, never a
+    # real negative variance).
+    std_ns_flat = np.sqrt(np.clip(vmap_ns, 0.0, None)).ravel()
+    kmap_ns_flat = kmap_ns.ravel()
+    n_cells = kmap_ns_flat.shape[0]
+
+    mc_rng = np.random.default_rng(KRIGING_VAR_MC_SEED)
+    # Shape (n_cells, N_MC): fully vectorized draw + back-transform, no
+    # per-cell/per-draw Python loop.
+    ns_draws = mc_rng.normal(
+        loc=kmap_ns_flat[:, None], scale=std_ns_flat[:, None], size=(n_cells, N_MC)
+    )
+    physical_draws = backtr_value_vectorized(
+        ns_draws, vr, vrg, BACKTR_ZMIN, BACKTR_ZMAX, LTAIL, LTPAR, UTAIL, UTPAR
+    )
+    kriging_var_map_physical_mc = physical_draws.var(axis=1, ddof=1).reshape(NY, NX)
+    mc_seconds = time.time() - t_mc_start
+    print(
+        f"Monte Carlo physical-units variance: {n_cells} cells x {N_MC} draws "
+        f"took {mc_seconds:.2f}s"
+    )
 
     total_seconds = time.time() - t_start
 
@@ -237,6 +465,7 @@ def main():
         ("kriging_mean_map_physical.npy", kmap_physical),
         ("kriging_var_map_ns.npy", vmap_ns),
         ("kmap_ns.npy", kmap_ns),
+        ("kriging_var_map_physical_mc.npy", kriging_var_map_physical_mc),
     ]:
         np.save(run_dir / name, arr)
         output_files.append(name)
@@ -304,13 +533,44 @@ def main():
         },
         "kriging_variance_units": "normal-score (not back-transformed)",
         "kb2d_seconds": kb2d_seconds,
+        "backtr_validation": {
+            "seed": BACKTR_VALIDATION_SEED,
+            "n_samples": N_BACKTR_VALIDATION_SAMPLES,
+            "backtr_vectorized_max_abs_diff_vs_reference": backtr_vectorized_max_abs_diff_vs_reference,
+        },
+        "kriging_var_mc": {
+            "seed": KRIGING_VAR_MC_SEED,
+            "n_mc": N_MC,
+            "backtr_vectorized_max_abs_diff_vs_reference": backtr_vectorized_max_abs_diff_vs_reference,
+            "mc_seconds": mc_seconds,
+        },
+        "kriging_var_map_physical_mc_note": (
+            "kriging_var_map_physical_mc.npy is a Monte Carlo APPROXIMATION, "
+            "not an exact analytic back-transform of the kriging variance: "
+            "for each cell it assumes NPor ~ N(kmap_ns[cell], "
+            "sqrt(vmap_ns[cell])) independently in normal-score space (the "
+            "simple-kriging Gaussian posterior at that cell, ignoring "
+            "spatial correlation of the error across cells), draws N_MC "
+            "samples, back-transforms them to physical porosity units via "
+            "the validated backtr_value_vectorized, and takes the per-cell "
+            "sample variance of the back-transformed draws. It is provided "
+            "for visualization/comparison against SGS/RBF/GP physical-unit "
+            "variance maps (project decision 2026-09-14), not as a "
+            "replacement for kriging_var_map_ns.npy in any calibration-metric "
+            "computation."
+        ),
         "total_seconds": total_seconds,
     }
 
     manifest_path = save_result(
         experiment=EXPERIMENT_NAME,
         params=params,
-        seed_or_seeds={"truth_seed": TRUTH_SEED, "sample_seed": SAMPLE_SEED},
+        seed_or_seeds={
+            "truth_seed": TRUTH_SEED,
+            "sample_seed": SAMPLE_SEED,
+            "backtr_validation_seed": BACKTR_VALIDATION_SEED,
+            "kriging_var_mc_seed": KRIGING_VAR_MC_SEED,
+        },
         run_dir=run_dir,
         code_entrypoint=CODE_ENTRYPOINT,
         output_files=output_files,
@@ -322,7 +582,11 @@ def main():
     print(f"n_samples_used_by_kb2d = {n_samples_used_by_kb2d}")
     print(f"kmap_physical range: [{kmap_physical.min():.4f}, {kmap_physical.max():.4f}]")
     print(f"vmap_ns range: [{vmap_ns.min():.4f}, {vmap_ns.max():.4f}]")
-    print(f"kb2d took {kb2d_seconds:.2f}s, total {total_seconds:.2f}s")
+    print(
+        f"kriging_var_map_physical_mc range: "
+        f"[{kriging_var_map_physical_mc.min():.4f}, {kriging_var_map_physical_mc.max():.4f}]"
+    )
+    print(f"kb2d took {kb2d_seconds:.2f}s, MC variance took {mc_seconds:.2f}s, total {total_seconds:.2f}s")
 
     return run_dir, manifest_path, samples_df
 

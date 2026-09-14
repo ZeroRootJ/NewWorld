@@ -1,7 +1,7 @@
 {
   "kriging": {
-    "run_dir": "results/raw/kriging/20260914T144604Z",
-    "timestamp": "20260914T144604Z"
+    "run_dir": "results/raw/kriging/20260914T184654Z",
+    "timestamp": "20260914T184654Z"
   },
   "sgs": {
     "run_dir": "results/raw/sgs/20260914T141516Z",
@@ -12,7 +12,7 @@
     "timestamp": "20260914T135501Z"
   },
   "gp_mle": {
-    "run_dir": "results/raw/gp_mle/20260914T135517Z",
-    "timestamp": "20260914T135517Z"
+    "run_dir": "results/raw/gp_mle/20260914T180412Z",
+    "timestamp": "20260914T180412Z"
   }
 }
