@@ -47,12 +47,17 @@ from src.truth_model import make_porosity_truth
 # "Base case ground truth(단일 realization, seed=101 ...)".
 TRUTH_SEED = 101
 
-# 20% of the 50x50 = 2500-cell truth grid, per task spec. This is the single
-# source of truth for the sample count -- every method-comparison script
+# 5% of the 50x50 = 2500-cell truth grid (2026-09-14, changed from 20%/500 --
+# user decision after literature review, not to be re-litigated here). Basis:
+# docs/references.md -- Fiedler et al. 2021 uses exactly 5% (50 of 1000 grid
+# points); Trifonov et al. 2025 (SPE10 benchmark) uses ~5.3% (700 wells of
+# ~13,200 areal cells) as their densest well count. This is the single source
+# of truth for the sample count -- every method-comparison script
 # (rbf_bootstrap.py, gp_mle.py, ...) must import N_SAMPLES from here rather
-# than re-declaring the literal 500, so the value cannot silently drift
-# between methods.
-N_SAMPLES = 500
+# than re-declaring the literal, so the value cannot silently drift between
+# methods. The prior N_SAMPLES=500 (20%) run in results/raw/ is original data
+# and is left untouched; this change only affects new runs going forward.
+N_SAMPLES = 125
 
 # Same interior-sampling margin convention as regular_interior_samples
 # (docs/geostatspy_conventions.md / src/sampling.py).

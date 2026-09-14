@@ -1,0 +1,18 @@
+{
+  "kriging": {
+    "run_dir": "results/raw/kriging/20260914T144604Z",
+    "timestamp": "20260914T144604Z"
+  },
+  "sgs": {
+    "run_dir": "results/raw/sgs/20260914T141516Z",
+    "timestamp": "20260914T141516Z"
+  },
+  "rbf_bootstrap": {
+    "run_dir": "results/raw/rbf_bootstrap/20260914T135501Z",
+    "timestamp": "20260914T135501Z"
+  },
+  "gp_mle": {
+    "run_dir": "results/raw/gp_mle/20260914T135517Z",
+    "timestamp": "20260914T135517Z"
+  }
+}

@@ -13,9 +13,11 @@ Pipeline
    CLAUDE.md) is structurally guaranteed to match rather than relying on two
    scripts independently declaring the same literal.
 2. Tune the RBF shape parameter (epsilon) and smoothing parameter (lambda)
-   by k-fold cross-validated MSE grid search on the 500 samples (automatic
-   procedure per docs/experiment_context.md section 4 -- "Tune these by the
-   automatic procedure the paper is critiquing", not hand-tuned).
+   by k-fold cross-validated MSE grid search on the N_SAMPLES samples (125
+   requested / 121 actual for the base case -- see
+   base_case_conditioning.py; automatic procedure per
+   docs/experiment_context.md section 4 -- "Tune these by the automatic
+   procedure the paper is critiquing", not hand-tuned).
 3. Fit once on all samples with the tuned hyperparameters -> point estimate
    map (the RBF's native prediction).
 4. Bootstrap: resample the samples with replacement N_BOOTSTRAP times,
@@ -55,7 +57,8 @@ from src.io import make_run_dir, save_result
 # 'gaussian' (exp(-r**2), with r scaled by epsilon) chosen over
 # 'multiquadric' (-sqrt(1+r**2)): gaussian decays to zero with distance
 # (bounded, well-behaved far from any sample -- e.g. near domain corners
-# sparsely covered by the 500 interior samples), whereas multiquadric grows
+# sparsely covered by the N_SAMPLES (125 requested / 121 actual) interior
+# samples), whereas multiquadric grows
 # unboundedly with distance from data, which risks poorly-behaved
 # bootstrap replicate maps at grid cells far from any given bootstrap
 # resample's support. Both kernels have a shape parameter (epsilon), which
@@ -69,10 +72,15 @@ RBF_KERNEL = "gaussian"
 CV_FOLDS = 5
 CV_SEED = 40  # controls the KFold shuffle only
 
-# Grid spans distances relevant to this domain: sample spacing for 500
-# points over the ~900m x 900m interior sampling region is ~40m, and the
+# Grid spans distances relevant to this domain: sample spacing for the
+# current N_SAMPLES (125 requested / 121 actual) over the ~900m x 900m
+# interior sampling region is ~sqrt(900*900/121) ~ 82m (was ~40m under the
+# prior N_SAMPLES=500 design this grid was originally sized for), and the
 # variogram range used to generate the truth is 300m, so epsilon (acting
-# as an inverse length scale) is swept from well below 1/900 to above 1/40.
+# as an inverse length scale) is swept from well below 1/900 to above 1/82.
+# The grid values themselves are unchanged from the N_SAMPLES=500 design
+# (still bracket 1/82 comfortably at the dense end, 0.3 and 1.0), so this is
+# a comment-only update, not a re-tuned grid.
 EPSILON_GRID = np.array([0.001, 0.003, 0.01, 0.02, 0.03, 0.05, 0.1, 0.3, 1.0])
 # Smoothing (lambda) swept from 0 (exact interpolation) across several
 # orders of magnitude relative to the porosity variance (stdev=3 -> var=9).

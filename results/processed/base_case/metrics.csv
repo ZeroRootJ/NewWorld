@@ -1,0 +1,9 @@
+case,axis,axis_level,method,metric,value
+base_case,none,base,kriging,mse,3.3122649297598996
+base_case,none,base,kriging,umg,0.9497688104245482
+base_case,none,base,sgs,mse,3.6125604506167117
+base_case,none,base,sgs,umg,0.9043295502311897
+base_case,none,base,rbf_bootstrap,mse,3.725555172458018
+base_case,none,base,rbf_bootstrap,umg,0.5278688524590164
+base_case,none,base,gp_mle,mse,3.3998837020315715
+base_case,none,base,gp_mle,umg,0.9611656821751732
