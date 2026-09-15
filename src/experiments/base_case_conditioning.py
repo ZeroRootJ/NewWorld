@@ -74,27 +74,43 @@ VCOL = "Por"
 SAMPLE_SEED = 20
 
 
-def build_vario() -> Dict[str, Any]:
+def build_vario(hmaj1: float = HMAJ1, hmin1: float = HMIN1) -> Dict[str, Any]:
     """Build the (single, reused) base-case variogram dict.
+
+    ``hmaj1``/``hmin1`` default to the base-case constants (300 m,
+    isotropic) so calling this with no arguments reproduces the base case
+    exactly. Passing different values is how the range axis (deliverable 2,
+    docs/experiment_context.md) varies the variogram range while holding
+    every other parameter (nugget, sill split, azimuth) fixed --
+    one-factor-at-a-time.
 
     Reused as-is by every method that needs it (kriging/SGS baselines,
     later); RBF+bootstrap and GP-MLE do not consume this dict directly but
     it is built here for a single source of truth on variogram parameters.
     """
     return GSLIB.make_variogram(
-        nug=NUG, nst=1, it1=IT1, cc1=CC1, azi1=AZI1, hmaj1=HMAJ1, hmin1=HMIN1
+        nug=NUG, nst=1, it1=IT1, cc1=CC1, azi1=AZI1, hmaj1=hmaj1, hmin1=hmin1
     )
 
 
-def get_base_case_truth() -> "pd.DataFrame":
-    """Regenerate the single base-case ground-truth field (seed=101).
+def get_base_case_truth(
+    truth_seed: int = TRUTH_SEED, hmaj1: float = HMAJ1, hmin1: float = HMIN1
+) -> "pd.DataFrame":
+    """Regenerate a base-case-style ground-truth field.
+
+    Defaults (``truth_seed=TRUTH_SEED``, ``hmaj1=HMAJ1``, ``hmin1=HMIN1``)
+    reproduce the exact base-case truth field (seed=101, range=300m). Passing
+    a different ``hmaj1``/``hmin1`` (equal, for the isotropic range axis)
+    regenerates the truth under a different variogram range while keeping
+    every other parameter (grid, distribution, nugget, seed) identical --
+    the range-axis experiment (docs/experiment_context.md deliverable 2).
 
     Returns
     -------
     np.ndarray of shape (NY, NX), same convention as
     src.truth_model.make_porosity_truth (row 0 = max-y row).
     """
-    vario = build_vario()
+    vario = build_vario(hmaj1=hmaj1, hmin1=hmin1)
     truth = make_porosity_truth(
         nx=NX,
         ny=NY,
@@ -105,7 +121,7 @@ def get_base_case_truth() -> "pd.DataFrame":
         vario=vario,
         mean=POR_MEAN,
         stdev=POR_STDEV,
-        seed=TRUTH_SEED,
+        seed=truth_seed,
     )
     return truth
 
@@ -144,17 +160,25 @@ def get_conditioning_samples(truth, sample_seed: int = SAMPLE_SEED) -> pd.DataFr
     return df
 
 
-def get_base_case_conditioning_data(sample_seed: int = SAMPLE_SEED) -> Tuple[Any, pd.DataFrame]:
+def get_base_case_conditioning_data(
+    sample_seed: int = SAMPLE_SEED,
+    truth_seed: int = TRUTH_SEED,
+    hmaj1: float = HMAJ1,
+    hmin1: float = HMIN1,
+) -> Tuple[Any, pd.DataFrame]:
     """Convenience wrapper: regenerate the base-case truth and draw samples
-    from it in one call. Both rbf_bootstrap.py and gp_mle.py should call
-    this rather than calling get_base_case_truth / get_conditioning_samples
-    separately, so there is exactly one code path that ties truth generation
-    to sampling. ``sample_seed`` defaults to the module-level ``SAMPLE_SEED``
-    -- callers should import and pass ``SAMPLE_SEED`` from this module (or
-    rely on the default) instead of re-declaring their own seed constant, so
-    that "identical sample locations across methods" holds structurally
-    rather than by two literals happening to agree.
+    from it in one call. Every method-comparison script (kriging.py, sgs.py,
+    rbf_bootstrap.py, gp_mle.py) should call this rather than calling
+    get_base_case_truth / get_conditioning_samples separately, so there is
+    exactly one code path that ties truth generation to sampling.
+    ``sample_seed``/``truth_seed``/``hmaj1``/``hmin1`` all default to the
+    base-case constants -- calling with no arguments reproduces the base
+    case exactly; passing ``truth_seed``/``hmaj1``/``hmin1`` is how the
+    range axis (docs/experiment_context.md deliverable 2) varies the
+    variogram range one-factor-at-a-time while keeping the sample locations
+    (drawn with the same ``sample_seed``, from a truth field of identical
+    shape/distribution) directly comparable across axis levels.
     """
-    truth = get_base_case_truth()
+    truth = get_base_case_truth(truth_seed=truth_seed, hmaj1=hmaj1, hmin1=hmin1)
     samples = get_conditioning_samples(truth, sample_seed=sample_seed)
     return truth, samples

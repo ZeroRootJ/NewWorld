@@ -62,6 +62,8 @@ from src.experiments.base_case import (
     POR_STDEV,
 )
 from src.experiments.base_case_conditioning import (
+    HMAJ1 as _COND_HMAJ1,
+    HMIN1 as _COND_HMIN1,
     N_SAMPLES,
     SAMPLE_SEED,
     TRUTH_SEED,
@@ -277,12 +279,29 @@ EXPERIMENT_NAME = "kriging"
 CODE_ENTRYPOINT = "src/experiments/kriging.py"
 
 
-def main():
+def main(
+    truth_seed: int = TRUTH_SEED,
+    sample_seed: int = SAMPLE_SEED,
+    hmaj1: float = _COND_HMAJ1,
+    hmin1: float = _COND_HMIN1,
+):
+    """Run the simple-kriging base-case pipeline.
+
+    Defaults (``truth_seed=TRUTH_SEED``, ``sample_seed=SAMPLE_SEED``,
+    ``hmaj1``/``hmin1`` = the base-case 300m range) reproduce the exact base
+    case. Passing a different ``hmaj1``/``hmin1`` (equal, isotropic) is how
+    the range axis (docs/experiment_context.md deliverable 2) varies the
+    variogram range while every search/tuning constant below (NDMAX,
+    RADIUS, BACKTR_ZMIN/ZMAX, etc.) stays fixed at its base-case value
+    (one-factor-at-a-time -- do not vary those here).
+    """
     t_start = time.time()
 
-    truth, samples_df = get_base_case_conditioning_data(sample_seed=SAMPLE_SEED)
+    truth, samples_df = get_base_case_conditioning_data(
+        sample_seed=sample_seed, truth_seed=truth_seed, hmaj1=hmaj1, hmin1=hmin1
+    )
     n_actual_samples = len(samples_df)
-    vario = build_vario()
+    vario = build_vario(hmaj1=hmaj1, hmin1=hmin1)
 
     # --- Normal-score transform of the sample data ----------------------
     # Exact variable names per project decision (do not rename vr/vrg --
@@ -479,7 +498,7 @@ def main():
     ax1 = plt.subplot(1, 3, 1)
     im1 = ax1.imshow(truth, extent=[XMIN, XMAX, YMIN, YMAX], origin="upper", cmap="viridis", vmin=vmin, vmax=vmax)
     ax1.scatter(samples_df["X"], samples_df["Y"], s=8, c="red", marker="+", label="samples")
-    ax1.set_title(f"Truth (seed={TRUTH_SEED})")
+    ax1.set_title(f"Truth (seed={truth_seed})")
     ax1.set_xlabel("X (m)")
     ax1.set_ylabel("Y (m)")
     plt.colorbar(im1, ax=ax1, label="Porosity (%)")
@@ -509,8 +528,12 @@ def main():
 
     params = {
         "grid": {"nx": NX, "ny": NY, "xsiz": XSIZ, "ysiz": YSIZ, "xmn": XMN, "ymn": YMN},
-        "truth_seed": TRUTH_SEED,
-        "sample_seed": SAMPLE_SEED,
+        "truth_seed": truth_seed,
+        "sample_seed": sample_seed,
+        # hmaj1/hmin1 duplicated top-level (also present inside "variogram"
+        # below) for range-axis lookup convenience (task instruction).
+        "hmaj1": hmaj1,
+        "hmin1": hmin1,
         "n_samples_requested": N_SAMPLES,
         "n_samples_actual": n_actual_samples,
         "n_samples_used_by_kb2d": n_samples_used_by_kb2d,
@@ -566,8 +589,8 @@ def main():
         experiment=EXPERIMENT_NAME,
         params=params,
         seed_or_seeds={
-            "truth_seed": TRUTH_SEED,
-            "sample_seed": SAMPLE_SEED,
+            "truth_seed": truth_seed,
+            "sample_seed": sample_seed,
             "backtr_validation_seed": BACKTR_VALIDATION_SEED,
             "kriging_var_mc_seed": KRIGING_VAR_MC_SEED,
         },

@@ -67,9 +67,10 @@ from src.experiments.base_case import (
     YSIZ,
     POR_MEAN,
     POR_STDEV,
-    HMAJ1,
 )
 from src.experiments.base_case_conditioning import (
+    HMAJ1 as _COND_HMAJ1,
+    HMIN1 as _COND_HMIN1,
     N_SAMPLES,
     SAMPLE_SEED,
     TRUTH_SEED,
@@ -222,12 +223,27 @@ QC_BANDH = 9999.0
 QC_ISILL = 1
 
 
-def main():
+def main(
+    truth_seed: int = TRUTH_SEED,
+    sample_seed: int = SAMPLE_SEED,
+    hmaj1: float = _COND_HMAJ1,
+    hmin1: float = _COND_HMIN1,
+):
+    """Run the SGS base-case pipeline.
+
+    Defaults reproduce the exact base case (see kriging.main's docstring for
+    the shared convention). Search/jitter/back-transform constants below
+    (NDMAX, NODMAX, SGS_JITTER_MAGNITUDE, SGSIM_ZMIN/ZMAX, etc.) are held
+    fixed at their base-case values regardless of ``hmaj1``/``hmin1``
+    (one-factor-at-a-time -- do not vary those here).
+    """
     t_start = time.time()
 
-    truth, samples_df = get_base_case_conditioning_data(sample_seed=SAMPLE_SEED)
+    truth, samples_df = get_base_case_conditioning_data(
+        sample_seed=sample_seed, truth_seed=truth_seed, hmaj1=hmaj1, hmin1=hmin1
+    )
     n_actual_samples = len(samples_df)
-    vario = build_vario()
+    vario = build_vario(hmaj1=hmaj1, hmin1=hmin1)
 
     # --- Local jitter, sgsim-call copy only (see SGS_JITTER_* comment above)
     # samples_df itself (saved to samples.csv / used by every other method)
@@ -383,7 +399,7 @@ def main():
     ax1 = plt.subplot(2, 3, 1)
     im1 = ax1.imshow(truth, extent=[XMIN, XMAX, YMIN, YMAX], origin="upper", cmap="viridis", vmin=vmin, vmax=vmax)
     ax1.scatter(samples_df["X"], samples_df["Y"], s=8, c="red", marker="+", label="samples")
-    ax1.set_title(f"Truth (seed={TRUTH_SEED})")
+    ax1.set_title(f"Truth (seed={truth_seed})")
     ax1.set_xlabel("X (m)")
     ax1.set_ylabel("Y (m)")
     plt.colorbar(im1, ax=ax1, label="Porosity (%)")
@@ -417,8 +433,8 @@ def main():
     ax6 = plt.subplot(2, 3, 6)
     ax6.plot(qc_lag, qc_gamma, "o-", label=f"realization {QC_REALIZATION_INDEX} experimental")
     ax6.axhline(1.0, color="gray", linestyle="--", label="sill (standardized=1.0)")
-    ax6.axvline(HMAJ1, color="red", linestyle=":", label=f"base-case range={HMAJ1:g}m")
-    ax6.set_title("QC: experimental variogram vs. base-case range")
+    ax6.axvline(hmaj1, color="red", linestyle=":", label=f"range={hmaj1:g}m")
+    ax6.set_title(f"QC: experimental variogram vs. model range ({hmaj1:g}m)")
     ax6.set_xlabel("Lag distance (m)")
     ax6.set_ylabel("Semivariance (standardized)")
     ax6.legend(fontsize=7)
@@ -431,8 +447,12 @@ def main():
 
     params = {
         "grid": {"nx": NX, "ny": NY, "xsiz": XSIZ, "ysiz": YSIZ, "xmn": XMN, "ymn": YMN},
-        "truth_seed": TRUTH_SEED,
-        "sample_seed": SAMPLE_SEED,
+        "truth_seed": truth_seed,
+        "sample_seed": sample_seed,
+        # hmaj1/hmin1 duplicated top-level (also present inside "variogram"
+        # below) for range-axis lookup convenience (task instruction).
+        "hmaj1": hmaj1,
+        "hmin1": hmin1,
         "n_samples_requested": N_SAMPLES,
         "n_samples_actual": n_actual_samples,
         "variogram": vario,
@@ -525,7 +545,7 @@ def main():
     manifest_path = save_result(
         experiment=EXPERIMENT_NAME,
         params=params,
-        seed_or_seeds={"truth_seed": TRUTH_SEED, "sample_seed": SAMPLE_SEED, "sgs_seed": SGS_SEED},
+        seed_or_seeds={"truth_seed": truth_seed, "sample_seed": sample_seed, "sgs_seed": SGS_SEED},
         run_dir=run_dir,
         code_entrypoint=CODE_ENTRYPOINT,
         output_files=output_files,

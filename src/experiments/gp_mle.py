@@ -38,6 +38,8 @@ from sklearn.gaussian_process.kernels import ConstantKernel, RBF, WhiteKernel
 
 from src.experiments.base_case import NX, NY, XMN, XMAX, XMIN, YMN, YMAX, YMIN, XSIZ, YSIZ
 from src.experiments.base_case_conditioning import (
+    HMAJ1 as _COND_HMAJ1,
+    HMIN1 as _COND_HMIN1,
     N_SAMPLES,
     SAMPLE_SEED,
     TRUTH_SEED,
@@ -94,10 +96,26 @@ def build_kernel():
     )
 
 
-def main():
+def main(
+    truth_seed: int = TRUTH_SEED,
+    sample_seed: int = SAMPLE_SEED,
+    hmaj1: float = _COND_HMAJ1,
+    hmin1: float = _COND_HMIN1,
+):
+    """Run the GP-MLE base-case pipeline.
+
+    Defaults reproduce the exact base case (see kriging.main's docstring for
+    the shared convention). GP-MLE does not consume a variogram directly --
+    ``hmaj1``/``hmin1`` only affect the regenerated ground-truth field (via
+    ``get_base_case_conditioning_data``), not this method's own kernel
+    initial values/bounds/n_restarts below, which are held fixed regardless
+    of range (one-factor-at-a-time -- do not vary those here).
+    """
     t_start = time.time()
 
-    truth, samples_df = get_base_case_conditioning_data(sample_seed=SAMPLE_SEED)
+    truth, samples_df = get_base_case_conditioning_data(
+        sample_seed=sample_seed, truth_seed=truth_seed, hmaj1=hmaj1, hmin1=hmin1
+    )
     n_actual_samples = len(samples_df)
 
     X = samples_df[["X", "Y"]].values
@@ -227,7 +245,7 @@ def main():
     ax1 = plt.subplot(1, 3, 1)
     im1 = ax1.imshow(truth, extent=[XMIN, XMAX, YMIN, YMAX], origin="upper", cmap="viridis", vmin=vmin, vmax=vmax)
     ax1.scatter(samples_df["X"], samples_df["Y"], s=8, c="red", marker="+", label="samples")
-    ax1.set_title(f"Truth (seed={TRUTH_SEED})")
+    ax1.set_title(f"Truth (seed={truth_seed})")
     ax1.set_xlabel("X (m)")
     ax1.set_ylabel("Y (m)")
     plt.colorbar(im1, ax=ax1, label="Porosity (%)")
@@ -257,8 +275,14 @@ def main():
 
     params = {
         "grid": {"nx": NX, "ny": NY, "xsiz": XSIZ, "ysiz": YSIZ, "xmn": XMN, "ymn": YMN},
-        "truth_seed": TRUTH_SEED,
-        "sample_seed": SAMPLE_SEED,
+        "truth_seed": truth_seed,
+        "sample_seed": sample_seed,
+        # hmaj1/hmin1: only affect the regenerated ground-truth field
+        # (GP-MLE has no variogram of its own -- its kernel hyperparameters
+        # are fit by marginal likelihood) -- recorded here for range-axis
+        # lookup convenience (task instruction).
+        "hmaj1": hmaj1,
+        "hmin1": hmin1,
         "n_samples_requested": N_SAMPLES,
         "n_samples_actual": n_actual_samples,
         "kernel_init": {
@@ -294,8 +318,8 @@ def main():
         experiment=EXPERIMENT_NAME,
         params=params,
         seed_or_seeds={
-            "truth_seed": TRUTH_SEED,
-            "sample_seed": SAMPLE_SEED,
+            "truth_seed": truth_seed,
+            "sample_seed": sample_seed,
             "gp_random_state": GP_RANDOM_STATE,
             "gp_sample_seed": GP_SAMPLE_SEED,
         },

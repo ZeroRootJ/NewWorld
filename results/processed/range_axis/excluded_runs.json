@@ -1,0 +1,11 @@
+{
+  "note": "Runs that exist in results/raw/ but are deliberately NOT part of the range axis. range=50m was dropped from the axis by the user on 2026-09-14 (too short to be a meaningful level); the raw run directories below are preserved unmodified but are excluded from source_runs.json, metrics.csv, the figures and the report.",
+  "excluded_levels": {
+    "50": {
+      "kriging": "results/raw/kriging/20260914T193717Z",
+      "sgs": "results/raw/sgs/20260914T193736Z",
+      "rbf_bootstrap": "results/raw/rbf_bootstrap/20260914T193747Z",
+      "gp_mle": "results/raw/gp_mle/20260914T193805Z"
+    }
+  }
+}
