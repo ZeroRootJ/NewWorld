@@ -59,6 +59,31 @@ TRUTH_SEED = 101
 # and is left untouched; this change only affects new runs going forward.
 N_SAMPLES = 125
 
+# --- Sample-density axis: X draws SHARED across levels, Y draws differ ---
+# User decision 2026-09-15 (an earlier nested-subset instruction was
+# explicitly CANCELLED -- do not re-introduce nesting here): each level of
+# the sample-density axis (5% / 2% / 1% of the 2500-cell grid = n_samples
+# 125 / 50 / 25) draws its samples from the full ground-truth field, i.e. by
+# simply calling ``random_interior_samples`` with that level's own
+# ``n_samples`` and the shared SAMPLE_SEED. Smaller sets are therefore NOT
+# subsets of larger ones -- but they are NOT statistically independent of
+# them either, and must not be described as "independent" (see below).
+#
+# This is NOT an accident of the implementation, and the consequence was
+# measured rather than assumed (2026-09-15). ``random_interior_samples``
+# draws ``xs = rng.uniform(..., n_samples)`` and then ``ys = rng.uniform(...,
+# n_samples)`` as two separate calls on the same RandomState, so at a fixed
+# seed the x-values of the n=25 draw match the first 25 x-values of the
+# n=125 draw but the y-values do not (stream positions 25..49 vs. 125..149).
+# Measured overlap of the resulting conditioning-CELL sets at SAMPLE_SEED=20:
+#
+#     |n25 ∩ n125| = 4 of 25,  |n50 ∩ n125| = 4 of 50,  |n25 ∩ n50| = 0
+#
+# KNOWN LIMITATION, must be carried into any report built on this axis:
+# with one ground-truth realization per level, a difference between two
+# sample-density levels mixes TWO effects -- "less data was given" and "the
+# data landed in different places" -- and this design does not separate them.
+#
 # Same interior-sampling margin convention as regular_interior_samples
 # (docs/geostatspy_conventions.md / src/sampling.py).
 MARGIN_FRAC = 0.05
@@ -126,8 +151,10 @@ def get_base_case_truth(
     return truth
 
 
-def get_conditioning_samples(truth, sample_seed: int = SAMPLE_SEED) -> pd.DataFrame:
-    """Draw the (up to) N_SAMPLES random interior samples from the given
+def get_conditioning_samples(
+    truth, sample_seed: int = SAMPLE_SEED, n_samples: int = N_SAMPLES
+) -> pd.DataFrame:
+    """Draw the (up to) ``n_samples`` random interior samples from the given
     truth field.
 
     Parameters
@@ -138,20 +165,28 @@ def get_conditioning_samples(truth, sample_seed: int = SAMPLE_SEED) -> pd.DataFr
         source of truth for the sample-location seed). Callers should not
         pass a different value unless they explicitly intend to deviate from
         the shared base-case sample locations.
+    n_samples : defaults to the module-level ``N_SAMPLES`` (=125, the base
+        case / 5% of the 2500-cell grid), which reproduces the base case
+        exactly. The sample-density axis (docs/progress.md axis 5) passes 50
+        (2%) and 25 (1%). The levels are neither nested subsets nor
+        independent draws -- they share their X draws and differ only in Y;
+        see the "X draws SHARED across levels" comment above for the measured
+        overlap and the limitation this implies.
 
     Returns
     -------
     pd.DataFrame with columns ["X", "Y", VCOL]. May have fewer than
-    N_SAMPLES rows after duplicate-cell removal -- callers must read
-    len(df) rather than assume N_SAMPLES, and record the actual count in
-    their manifest.
+    ``n_samples`` rows after duplicate-cell removal (this is what happens at
+    the default n_samples=125 -> 121 rows) -- callers must read len(df)
+    rather than assume ``n_samples``, and record the actual count in their
+    manifest.
     """
     df = random_interior_samples(
         xmin=XMIN,
         xmax=XMAX,
         ymin=YMIN,
         ymax=YMAX,
-        n_samples=N_SAMPLES,
+        n_samples=n_samples,
         margin_frac=MARGIN_FRAC,
         value_grid=truth,
         colname=VCOL,
@@ -165,20 +200,26 @@ def get_base_case_conditioning_data(
     truth_seed: int = TRUTH_SEED,
     hmaj1: float = HMAJ1,
     hmin1: float = HMIN1,
+    n_samples: int = N_SAMPLES,
 ) -> Tuple[Any, pd.DataFrame]:
     """Convenience wrapper: regenerate the base-case truth and draw samples
     from it in one call. Every method-comparison script (kriging.py, sgs.py,
     rbf_bootstrap.py, gp_mle.py) should call this rather than calling
     get_base_case_truth / get_conditioning_samples separately, so there is
     exactly one code path that ties truth generation to sampling.
-    ``sample_seed``/``truth_seed``/``hmaj1``/``hmin1`` all default to the
-    base-case constants -- calling with no arguments reproduces the base
-    case exactly; passing ``truth_seed``/``hmaj1``/``hmin1`` is how the
-    range axis (docs/experiment_context.md deliverable 2) varies the
-    variogram range one-factor-at-a-time while keeping the sample locations
-    (drawn with the same ``sample_seed``, from a truth field of identical
-    shape/distribution) directly comparable across axis levels.
+    ``sample_seed``/``truth_seed``/``hmaj1``/``hmin1``/``n_samples`` all
+    default to the base-case constants -- calling with no arguments
+    reproduces the base case exactly; passing ``truth_seed``/``hmaj1``/
+    ``hmin1`` is how the range axis (docs/experiment_context.md deliverable
+    2) varies the variogram range one-factor-at-a-time while keeping the
+    sample locations (drawn with the same ``sample_seed``, from a truth field
+    of identical shape/distribution) directly comparable across axis levels,
+    and passing ``n_samples`` is how the sample-density axis varies the
+    conditioning sample count one-factor-at-a-time (independent draws per
+    level, NOT nested subsets -- see ``get_conditioning_samples``).
     """
     truth = get_base_case_truth(truth_seed=truth_seed, hmaj1=hmaj1, hmin1=hmin1)
-    samples = get_conditioning_samples(truth, sample_seed=sample_seed)
+    samples = get_conditioning_samples(
+        truth, sample_seed=sample_seed, n_samples=n_samples
+    )
     return truth, samples

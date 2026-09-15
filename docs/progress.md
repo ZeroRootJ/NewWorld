@@ -9,8 +9,27 @@ Deliverable Order (설계 문서 7절 기준) — 각 단계는 이전 단계에
 - [ ] 3. Nugget 변화 실험
 - [ ] 4. Extrapolation / data configuration 변화 실험
 - [ ] 5. Anisotropy 변화 실험
-- [ ] TODO (신규, 미확정): axis 5 — sample count/sparsity 변화 실험. 구체적 단계는 base case 결과를
-      보고 결정 예정 ([experiment_context.md](./experiment_context.md) 3절 참고)
+- [ ] 6. Sample count/sparsity 변화 실험 — 5%/2%/1% 3개 레벨 완료(레벨당 realization 1개), 추가 realization 예정
+      (원래 "axis 5 TODO(미확정)"로 잡혀 있던 항목. 설계 문서 7절의 1~5번보다 먼저 착수 — 사용자 지시 2026-09-15)
+
+## 보류(TODO) — 나중에 다시 판단할 것
+
+- **sharpness 계열 지표(interval width, CRPS)를 workflow에서 일단 제외** (사용자 결정 2026-09-15).
+  사유: 현재 보고 싶은 것을 제대로 표현하지 못한다는 판단. 대신 예측 분산의 합(`variance_sum`)/
+  평균(`variance_mean`)을 비교 지표로 사용.
+  - 적용 범위: **sample density 축만**. range axis(`results/processed/range_axis/`)는 width/CRPS를
+    그대로 유지하며 이번 결정의 영향을 받지 않는다.
+  - 코드는 살아있다: `src/evaluation.py`의 `gaussian_interval_widths`/`gaussian_crps`/
+    `kriging_interval_widths`/`kriging_crps` 등과 그 테스트 9개는 전부 유지·검증된 상태이고,
+    `evaluate_sample_density_axis.py`의 `EMIT_SHARPNESS_METRICS=False` 플래그만 True로 되돌리면
+    즉시 복구된다.
+  - 계산된 값도 버리지 않았다: `results/processed/sample_density_axis/metrics_parked_sharpness.csv`
+    에 보존. 관련 진단(`crps_convergence.csv`, `kriging_backtransform_tail_sensitivity.csv`)도 유지.
+  - 다시 볼 때 같이 고려할 것: (a) `docs/experiment_context.md` 5절이 interval width와 proper
+    scoring rule을 평가 요구사항으로 명시하고 있으므로, 최종 논문에서 이들을 완전히 빼려면 그
+    근거가 필요하다. (b) kriging의 width만 back-transform tail 가정에 민감하다는 측정 결과
+    (1% 레벨에서 ±2σ/±4σ/±6σ에 따라 8.64/9.84/11.03으로 순위가 3가지로 바뀜)가 이 판단의
+    배경 중 하나다.
 
 ## 로그
 | 날짜 | 단계 | 상태 | 비고 |
@@ -32,3 +51,7 @@ Deliverable Order (설계 문서 7절 기준) — 각 단계는 이전 단계에
 | 2026-09-14 | 2 | 8레벨 결과: MSE는 range 증가에 따라 단조 감소 후 500m 부근에서 평탄(4개 방법 모두). **RBF+bootstrap은 전 레벨에서 UMG 0.32~0.53으로 압도적 최악이고 구간 폭도 kriging의 1/2~1/6, CRPS도 전 레벨 최악** — Claim 1이 range 전 구간에서 일관되게 재현됨(reviewer 확인: 가우시안/경험/fair 어느 CRPS 추정량으로도 결론 불변). **GP-MLE는 UMG 0.96~0.996로 전 레벨 최상위이나 CRPS에서는 8레벨 중 6레벨에서 kriging에 밀림** — 500m 이상에서 kriging/SGS 구간 폭은 계속 좁아지는데(1.70 @800m) GP-MLE만 ~2.05에서 평탄해진 뒤 반등(2.10 @800m, kriging 대비 1.24배). 즉 UMG 우위가 CRPS로는 이어지지 않음 | 사용자 결정 2건: (1) **ndmax 교란요인 현행 유지+각주** — range≥600m에서 kriging(ndmax=50)/SGS(ndmax=20)는 거의 모든 셀에서 상관 샘플(800m에서 평균 108.6/121개)을 잘라내는 반면 GP-MLE는 121개 전부 사용. kriging UMG의 장거리 하락(0.99→0.87)이 실제 현상인지 이 아티팩트인지 미분리 상태임을 논문에 각주로 명시. (2) **앙상블 CRPS 현행 유지** — SGS/RBF는 replicate 10개라 경험분위수 대신 가우시안 (mean,var) 모멘트 사용(각 방법 UMG 표현과 일치). 단 fair 추정량으로 바꾸면 800m에서 SGS(0.838) vs GP-MLE(0.844) 순위가 뒤집힘을 인지하고 유지 |
 | 2026-09-14 | 2 | 문헌조사(`docs/references.md`에 CRPS 섹션 신규): **CRPS와 Deutsch goodness를 함께 쓴 선행연구를 찾지 못함**(두 계보가 reference list 상에서 서로 인용조차 안 함 — Semantic Scholar API로 직접 대조). 가장 근접한 선례는 Schmidinger & Heuvelink 2023(Geoderma 437, 116585; coverage 계열+CRPS 병용, 단 Deutsch G 미사용). **Szatmári & Pásztor 2019**(Geoderma 337, 1329–1340; UK/SGS/RFK/QRF를 accuracy plot+G로 비교)는 본 연구와 실험 구도가 가장 유사하므로 차별점 명시 필요 | ⚠️ 제출 전 해소 필요: Deutsch 1997 **페이지 범위**가 2차 출처마다 102–113 vs 115–125로 엇갈림, 원문(CCG 서버 스캔 PDF)에서 "goodness는 구간 확대로 부풀릴 수 있어 precision 병행 필요"라는 서술 존재 여부 **미검증**(스캔 이미지라 자동 확인 실패, 사람이 직접 열어봐야 함) |
 | 2026-09-14 | 2 | reviewer가 지적한 명확한 문제 3건 수정: (1) `pytest`가 `.venv`·`requirements.txt` 양쪽에 없어 테스트 실행 안내가 재현 불가였던 문제 → pytest 8.3.5 설치 후 `requirements.txt` 갱신, 9개 테스트(신규 6+기존 3) 전부 통과 확인. (2) `sgs.py` QC 그림 제목이 range 파라미터화 후에도 "base-case range"로 고정돼 있던 stale 라벨 수정. (3) 위 UMG 관련 잘못된 docstring 2곳 정정 | `results/raw/`의 기존 QC png는 원본 보존 원칙상 그대로 두므로, 이미 생성된 run의 `qc_sgs.png`에는 stale 제목이 남아있음(이후 run부터 수정 반영) |
+| 2026-09-15 | 5 | Sample density 축 신규(기존 "axis 5 TODO" 착수, 사용자 지시): **5%(n=125→실사용 121) / 2%(n=50) / 1%(n=25)**, range=300m 고정, 레벨당 realization 1개. `get_conditioning_samples`/`get_base_case_conditioning_data`와 4개 방법 `main()`에 `n_samples` 인자 추가(기본값=125 → 무인자 호출 시 base case와 bit-identical, reviewer가 14개 배열+5개 텍스트 파일 max abs diff 0.0으로 재현 확인). 5%는 base case run 재사용(검증 후), 신규 run 8개. 지표는 range 축과 동일한 5개(mse/umg/width_mean/width_p95/crps) | `results/processed/sample_density_axis/metrics.csv` 60행. 평가 셀 수가 레벨마다 다름(2379/2450/2475) — 세 레벨 공통 2312셀로 재계산 시 전 지표 변화 <1.5%, 순위 변화 없음(reviewer 확인) |
+| 2026-09-15 | 5 | **샘플 추출 방식 정정**: 당초 nested subset으로 구현했다가 사용자 지시("전체 ground truth에서 뽑아라")로 레벨별 독립 호출로 되돌림. 그러나 reviewer가 **"independent"라는 기술이 사실과 다름**을 발견: `src/sampling.py`가 `xs = rng.uniform(...)` → `ys = rng.uniform(...)`를 같은 RandomState에 순차 호출하므로, 고정 seed에서 **n=25 draw의 X좌표는 n=125 draw의 첫 25개와 완전히 동일하고 Y만 다르다**(스트림 위치 25~49 vs 125~149). 즉 세 레벨은 nested도 independent도 아닌 **X 공유 / Y 상이** 구조. 셀 교집합(4/25, 4/50, 0/25)만으로는 이 결합이 드러나지 않음. `sample_density_axis.py` docstring, `sample_overlap.json` note, 모든 그림 캡션, `base_case_conditioning.py`의 섹션 헤더·docstring에서 "independent" 표현 제거하고 실제 구조로 정정. `sampling.py`의 `random_interior_samples` docstring에도 이 성질을 원천 기록 | 수치 결과는 전부 유효(순수 기술 문구 정정). 그림 축 라벨도 requested(5.0%, n=125) → actual(4.84%, n=121)로 수정 |
+| 2026-09-15 | 5 | 결과(레벨별 4방법): 1%(n=25)에서 MSE kriging 6.851 / sgs 7.756 / rbf 7.672 / gp 7.872, UMG 0.974 / 0.910 / 0.422 / 0.975, width_mean 3.553 / 3.440 / 1.016 / 3.838, CRPS 1.430 / 1.568 / 1.877 / 1.558. **RBF+bootstrap의 width가 축 전체에서 거의 평평**(1.105 → 1.028 → 1.016)한 반면 나머지 셋은 약 1.5배 증가(2.36~2.42 → 3.44~3.84). GP-MLE의 학습된 length_scale은 116.13 / 120.09 / **54.09**m로 1%에서 붕괴(practical range √6·ℓ 환산 시 284 / 294 / **132**m, truth spherical range 300m), 학습된 noise variance는 1.601 / 1.627 / 0.492 (truth nugget 0.45 대비 3.6× / 3.6× / 1.09×) | reviewer가 480개 초기값(restart 8~200 + 3차원 격자)으로 재적합해 **세 레벨 모두 동일 해로 수렴** 확인 — 1%의 ℓ=54m는 optimizer 실패가 아니라 전역 MLE 해 |
+| 2026-09-15 | 5 | reviewer가 발견한 교란요인·민감도 (해석 없이 수치만 기록): (1) **conditioning 샘플 평균 편향** — truth field 전체 평균 15.000 대비 샘플 평균 14.104(5%, z=−3.06) / 14.628(2%, z=−0.69) / **16.070(1%, z=+1.84)**, MSE에서 bias²가 차지하는 비중 0.2~0.7% / 0.2~3.8% / **13.7~16.3%**. SGS 1% realization 평균이 16.089±0.424로 흐르는 것도 이 샘플 편향(16.070)에서 파생. (2) **kriging의 back-transform tail 가정 민감도**(1%, 변환표 25점, CRPS 적분이 91.7% 셀에서 tail 외삽 통과) — CRPS는 ±2σ/±4σ/±6σ에서 1.4239/1.4297/1.4395로 GP(1.5576)·SGS(1.5682)보다 항상 낮아 **순위 견고**하나, width_p95는 8.643/9.838/11.034로 **순위가 3가지로 바뀜**(SGS 9.256, GP 10.328 사이를 오감). (3) **RBF의 1% smoothing flip**(0.1 → 0.0, dedup 10/10 발동) — CV paired t-test t=1.94 **p=0.124**(fold당 test 5점)로 노이즈 수준이며, dedup 없이는 `LinAlgError`로 실행 불가. sm=0.1 강제 시 UMG 0.3807 / w95 2.442 vs production 0.4221 / 2.734. (4) **SGS `ndmax=20` 구속 셀 비율**이 레벨마다 다름: 5% 68.5% / 2% 11.2% / 1% 0% | 사용자 지시로 해석은 보류, 수치만 기록. 진단 CSV 4종 신규: `conditioning_sample_bias.csv`, `mse_bias_variance_decomposition.csv`, `gp_hyperparameter_scale_conversion.csv`, `kriging_backtransform_tail_sensitivity.csv` |

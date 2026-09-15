@@ -125,21 +125,28 @@ def main(
     sample_seed: int = SAMPLE_SEED,
     hmaj1: float = _COND_HMAJ1,
     hmin1: float = _COND_HMIN1,
+    n_samples: int = N_SAMPLES,
 ):
     """Run the RBF+bootstrap base-case pipeline.
 
     Defaults reproduce the exact base case (see kriging.main's docstring for
-    the shared convention). RBF+bootstrap does not consume a variogram
-    directly -- ``hmaj1``/``hmin1`` only affect the regenerated ground-truth
-    field (via ``get_base_case_conditioning_data``), not this method's own
-    CV grid / bootstrap constants below (EPSILON_GRID, SMOOTHING_GRID,
-    N_BOOTSTRAP, etc.), which are held fixed regardless of range
+    the shared convention, including the ``n_samples`` sample-density-axis
+    argument). RBF+bootstrap does not consume a variogram directly --
+    ``hmaj1``/``hmin1`` only affect the regenerated ground-truth field (via
+    ``get_base_case_conditioning_data``), and ``n_samples`` only affects how
+    many conditioning samples are drawn from it; neither changes this
+    method's own CV grid / bootstrap constants below (EPSILON_GRID,
+    SMOOTHING_GRID, CV_FOLDS, N_BOOTSTRAP, etc.), which are held fixed
     (one-factor-at-a-time -- do not vary those here).
     """
     t_start = time.time()
 
     truth, samples_df = get_base_case_conditioning_data(
-        sample_seed=sample_seed, truth_seed=truth_seed, hmaj1=hmaj1, hmin1=hmin1
+        sample_seed=sample_seed,
+        truth_seed=truth_seed,
+        hmaj1=hmaj1,
+        hmin1=hmin1,
+        n_samples=n_samples,
     )
     n_actual_samples = len(samples_df)
 
@@ -301,7 +308,7 @@ def main(
         # range-axis lookup convenience (task instruction).
         "hmaj1": hmaj1,
         "hmin1": hmin1,
-        "n_samples_requested": N_SAMPLES,
+        "n_samples_requested": n_samples,
         "n_samples_actual": n_actual_samples,
         "rbf_kernel": RBF_KERNEL,
         "cv_folds": CV_FOLDS,

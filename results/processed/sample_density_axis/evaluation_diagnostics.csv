@@ -1,0 +1,4 @@
+axis_level,n_samples_requested,n_samples_actual,n_cells_total,n_cells_excluded,n_cells_evaluated,backtr_vectorized_max_abs_diff_vs_reference,kriging_nscore_table_n_points
+5,125,121,2500,121,2379,0.0,121
+2,50,50,2500,50,2450,0.0,50
+1,25,25,2500,25,2475,0.0,25

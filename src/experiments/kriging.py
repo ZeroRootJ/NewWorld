@@ -284,21 +284,30 @@ def main(
     sample_seed: int = SAMPLE_SEED,
     hmaj1: float = _COND_HMAJ1,
     hmin1: float = _COND_HMIN1,
+    n_samples: int = N_SAMPLES,
 ):
     """Run the simple-kriging base-case pipeline.
 
     Defaults (``truth_seed=TRUTH_SEED``, ``sample_seed=SAMPLE_SEED``,
-    ``hmaj1``/``hmin1`` = the base-case 300m range) reproduce the exact base
-    case. Passing a different ``hmaj1``/``hmin1`` (equal, isotropic) is how
-    the range axis (docs/experiment_context.md deliverable 2) varies the
-    variogram range while every search/tuning constant below (NDMAX,
-    RADIUS, BACKTR_ZMIN/ZMAX, etc.) stays fixed at its base-case value
-    (one-factor-at-a-time -- do not vary those here).
+    ``hmaj1``/``hmin1`` = the base-case 300m range, ``n_samples=N_SAMPLES``)
+    reproduce the exact base case. Passing a different ``hmaj1``/``hmin1``
+    (equal, isotropic) is how the range axis (docs/experiment_context.md
+    deliverable 2) varies the variogram range; passing a different
+    ``n_samples`` is how the sample-density axis varies the conditioning
+    sample count (each level drawn INDEPENDENTLY, not as a nested subset --
+    see base_case_conditioning.get_conditioning_samples). In both cases every
+    search/tuning constant below
+    (NDMAX, RADIUS, BACKTR_ZMIN/ZMAX, etc.) stays fixed at its base-case
+    value (one-factor-at-a-time -- do not vary those here).
     """
     t_start = time.time()
 
     truth, samples_df = get_base_case_conditioning_data(
-        sample_seed=sample_seed, truth_seed=truth_seed, hmaj1=hmaj1, hmin1=hmin1
+        sample_seed=sample_seed,
+        truth_seed=truth_seed,
+        hmaj1=hmaj1,
+        hmin1=hmin1,
+        n_samples=n_samples,
     )
     n_actual_samples = len(samples_df)
     vario = build_vario(hmaj1=hmaj1, hmin1=hmin1)
@@ -534,7 +543,7 @@ def main(
         # below) for range-axis lookup convenience (task instruction).
         "hmaj1": hmaj1,
         "hmin1": hmin1,
-        "n_samples_requested": N_SAMPLES,
+        "n_samples_requested": n_samples,
         "n_samples_actual": n_actual_samples,
         "n_samples_used_by_kb2d": n_samples_used_by_kb2d,
         "variogram": vario,

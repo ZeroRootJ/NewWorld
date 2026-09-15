@@ -130,6 +130,19 @@ def random_interior_samples(
         site, per project convention -- recorded in the manifest, not
         hardcoded here)
 
+    Notes
+    -----
+    TWO CALLS WITH THE SAME ``seed`` BUT DIFFERENT ``n_samples`` ARE NOT
+    INDEPENDENT. All ``n_samples`` x-values are drawn first and all
+    ``n_samples`` y-values second, from one ``RandomState(seed)``, so for
+    n_a < n_b the n_a draw's x-values are exactly the FIRST n_a x-values of
+    the n_b draw, while the y-values differ (they come from stream positions
+    n..2n-1, which depend on n). Callers that vary ``n_samples`` at a fixed
+    seed -- e.g. the sample-density axis -- must describe the resulting
+    sample sets as sharing their x-coordinates, never as "independent"
+    draws. (Measured consequences for that axis are recorded in
+    results/processed/sample_density_axis/sample_overlap.json.)
+
     Returns
     -------
     pd.DataFrame with columns ["X", "Y", colname], one row per unique grid

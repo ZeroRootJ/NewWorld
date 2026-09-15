@@ -101,20 +101,27 @@ def main(
     sample_seed: int = SAMPLE_SEED,
     hmaj1: float = _COND_HMAJ1,
     hmin1: float = _COND_HMIN1,
+    n_samples: int = N_SAMPLES,
 ):
     """Run the GP-MLE base-case pipeline.
 
     Defaults reproduce the exact base case (see kriging.main's docstring for
-    the shared convention). GP-MLE does not consume a variogram directly --
-    ``hmaj1``/``hmin1`` only affect the regenerated ground-truth field (via
-    ``get_base_case_conditioning_data``), not this method's own kernel
-    initial values/bounds/n_restarts below, which are held fixed regardless
-    of range (one-factor-at-a-time -- do not vary those here).
+    the shared convention, including the ``n_samples`` sample-density-axis
+    argument). GP-MLE does not consume a variogram directly -- ``hmaj1``/
+    ``hmin1`` only affect the regenerated ground-truth field (via
+    ``get_base_case_conditioning_data``), and ``n_samples`` only affects how
+    many conditioning samples are drawn from it; neither changes this
+    method's own kernel initial values/bounds/n_restarts below, which are
+    held fixed (one-factor-at-a-time -- do not vary those here).
     """
     t_start = time.time()
 
     truth, samples_df = get_base_case_conditioning_data(
-        sample_seed=sample_seed, truth_seed=truth_seed, hmaj1=hmaj1, hmin1=hmin1
+        sample_seed=sample_seed,
+        truth_seed=truth_seed,
+        hmaj1=hmaj1,
+        hmin1=hmin1,
+        n_samples=n_samples,
     )
     n_actual_samples = len(samples_df)
 
@@ -283,7 +290,7 @@ def main(
         # lookup convenience (task instruction).
         "hmaj1": hmaj1,
         "hmin1": hmin1,
-        "n_samples_requested": N_SAMPLES,
+        "n_samples_requested": n_samples,
         "n_samples_actual": n_actual_samples,
         "kernel_init": {
             "constant_value_init": CONSTANT_VALUE_INIT,

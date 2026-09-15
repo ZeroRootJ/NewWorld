@@ -1,0 +1,4 @@
+axis_level,n_samples_requested,n_samples_actual,n_cells_total,n_cells_excluded,n_cells_evaluated,note
+5,125,121,2500,121,2379,"Conditioning-sample cells are excluded from evaluation for all 4 methods identically WITHIN a level, but the excluded set differs BETWEEN levels, so cross-level metric comparisons are not over an identical cell set."
+2,50,50,2500,50,2450,"Conditioning-sample cells are excluded from evaluation for all 4 methods identically WITHIN a level, but the excluded set differs BETWEEN levels, so cross-level metric comparisons are not over an identical cell set."
+1,25,25,2500,25,2475,"Conditioning-sample cells are excluded from evaluation for all 4 methods identically WITHIN a level, but the excluded set differs BETWEEN levels, so cross-level metric comparisons are not over an identical cell set."

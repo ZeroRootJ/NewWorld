@@ -1,0 +1,90 @@
+{
+  "note": "The three axis levels are NEITHER nested subsets NOR independent draws -- do not describe them as 'independent'. Each level calls random_interior_samples(n_samples=<level's n>, seed=SAMPLE_SEED), which draws xs = rng.uniform(..., n_samples) and then ys = rng.uniform(..., n_samples) on ONE RandomState(SAMPLE_SEED). At a fixed seed the X draws are therefore SHARED across levels (the n=25 level's 25 raw X values are exactly the first 25 raw X values of the n=125 and n=50 levels; see raw_x_draws_identical_over_common_prefix) while the Y draws come from stream positions n..2n-1 and differ. Measured consequence: all 20 distinct X coordinates of the n=25 set occur in the n=125 set and all 20 occur in the n=50 set, and all 30 distinct X of the n=50 set occur in the n=125 set, whereas only 16 of the n=25 set's 18 distinct Y coordinates occur in the n=125 set -- yet just 4 of 25 complete (X,Y) cells are shared between n=25 and n=125, 4 of 50 between n=50 and n=125, and 0 between n=25 and n=50. The cell counts alone hide the X-sharing. LIMITATION: with one ground-truth realization per level, a difference between levels mixes 'less data was given' with 'the data landed in different places' (chiefly along Y, since X is shared); this design does not separate the two.",
+  "sample_seed": 20,
+  "truth_seed": 101,
+  "hmaj1": 300.0,
+  "n_samples_requested": {
+    "5": 125,
+    "2": 50,
+    "1": 25
+  },
+  "n_samples_actual": {
+    "5": 121,
+    "2": 50,
+    "1": 25
+  },
+  "sample_fraction_actual_pct": {
+    "5": 4.84,
+    "2": 2.0,
+    "1": 1.0
+  },
+  "n_distinct_x_actual": {
+    "5": 42,
+    "2": 30,
+    "1": 20
+  },
+  "n_distinct_y_actual": {
+    "5": 42,
+    "2": 31,
+    "1": 18
+  },
+  "pairwise_overlap": {
+    "5pct_vs_2pct": {
+      "n_shared_cells": 4,
+      "n_cells_5pct": 121,
+      "n_cells_2pct": 50,
+      "smaller_cell_set_is_subset_of_larger": false,
+      "n_distinct_x_5pct": 42,
+      "n_distinct_x_2pct": 30,
+      "n_shared_distinct_x": 30,
+      "n_distinct_x_of_smaller_set": 30,
+      "smaller_distinct_x_set_is_subset_of_larger": true,
+      "n_distinct_y_5pct": 42,
+      "n_distinct_y_2pct": 31,
+      "n_shared_distinct_y": 28,
+      "n_distinct_y_of_smaller_set": 31,
+      "smaller_distinct_y_set_is_subset_of_larger": false,
+      "raw_draw_common_prefix_length": 50,
+      "raw_x_draws_identical_over_common_prefix": true,
+      "raw_y_draws_identical_over_common_prefix": false
+    },
+    "5pct_vs_1pct": {
+      "n_shared_cells": 4,
+      "n_cells_5pct": 121,
+      "n_cells_1pct": 25,
+      "smaller_cell_set_is_subset_of_larger": false,
+      "n_distinct_x_5pct": 42,
+      "n_distinct_x_1pct": 20,
+      "n_shared_distinct_x": 20,
+      "n_distinct_x_of_smaller_set": 20,
+      "smaller_distinct_x_set_is_subset_of_larger": true,
+      "n_distinct_y_5pct": 42,
+      "n_distinct_y_1pct": 18,
+      "n_shared_distinct_y": 16,
+      "n_distinct_y_of_smaller_set": 18,
+      "smaller_distinct_y_set_is_subset_of_larger": false,
+      "raw_draw_common_prefix_length": 25,
+      "raw_x_draws_identical_over_common_prefix": true,
+      "raw_y_draws_identical_over_common_prefix": false
+    },
+    "2pct_vs_1pct": {
+      "n_shared_cells": 0,
+      "n_cells_2pct": 50,
+      "n_cells_1pct": 25,
+      "smaller_cell_set_is_subset_of_larger": false,
+      "n_distinct_x_2pct": 30,
+      "n_distinct_x_1pct": 20,
+      "n_shared_distinct_x": 20,
+      "n_distinct_x_of_smaller_set": 20,
+      "smaller_distinct_x_set_is_subset_of_larger": true,
+      "n_distinct_y_2pct": 31,
+      "n_distinct_y_1pct": 18,
+      "n_shared_distinct_y": 14,
+      "n_distinct_y_of_smaller_set": 18,
+      "smaller_distinct_y_set_is_subset_of_larger": false,
+      "raw_draw_common_prefix_length": 25,
+      "raw_x_draws_identical_over_common_prefix": true,
+      "raw_y_draws_identical_over_common_prefix": false
+    }
+  }
+}
