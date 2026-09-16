@@ -79,8 +79,18 @@ exact match pins the run to the right level.
 
 This script does NOT re-implement any method -- it calls each method's
 already-parameterized main() (kriging.main / sgs.main / rbf_bootstrap.main /
-gp_mle.main) once per new level, in the fixed order [kriging, sgs,
-rbf_bootstrap, gp_mle].
+gp_mle.main) once per new level.
+
+Parallel execution (2026-09-16)
+--------------------------------
+The NEW_AXIS_LEVELS levels x METHODS grid (2 x 4 = 8 fresh runs) is fully
+independent -- different sample draws per level, disjoint output files, no
+shared state across calls -- so all 8 tasks are submitted together to one
+process pool (see src/experiments/_axis_parallel.py) instead of a
+sequential per-level, per-method loop. Completion order (and hence the
+order runs appear in stdout / get their timestamps) is therefore NOT
+guaranteed to be [kriging, sgs, rbf_bootstrap, gp_mle] per level as it was
+before; source_runs.json's assembly does not depend on that order.
 
 Run with: .venv/Scripts/python.exe -m src.experiments.sample_density_axis
 
@@ -108,7 +118,7 @@ from src.experiments.base_case_conditioning import (
     get_base_case_truth,
     get_conditioning_samples,
 )
-from src.experiments import gp_mle, kriging, rbf_bootstrap, sgs
+from src.experiments._axis_parallel import run_levels_parallel
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 PROCESSED_DIR = _REPO_ROOT / "results" / "processed" / "sample_density_axis"
@@ -287,24 +297,19 @@ def run_one_level(axis_level: str) -> dict:
     """Run all 4 methods at this level's n_samples, with the variogram range
     (AXIS_HMAJ1/AXIS_HMIN1 = the base-case 300 m), TRUTH_SEED, SAMPLE_SEED
     and every method's own search/tuning constants left at their base-case
-    values. Returns {"kriging": Path(...), ...}."""
+    values. Returns {"kriging": Path(...), ...}.
+
+    Kept as a single-level convenience wrapper (e.g. for standalone/debug
+    use) around ``run_levels_parallel``; ``main()`` below does NOT call this
+    once per level -- it builds all of NEW_AXIS_LEVELS' kwargs up front and
+    submits every (level x method) task to one process pool together, since
+    calling this per level would serialize the levels and defeat the point
+    of parallelizing across the whole grid (2026-09-16 parallelization task).
+    """
     n = SAMPLE_COUNTS[axis_level]
-    kwargs = dict(
-        truth_seed=TRUTH_SEED, hmaj1=AXIS_HMAJ1, hmin1=AXIS_HMIN1, n_samples=n
-    )
-    run_dirs = {}
-
-    for name, module in (
-        ("kriging", kriging),
-        ("sgs", sgs),
-        ("rbf_bootstrap", rbf_bootstrap),
-        ("gp_mle", gp_mle),
-    ):
-        print(f"\n=== sample fraction = {axis_level}% (n_samples={n}): {name} ===")
-        run_dir, _, _ = module.main(**kwargs)
-        run_dirs[name] = run_dir
-
-    return run_dirs
+    kwargs = dict(truth_seed=TRUTH_SEED, hmaj1=AXIS_HMAJ1, hmin1=AXIS_HMIN1, n_samples=n)
+    results = run_levels_parallel({axis_level: kwargs}, methods=METHODS)
+    return results[axis_level]
 
 
 def verify_reused_run(rel_run_dir: str, axis_level: str, method: str) -> None:
@@ -402,9 +407,23 @@ def main():
         verify_reused_run(source_runs[BASE_CASE_AXIS_LEVEL][m], BASE_CASE_AXIS_LEVEL, m)
 
     # --- Execute the new levels --------------------------------------------
+    # Both NEW_AXIS_LEVELS levels x METHODS (2 x 4 = 8 tasks) are fully
+    # independent (different sample draws, disjoint output files, no shared
+    # state) -- submitted together to one process pool instead of a
+    # sequential per-level loop (2026-09-16 parallelization task; see
+    # src/experiments/_axis_parallel.py for why processes, not threads).
+    level_kwargs = {
+        lvl: dict(
+            truth_seed=TRUTH_SEED,
+            hmaj1=AXIS_HMAJ1,
+            hmin1=AXIS_HMIN1,
+            n_samples=SAMPLE_COUNTS[lvl],
+        )
+        for lvl in NEW_AXIS_LEVELS
+    }
+    new_run_dirs = run_levels_parallel(level_kwargs, methods=METHODS)
     for axis_level in NEW_AXIS_LEVELS:
-        run_dirs = run_one_level(axis_level)
-        source_runs[axis_level] = {m: _rel(run_dirs[m]) for m in METHODS}
+        source_runs[axis_level] = {m: _rel(new_run_dirs[axis_level][m]) for m in METHODS}
 
     source_runs = {lvl: source_runs[lvl] for lvl in ALL_AXIS_LEVELS}
 

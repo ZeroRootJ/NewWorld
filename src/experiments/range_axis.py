@@ -37,8 +37,18 @@ right ground truth.
 
 This script does NOT re-implement any method -- it simply calls each
 method's already-parameterized main() (kriging.main / sgs.main /
-rbf_bootstrap.main / gp_mle.main) once per new range value, in the fixed
-order [kriging, sgs, rbf_bootstrap, gp_mle].
+rbf_bootstrap.main / gp_mle.main) once per new range value.
+
+Parallel execution (2026-09-16)
+--------------------------------
+The NEW_RANGE_VALUES levels x METHODS grid (6 x 4 = 24 fresh runs) is fully
+independent -- different truth/sample draws per level, disjoint output
+files, no shared state across calls -- so all 24 tasks are submitted
+together to one process pool (see src/experiments/_axis_parallel.py) instead
+of a sequential per-level, per-method loop. Completion order (and hence the
+order runs appear in stdout / get their timestamps) is therefore NOT
+guaranteed to be [kriging, sgs, rbf_bootstrap, gp_mle] per level as it was
+before; source_runs.json's assembly does not depend on that order.
 
 Run with: .venv/Scripts/python.exe -m src.experiments.range_axis
 """
@@ -55,7 +65,7 @@ from src.experiments.base_case_conditioning import (
     VCOL,
     get_base_case_conditioning_data,
 )
-from src.experiments import gp_mle, kriging, rbf_bootstrap, sgs
+from src.experiments._axis_parallel import run_levels_parallel
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 PROCESSED_DIR = _REPO_ROOT / "results" / "processed" / "range_axis"
@@ -83,28 +93,20 @@ def run_one_range(hmaj1: float) -> dict:
     and every other parameter left at each method's own base-case default.
 
     Returns {"kriging": Path(...), ...}.
+
+    Kept as a single-level convenience wrapper (e.g. for standalone/debug
+    use) around ``run_levels_parallel``; ``main()`` below does NOT call this
+    once per level -- it builds all of NEW_RANGE_VALUES' kwargs up front and
+    submits every (level x method) task to one process pool together, since
+    calling this per level would serialize the levels and defeat the point
+    of parallelizing across the whole grid (2026-09-16 parallelization task).
     """
     hmin1 = hmaj1  # isotropic range axis
-
-    run_dirs = {}
-
-    print(f"\n=== range = {hmaj1:g} m: kriging ===")
-    kdir, _, _ = kriging.main(truth_seed=TRUTH_SEED, hmaj1=hmaj1, hmin1=hmin1)
-    run_dirs["kriging"] = kdir
-
-    print(f"\n=== range = {hmaj1:g} m: sgs ===")
-    sdir, _, _ = sgs.main(truth_seed=TRUTH_SEED, hmaj1=hmaj1, hmin1=hmin1)
-    run_dirs["sgs"] = sdir
-
-    print(f"\n=== range = {hmaj1:g} m: rbf_bootstrap ===")
-    rdir, _, _ = rbf_bootstrap.main(truth_seed=TRUTH_SEED, hmaj1=hmaj1, hmin1=hmin1)
-    run_dirs["rbf_bootstrap"] = rdir
-
-    print(f"\n=== range = {hmaj1:g} m: gp_mle ===")
-    gdir, _, _ = gp_mle.main(truth_seed=TRUTH_SEED, hmaj1=hmaj1, hmin1=hmin1)
-    run_dirs["gp_mle"] = gdir
-
-    return run_dirs
+    level = str(int(hmaj1))
+    results = run_levels_parallel(
+        {level: dict(truth_seed=TRUTH_SEED, hmaj1=hmaj1, hmin1=hmin1)}, methods=METHODS
+    )
+    return results[level]
 
 
 def verify_reused_run(rel_run_dir: str, hmaj1: float, method: str) -> None:
@@ -220,10 +222,19 @@ def main():
             source_runs[REUSED_FROM_RANGE_AXIS_LEVEL][m], float(REUSED_FROM_RANGE_AXIS_LEVEL), m
         )
 
-    # --- Execute the new levels --------------------------------------------
+    # --- Execute the new levels ---------------------------------------------
+    # All NEW_RANGE_VALUES levels x METHODS (6 x 4 = 24 tasks) are fully
+    # independent (different truth/sample draws, disjoint output files, no
+    # shared state) -- submitted together to one process pool instead of a
+    # sequential per-level loop (2026-09-16 parallelization task; see
+    # src/experiments/_axis_parallel.py for why processes, not threads).
+    level_kwargs = {
+        str(int(r)): dict(truth_seed=TRUTH_SEED, hmaj1=r, hmin1=r) for r in NEW_RANGE_VALUES
+    }
+    new_run_dirs = run_levels_parallel(level_kwargs, methods=METHODS)
     for r in NEW_RANGE_VALUES:
-        run_dirs = run_one_range(r)
-        source_runs[str(int(r))] = {m: _rel(run_dirs[m]) for m in METHODS}
+        level = str(int(r))
+        source_runs[level] = {m: _rel(new_run_dirs[level][m]) for m in METHODS}
 
     # Sort by numeric axis level for readability.
     source_runs = {str(int(r)): source_runs[str(int(r))] for r in ALL_RANGE_VALUES}

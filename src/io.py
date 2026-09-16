@@ -93,15 +93,39 @@ def get_git_status(repo_dir: Optional[Union[str, Path]] = None) -> Tuple[Optiona
 def make_run_dir(experiment: str, output_dir: Union[str, Path] = "results/raw") -> Path:
     """Create and return results/raw/<experiment>/<timestamp>/.
 
-    The timestamp is UTC, filesystem-safe (no colons), e.g. 20260911T153000Z.
+    The timestamp is UTC, filesystem-safe (no colons), microsecond-precision,
+    e.g. 20260911T153000123456Z. Microsecond precision (rather than the
+    previous whole-second precision) matters once axis-level/method runs are
+    parallelized across OS processes (see the 2026-09-16 parallelization
+    task): a whole-second timestamp lets two processes that call
+    ``make_run_dir`` for the *same* ``experiment`` (e.g. two different range-
+    axis levels both running "kriging") within the same second collide on
+    the same directory name. All timestamp fields are fixed-width,
+    zero-padded, so lexicographic sort of directory names still matches
+    chronological order -- this is relied on elsewhere (e.g.
+    evaluate_base_case.latest_run_dir's "most recent by timestamp-sorted
+    directory name" lookup).
+
+    As a safety net for the residual chance that two processes still finish
+    within the very same microsecond, directory creation retries with an
+    incrementing numeric suffix (``-1``, ``-2``, ...) appended after a
+    collision, instead of raising ``FileExistsError``.
     """
     output_root = Path(output_dir)
     if not output_root.is_absolute():
         output_root = _REPO_ROOT / output_root
-    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    run_dir = output_root / experiment / timestamp
-    run_dir.mkdir(parents=True, exist_ok=False)
-    return run_dir
+
+    exp_dir = output_root / experiment
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    run_dir = exp_dir / timestamp
+    suffix = 0
+    while True:
+        try:
+            run_dir.mkdir(parents=True, exist_ok=False)
+            return run_dir
+        except FileExistsError:
+            suffix += 1
+            run_dir = exp_dir / f"{timestamp}-{suffix}"
 
 
 def save_result(
