@@ -1,0 +1,38 @@
+{
+  "note": "10 fresh sample-location replicates at the SAME ground truth (TRUTH_SEED=101, range=300 m) and the SAME requested sample count (n_samples_requested=125, the base case's own 5% density level), varying ONLY sample_seed. Distinct from the project's pinned base-case SAMPLE_SEED=20 (an 11th, pre-existing point of reference at the same n_samples, NOT folded into this set -- see module docstring) and from TRUTH_SEED=101. n_samples_actual can differ slightly between replicates because random_interior_samples snaps draws to grid-cell centroids and drops duplicate-cell collisions.",
+  "truth_seed": 101,
+  "hmaj1": 300.0,
+  "hmin1": 300.0,
+  "n_samples_requested": 125,
+  "sample_seed_replicates": {
+    "rep0": 1001,
+    "rep1": 1002,
+    "rep2": 1003,
+    "rep3": 1004,
+    "rep4": 1005,
+    "rep5": 1006,
+    "rep6": 1007,
+    "rep7": 1008,
+    "rep8": 1009,
+    "rep9": 1010
+  },
+  "n_samples_actual": {
+    "rep0": 120,
+    "rep1": 121,
+    "rep2": 124,
+    "rep3": 122,
+    "rep4": 119,
+    "rep5": 120,
+    "rep6": 121,
+    "rep7": 118,
+    "rep8": 121,
+    "rep9": 120
+  },
+  "base_case_reference_sample_seed": 20,
+  "methods": [
+    "kriging",
+    "sgs",
+    "rbf_bootstrap",
+    "gp_mle"
+  ]
+}

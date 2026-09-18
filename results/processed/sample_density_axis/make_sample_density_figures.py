@@ -146,14 +146,15 @@ METHOD_MARKERS = {"kriging": "o", "sgs": "s", "rbf_bootstrap": "^", "gp_mle": "D
 # (metric key in metrics.csv, panel title, y-axis label)
 # The two sharpness panels (interval_width_mean_nominal, crps) were replaced by
 # the predictive-variance panels on 2026-09-15 -- see the module docstring.
+# variance_sum was DROPPED from this figure on 2026-09-18 (user decision,
+# display-only change, does not touch metrics.csv or
+# evaluate_sample_density_axis.py): variance_sum rows are still computed and
+# saved in metrics.csv, they are simply not plotted here any more --
+# variance_mean already normalizes for the differing evaluated-cell counts
+# between levels, which is the one variance panel readers need.
 MAIN_PANELS = [
     ("mse", "Accuracy: MSE vs. sample density", "MSE (Porosity %$^2$, lower better)"),
     ("umg", "Calibration: UMG vs. sample density", "UMG (1.0 = perfectly calibrated)"),
-    (
-        "variance_sum",
-        "Predictive variance: summed over evaluated cells",
-        "Sum of predictive variance (Porosity %$^2$)",
-    ),
     (
         "variance_mean",
         "Predictive variance: mean over evaluated cells",
@@ -161,19 +162,19 @@ MAIN_PANELS = [
     ),
 ]
 
-# Facts attached to the two variance panels (no interpretation).
+# Facts attached to the variance panel (no interpretation).
 VARIANCE_PANEL_CAPTION = (
-    "PREDICTIVE-VARIANCE PANELS: each point is that method's predictive variance "
-    "summed (left/lower-left panel) or averaged (right/lower-right panel) over that "
-    "level's EVALUATED cells, i.e. all 2500 grid cells minus that level's own "
-    "conditioning cells. The number of cells entering the SUM therefore DIFFERS BY "
-    "LEVEL -- 2379 (n=121) / 2450 (n=50) / 2475 (n=25) -- so variance_sum is not a sum "
-    "over an equal number of cells across levels; variance_mean divides each sum by its "
-    "own cell count and is shown for exactly that reason. Source arrays (all porosity "
-    "%^2): kriging kriging_var_map_physical_mc.npy, sgs sgs_var_map.npy, rbf_bootstrap "
-    "bootstrap_var_map.npy, gp_mle posterior_var_map.npy. Kriging's physical-unit "
-    "variance is a MONTE CARLO back-transform approximation of its normal-score "
-    "variance; the other three are native physical-unit arrays. See "
+    "PREDICTIVE-VARIANCE PANEL: each point is that method's predictive variance "
+    "averaged over that level's EVALUATED cells, i.e. all 2500 grid cells minus that "
+    "level's own conditioning cells. The number of cells entering the average therefore "
+    "DIFFERS BY LEVEL -- 2379 (n=121) / 2450 (n=50) / 2475 (n=25) -- which is why the "
+    "mean (rather than the sum) is plotted: it stays comparable across levels despite "
+    "the differing cell count. The summed variant, variance_sum, is still computed and "
+    "saved in metrics.csv but is no longer plotted in this figure. Source arrays (all "
+    "porosity %^2): kriging kriging_var_map_physical_mc.npy, sgs sgs_var_map.npy, "
+    "rbf_bootstrap bootstrap_var_map.npy, gp_mle posterior_var_map.npy. Kriging's "
+    "physical-unit variance is a MONTE CARLO back-transform approximation of its "
+    "normal-score variance; the other three are native physical-unit arrays. See "
     "results/processed/sample_density_axis/variance_metric_sources.csv."
 )
 
@@ -281,7 +282,7 @@ def make_metric_vs_density_figure():
             "sample_fraction_actual_pct."
         )
 
-    fig, axes = plt.subplots(2, 2, figsize=(14, 11))
+    fig, axes = plt.subplots(1, 3, figsize=(18, 7.5))
     for ax, (metric_name, title, ylabel) in zip(axes.ravel(), MAIN_PANELS):
         sub = metrics_df[metrics_df["metric"] == metric_name]
         for method in METHODS:
@@ -303,19 +304,19 @@ def make_metric_vs_density_figure():
 
     plt.suptitle(
         "Sample-density axis: accuracy (MSE) vs. uncertainty quality (UMG) vs. "
-        "predictive-variance magnitude (sum / mean)\n"
+        "predictive-variance magnitude (mean)\n"
         + textwrap.fill(SUPTITLE_NOTE, 130),
         fontsize=11,
     )
     fig.text(
-        0.5, 0.045, textwrap.fill(LIMITATION_CAPTION, 160),
+        0.5, 0.155, textwrap.fill(LIMITATION_CAPTION, 160),
         ha="center", va="top", fontsize=7.5, color="dimgray",
     )
     fig.text(
-        0.5, -0.005, textwrap.fill(VARIANCE_PANEL_CAPTION, 160),
+        0.5, 0.045, textwrap.fill(VARIANCE_PANEL_CAPTION, 160),
         ha="center", va="top", fontsize=7.5, color="dimgray",
     )
-    plt.subplots_adjust(left=0.08, bottom=0.14, right=0.98, top=0.89, wspace=0.25, hspace=0.35)
+    plt.subplots_adjust(left=0.06, bottom=0.32, right=0.98, top=0.86, wspace=0.3)
     FIGURES_DIR.mkdir(parents=True, exist_ok=True)
     out = FIGURES_DIR / "metrics_vs_sample_density.png"
     plt.savefig(out, dpi=MAIN_FIG_DPI, bbox_inches="tight")
