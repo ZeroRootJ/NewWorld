@@ -30,7 +30,7 @@ task was handed off:
 Layout
 ------
 ONE figure per method, 2 ROWS (top = MIN-length replicate, bottom =
-MAX-length replicate) x 5 COLUMNS:
+MAX-length replicate) x 6 COLUMNS:
   1. Ground truth + THAT replicate's own conditioning samples overlaid.
   2. Example realization (gp_mle: posterior_sample_map.npy, one posterior
      draw; rbf_bootstrap: bootstrap_replicate_maps.npy[0], the first of 10
@@ -56,17 +56,38 @@ MAX-length replicate) x 5 COLUMNS:
      (matching the display-text-only rename applied the same day to
      results/processed/sample_density_axis/make_sample_density_figures.py's
      make_calibration_grid_figure()).
+  6. Accuracy crossplot (truth vs. that method's POINT ESTIMATE for that
+     specific replicate) with a 1:1 reference line and the recomputed MSE in
+     the panel title. This reuses the exact convention
+     make_sample_density_figures.py's make_crossplot_figure() already
+     established elsewhere in this project (axis limits from the truth
+     field's own min/max with the same padding, MSE recomputed and
+     cross-checked against the pinned metrics.csv value before plotting) --
+     it is NOT a new convention invented for this script. Per that same
+     convention, the point-estimate array is METHOD-SPECIFIC and, for
+     rbf_bootstrap, DIFFERENT from column 3's ensemble mean: gp_mle uses
+     posterior_mean_map.npy (same array as column 3 -- no distinction for
+     this method); rbf_bootstrap uses point_estimate_map.npy (the SINGLE-FIT
+     estimate), NOT bootstrap_mean_map.npy (the ensemble mean used in
+     column 3). This MSE-scoring-vs-QC-panel split is a real, deliberate,
+     already-documented distinction in this project (see
+     CROSSPLOT_POINT_ESTIMATE_FILE in make_sample_density_figures.py and the
+     note under column 3 above) -- it is preserved here, not blurred.
 
 DECISIVE CORRECTNESS CHECK (same pattern make_crossplot_figure() already
 uses for MSE elsewhere in this project): for each of the 4 (method,
 replicate) case-study cells, this script (a) regenerates that replicate's
 conditioning samples from its own sample_seed and cross-checks them against
 the run's own recorded samples.csv (atol=1e-10, the project's standing
-float-text round-trip tolerance), and (b) recomputes UMG from the run's own
+float-text round-trip tolerance), (b) recomputes UMG from the run's own
 mean/variance maps and requires it to match (np.isclose) the value already
 stored in metrics.csv for that exact (axis_level="1", replicate, method,
-metric="umg") row. Either check failing raises -- this script never
-silently plots a number that disagrees with the pinned evaluation output.
+metric="umg") row, and (c) recomputes MSE from the run's own point-estimate
+map (masked to that replicate's evaluated cells) and requires it to match
+(np.isclose) the value already stored in metrics.csv for that exact
+(axis_level="1", replicate, method, metric="mse") row. Any of these checks
+failing raises -- this script never silently plots a number that disagrees
+with the pinned evaluation output.
 
 COLOR-SCALE CHOICES (stated here, per this project's standing convention of
 documenting every color-scale decision in the figure/caption itself, see
@@ -120,6 +141,7 @@ from src.evaluation import (  # noqa: E402
     accuracy_plot_fraction_in,
     calc_umg,
     conditioning_cell_mask,
+    mse,
 )
 from src.experiments.base_case import (  # noqa: E402
     NX, NY, XMIN, XMAX, YMIN, YMAX, XMN, YMN, XSIZ, YSIZ,
@@ -157,6 +179,8 @@ SAMPLES_MATCH_ATOL = 1e-10
 # Same MSE/UMG cross-check tolerance make_crossplot_figure() uses.
 UMG_MATCH_RTOL = 1e-8
 UMG_MATCH_ATOL = 1e-8
+MSE_MATCH_RTOL = 1e-8
+MSE_MATCH_ATOL = 1e-8
 
 METHOD_LABELS = {"gp_mle": "GP-MLE", "rbf_bootstrap": "RBF+bootstrap"}
 METHOD_ARRAY_FILES = {
@@ -170,6 +194,14 @@ METHOD_ARRAY_FILES = {
         "var": "bootstrap_var_map.npy",
         "example": None,  # example is replicate_maps[0], loaded specially below
     },
+}
+
+# Point-estimate array per method, matching make_sample_density_figures.py's
+# CROSSPLOT_POINT_ESTIMATE_FILE / MSE-scoring convention -- NOT the same as
+# METHOD_ARRAY_FILES["mean"] for rbf_bootstrap (see module docstring, column 6).
+METHOD_POINT_ESTIMATE_FILES = {
+    "gp_mle": "posterior_mean_map.npy",
+    "rbf_bootstrap": "point_estimate_map.npy",
 }
 
 
@@ -282,6 +314,32 @@ def load_case_study_row(
             "drifted from evaluate_sample_replicate_axis.py; not plotting silently."
         )
 
+    # --- (c) Load the point-estimate map and cross-check recomputed MSE against
+    # the pinned metrics.csv value (same convention as make_crossplot_figure()) ---
+    point_estimate_map = np.load(run_dir / METHOD_POINT_ESTIMATE_FILES[method])
+    point_estimate_masked = point_estimate_map[mask]
+    mse_recomputed = mse(truth_masked, point_estimate_masked)
+
+    pinned_mse = metrics_df.loc[
+        (metrics_df["axis_level"].astype(str) == AXIS_LEVEL)
+        & (metrics_df["replicate"] == replicate_id)
+        & (metrics_df["method"] == method)
+        & (metrics_df["metric"] == "mse"),
+        "value",
+    ]
+    if len(pinned_mse) != 1:
+        raise ValueError(
+            f"expected exactly 1 pinned MSE row for {method} {replicate_id} at axis_level="
+            f"{AXIS_LEVEL}; found {len(pinned_mse)}."
+        )
+    pinned_mse_value = float(pinned_mse.iloc[0])
+    if not np.isclose(mse_recomputed, pinned_mse_value, rtol=MSE_MATCH_RTOL, atol=MSE_MATCH_ATOL):
+        raise ValueError(
+            f"{method} {replicate_id}: recomputed MSE ({mse_recomputed}) does not match "
+            f"metrics.csv ({pinned_mse_value}) -- mask or point-estimate source array has "
+            "drifted from evaluate_sample_replicate_axis.py; not plotting silently."
+        )
+
     return {
         "role": role,
         "replicate_id": replicate_id,
@@ -300,6 +358,10 @@ def load_case_study_row(
         "fraction_in": fraction_in,
         "umg_recomputed": umg_recomputed,
         "umg_pinned": pinned_umg,
+        "truth_masked": truth_masked,
+        "point_estimate_masked": point_estimate_masked,
+        "mse_recomputed": mse_recomputed,
+        "mse_pinned": pinned_mse_value,
     }
 
 
@@ -312,10 +374,12 @@ def make_case_study_figure(
     max_row = load_case_study_row(method, "MAX", extremes["max"], truth, source_runs, metrics_df)
 
     porosity_vmin, porosity_vmax = float(np.min(truth)), float(np.max(truth))
+    crossplot_pad = 0.05 * (porosity_vmax - porosity_vmin)
+    crossplot_lims = (porosity_vmin - crossplot_pad, porosity_vmax + crossplot_pad)
 
-    fig, axes = plt.subplots(2, 5, figsize=(25, 10.5))
+    fig, axes = plt.subplots(2, 6, figsize=(30, 10.5))
     for row_idx, row_data in enumerate([min_row, max_row]):
-        ax_truth, ax_example, ax_mean, ax_var, ax_umg = axes[row_idx]
+        ax_truth, ax_example, ax_mean, ax_var, ax_umg, ax_crossplot = axes[row_idx]
 
         _panel(
             ax_truth, truth,
@@ -358,11 +422,34 @@ def make_case_study_figure(
         ax_umg.legend(loc="upper left", fontsize=8)
         ax_umg.grid(alpha=0.3)
 
+        point_estimate_label = (
+            "GP-MLE posterior mean" if method == "gp_mle" else "RBF+bootstrap point estimate"
+        )
+        ax_crossplot.scatter(
+            row_data["truth_masked"], row_data["point_estimate_masked"],
+            s=10, alpha=0.5, color="tab:red" if method == "gp_mle" else "tab:orange",
+            edgecolors="none",
+        )
+        ax_crossplot.plot(crossplot_lims, crossplot_lims, color="gray", linestyle="--",
+                           label="1:1")
+        ax_crossplot.set_xlim(crossplot_lims)
+        ax_crossplot.set_ylim(crossplot_lims)
+        ax_crossplot.set_xlabel("Truth (Porosity %)")
+        ax_crossplot.set_ylabel(f"{point_estimate_label} (Porosity %)")
+        ax_crossplot.set_title(
+            f"[{row_data['role']}] Accuracy crossplot (MSE={row_data['mse_recomputed']:.3f})"
+        )
+        ax_crossplot.legend(loc="upper left", fontsize=8)
+        ax_crossplot.grid(alpha=0.3)
+        ax_crossplot.set_aspect("equal", adjustable="box")
+
         print(
             f"  {method} {row_data['role']} ({row_data['replicate_id']}, sample_seed="
             f"{row_data['sample_seed']}): length_scale={row_data['length_scale_m']:.4f} m, "
             f"UMG recomputed={row_data['umg_recomputed']:.6f} vs. pinned metrics.csv="
-            f"{row_data['umg_pinned']:.6f} (match)"
+            f"{row_data['umg_pinned']:.6f} (match); MSE recomputed="
+            f"{row_data['mse_recomputed']:.6f} vs. pinned metrics.csv="
+            f"{row_data['mse_pinned']:.6f} (match)"
         )
 
     length_definition_note = min_row["length_definition"]
@@ -380,7 +467,14 @@ def make_case_study_figure(
         "UMG values plotted/annotated are recomputed here from this run's own predictive "
         "mean/variance maps and are verified (np.isclose) to match "
         "results/processed/sample_replicate_axis/metrics.csv's pinned value for the same "
-        "(axis_level, replicate, method, metric='umg') row."
+        "(axis_level, replicate, method, metric='umg') row. The 6th (accuracy crossplot) "
+        "panel plots truth vs. that replicate's point estimate -- "
+        f"{METHOD_POINT_ESTIMATE_FILES[method]}, which for rbf_bootstrap is the SINGLE-FIT "
+        "estimate and deliberately NOT the ensemble-mean array used in column 3 (see module "
+        "docstring) -- masked to that replicate's own evaluated cells (its conditioning "
+        "samples excluded), with axis limits from the truth field's own [min, max] (5% "
+        "padding) and MSE recomputed and verified (np.isclose) to match metrics.csv's pinned "
+        "value for the same (axis_level, replicate, method, metric='mse') row."
     )
 
     plt.suptitle(
