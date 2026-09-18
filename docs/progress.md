@@ -9,7 +9,7 @@ Deliverable Order (설계 문서 7절 기준) — 각 단계는 이전 단계에
 - [ ] 3. Nugget 변화 실험
 - [ ] 4. Extrapolation / data configuration 변화 실험
 - [ ] 5. Anisotropy 변화 실험
-- [ ] 6. Sample count/sparsity 변화 실험 — 5%/2%/1% 3개 레벨 완료(레벨당 realization 1개), 추가 realization 예정
+- [ ] 6. Sample count/sparsity 변화 실험 — 5%/2%/1% 3개 레벨 완료(레벨당 realization 1개), 5% 레벨은 sample-placement replicate 10개 추가 완료(2026-09-18), 2%/1%는 아직 1개씩
       (원래 "axis 5 TODO(미확정)"로 잡혀 있던 항목. 설계 문서 7절의 1~5번보다 먼저 착수 — 사용자 지시 2026-09-15)
 
 ## 보류(TODO) — 나중에 다시 판단할 것
