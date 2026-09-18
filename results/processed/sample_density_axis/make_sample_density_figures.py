@@ -483,7 +483,7 @@ def make_calibration_grid_figure():
         ax.set_title(f"{_level_label(axis_level)} of the grid sampled")
         ax.legend(loc="upper left", fontsize=8)
         ax.grid(alpha=0.3)
-    plt.suptitle("Sample-density axis calibration (accuracy) plots, 3 axis levels", fontsize=14)
+    plt.suptitle("Sample-density axis UMG plots, 3 axis levels", fontsize=14)
     fig.text(0.5, 0.005, LIMITATION_CAPTION, ha="center", fontsize=7.5, color="dimgray", wrap=True)
     plt.subplots_adjust(left=0.05, bottom=0.16, right=0.98, top=0.88, wspace=0.25)
     FIGURES_DIR.mkdir(parents=True, exist_ok=True)
