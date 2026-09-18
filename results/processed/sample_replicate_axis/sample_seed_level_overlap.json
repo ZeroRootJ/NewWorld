@@ -1,0 +1,469 @@
+{
+  "note": "For EVERY one of the 10 replicates, reusing that replicate's sample_seed at all 3 density levels reproduces the same 'X draws shared across levels, Y draws differ' coupling sample_density_axis.py documents for its own single SAMPLE_SEED=20: see all_replicates_raw_x_draws_identical_over_common_prefix and all_replicates_raw_y_draws_NOT_identical_over_common_prefix below (measured, not assumed) plus the per-replicate detail in 'per_replicate'.",
+  "all_replicates_smaller_distinct_x_set_is_subset_of_larger": true,
+  "all_replicates_smaller_distinct_y_set_is_NOT_subset_of_larger": false,
+  "all_replicates_raw_x_draws_identical_over_common_prefix": true,
+  "all_replicates_raw_y_draws_NOT_identical_over_common_prefix": true,
+  "per_replicate": {
+    "rep0": {
+      "sample_seed": 1001,
+      "n_samples_actual": {
+        "5": 120,
+        "2": 48,
+        "1": 25
+      },
+      "pairwise_overlap": {
+        "5pct_vs_2pct": {
+          "n_shared_cells": 3,
+          "n_cells_5pct": 120,
+          "n_cells_2pct": 48,
+          "n_distinct_x_of_smaller_set": 34,
+          "smaller_distinct_x_set_is_subset_of_larger": true,
+          "n_distinct_y_of_smaller_set": 29,
+          "smaller_distinct_y_set_is_subset_of_larger": false,
+          "raw_draw_common_prefix_length": 50,
+          "raw_x_draws_identical_over_common_prefix": true,
+          "raw_y_draws_identical_over_common_prefix": false
+        },
+        "5pct_vs_1pct": {
+          "n_shared_cells": 2,
+          "n_cells_5pct": 120,
+          "n_cells_1pct": 25,
+          "n_distinct_x_of_smaller_set": 21,
+          "smaller_distinct_x_set_is_subset_of_larger": true,
+          "n_distinct_y_of_smaller_set": 22,
+          "smaller_distinct_y_set_is_subset_of_larger": false,
+          "raw_draw_common_prefix_length": 25,
+          "raw_x_draws_identical_over_common_prefix": true,
+          "raw_y_draws_identical_over_common_prefix": false
+        },
+        "2pct_vs_1pct": {
+          "n_shared_cells": 2,
+          "n_cells_2pct": 48,
+          "n_cells_1pct": 25,
+          "n_distinct_x_of_smaller_set": 21,
+          "smaller_distinct_x_set_is_subset_of_larger": true,
+          "n_distinct_y_of_smaller_set": 22,
+          "smaller_distinct_y_set_is_subset_of_larger": false,
+          "raw_draw_common_prefix_length": 25,
+          "raw_x_draws_identical_over_common_prefix": true,
+          "raw_y_draws_identical_over_common_prefix": false
+        }
+      }
+    },
+    "rep1": {
+      "sample_seed": 1002,
+      "n_samples_actual": {
+        "5": 121,
+        "2": 50,
+        "1": 25
+      },
+      "pairwise_overlap": {
+        "5pct_vs_2pct": {
+          "n_shared_cells": 7,
+          "n_cells_5pct": 121,
+          "n_cells_2pct": 50,
+          "n_distinct_x_of_smaller_set": 28,
+          "smaller_distinct_x_set_is_subset_of_larger": true,
+          "n_distinct_y_of_smaller_set": 32,
+          "smaller_distinct_y_set_is_subset_of_larger": false,
+          "raw_draw_common_prefix_length": 50,
+          "raw_x_draws_identical_over_common_prefix": true,
+          "raw_y_draws_identical_over_common_prefix": false
+        },
+        "5pct_vs_1pct": {
+          "n_shared_cells": 3,
+          "n_cells_5pct": 121,
+          "n_cells_1pct": 25,
+          "n_distinct_x_of_smaller_set": 17,
+          "smaller_distinct_x_set_is_subset_of_larger": true,
+          "n_distinct_y_of_smaller_set": 19,
+          "smaller_distinct_y_set_is_subset_of_larger": true,
+          "raw_draw_common_prefix_length": 25,
+          "raw_x_draws_identical_over_common_prefix": true,
+          "raw_y_draws_identical_over_common_prefix": false
+        },
+        "2pct_vs_1pct": {
+          "n_shared_cells": 1,
+          "n_cells_2pct": 50,
+          "n_cells_1pct": 25,
+          "n_distinct_x_of_smaller_set": 17,
+          "smaller_distinct_x_set_is_subset_of_larger": true,
+          "n_distinct_y_of_smaller_set": 19,
+          "smaller_distinct_y_set_is_subset_of_larger": false,
+          "raw_draw_common_prefix_length": 25,
+          "raw_x_draws_identical_over_common_prefix": true,
+          "raw_y_draws_identical_over_common_prefix": false
+        }
+      }
+    },
+    "rep2": {
+      "sample_seed": 1003,
+      "n_samples_actual": {
+        "5": 124,
+        "2": 49,
+        "1": 24
+      },
+      "pairwise_overlap": {
+        "5pct_vs_2pct": {
+          "n_shared_cells": 2,
+          "n_cells_5pct": 124,
+          "n_cells_2pct": 49,
+          "n_distinct_x_of_smaller_set": 30,
+          "smaller_distinct_x_set_is_subset_of_larger": true,
+          "n_distinct_y_of_smaller_set": 27,
+          "smaller_distinct_y_set_is_subset_of_larger": true,
+          "raw_draw_common_prefix_length": 50,
+          "raw_x_draws_identical_over_common_prefix": true,
+          "raw_y_draws_identical_over_common_prefix": false
+        },
+        "5pct_vs_1pct": {
+          "n_shared_cells": 3,
+          "n_cells_5pct": 124,
+          "n_cells_1pct": 24,
+          "n_distinct_x_of_smaller_set": 18,
+          "smaller_distinct_x_set_is_subset_of_larger": true,
+          "n_distinct_y_of_smaller_set": 17,
+          "smaller_distinct_y_set_is_subset_of_larger": true,
+          "raw_draw_common_prefix_length": 25,
+          "raw_x_draws_identical_over_common_prefix": true,
+          "raw_y_draws_identical_over_common_prefix": false
+        },
+        "2pct_vs_1pct": {
+          "n_shared_cells": 2,
+          "n_cells_2pct": 49,
+          "n_cells_1pct": 24,
+          "n_distinct_x_of_smaller_set": 18,
+          "smaller_distinct_x_set_is_subset_of_larger": true,
+          "n_distinct_y_of_smaller_set": 17,
+          "smaller_distinct_y_set_is_subset_of_larger": false,
+          "raw_draw_common_prefix_length": 25,
+          "raw_x_draws_identical_over_common_prefix": true,
+          "raw_y_draws_identical_over_common_prefix": false
+        }
+      }
+    },
+    "rep3": {
+      "sample_seed": 1004,
+      "n_samples_actual": {
+        "5": 122,
+        "2": 50,
+        "1": 25
+      },
+      "pairwise_overlap": {
+        "5pct_vs_2pct": {
+          "n_shared_cells": 7,
+          "n_cells_5pct": 122,
+          "n_cells_2pct": 50,
+          "n_distinct_x_of_smaller_set": 31,
+          "smaller_distinct_x_set_is_subset_of_larger": true,
+          "n_distinct_y_of_smaller_set": 28,
+          "smaller_distinct_y_set_is_subset_of_larger": false,
+          "raw_draw_common_prefix_length": 50,
+          "raw_x_draws_identical_over_common_prefix": true,
+          "raw_y_draws_identical_over_common_prefix": false
+        },
+        "5pct_vs_1pct": {
+          "n_shared_cells": 1,
+          "n_cells_5pct": 122,
+          "n_cells_1pct": 25,
+          "n_distinct_x_of_smaller_set": 22,
+          "smaller_distinct_x_set_is_subset_of_larger": true,
+          "n_distinct_y_of_smaller_set": 18,
+          "smaller_distinct_y_set_is_subset_of_larger": false,
+          "raw_draw_common_prefix_length": 25,
+          "raw_x_draws_identical_over_common_prefix": true,
+          "raw_y_draws_identical_over_common_prefix": false
+        },
+        "2pct_vs_1pct": {
+          "n_shared_cells": 2,
+          "n_cells_2pct": 50,
+          "n_cells_1pct": 25,
+          "n_distinct_x_of_smaller_set": 22,
+          "smaller_distinct_x_set_is_subset_of_larger": true,
+          "n_distinct_y_of_smaller_set": 18,
+          "smaller_distinct_y_set_is_subset_of_larger": false,
+          "raw_draw_common_prefix_length": 25,
+          "raw_x_draws_identical_over_common_prefix": true,
+          "raw_y_draws_identical_over_common_prefix": false
+        }
+      }
+    },
+    "rep4": {
+      "sample_seed": 1005,
+      "n_samples_actual": {
+        "5": 119,
+        "2": 47,
+        "1": 25
+      },
+      "pairwise_overlap": {
+        "5pct_vs_2pct": {
+          "n_shared_cells": 2,
+          "n_cells_5pct": 119,
+          "n_cells_2pct": 47,
+          "n_distinct_x_of_smaller_set": 29,
+          "smaller_distinct_x_set_is_subset_of_larger": true,
+          "n_distinct_y_of_smaller_set": 31,
+          "smaller_distinct_y_set_is_subset_of_larger": false,
+          "raw_draw_common_prefix_length": 50,
+          "raw_x_draws_identical_over_common_prefix": true,
+          "raw_y_draws_identical_over_common_prefix": false
+        },
+        "5pct_vs_1pct": {
+          "n_shared_cells": 1,
+          "n_cells_5pct": 119,
+          "n_cells_1pct": 25,
+          "n_distinct_x_of_smaller_set": 20,
+          "smaller_distinct_x_set_is_subset_of_larger": true,
+          "n_distinct_y_of_smaller_set": 17,
+          "smaller_distinct_y_set_is_subset_of_larger": false,
+          "raw_draw_common_prefix_length": 25,
+          "raw_x_draws_identical_over_common_prefix": true,
+          "raw_y_draws_identical_over_common_prefix": false
+        },
+        "2pct_vs_1pct": {
+          "n_shared_cells": 2,
+          "n_cells_2pct": 47,
+          "n_cells_1pct": 25,
+          "n_distinct_x_of_smaller_set": 20,
+          "smaller_distinct_x_set_is_subset_of_larger": true,
+          "n_distinct_y_of_smaller_set": 17,
+          "smaller_distinct_y_set_is_subset_of_larger": false,
+          "raw_draw_common_prefix_length": 25,
+          "raw_x_draws_identical_over_common_prefix": true,
+          "raw_y_draws_identical_over_common_prefix": false
+        }
+      }
+    },
+    "rep5": {
+      "sample_seed": 1006,
+      "n_samples_actual": {
+        "5": 120,
+        "2": 50,
+        "1": 25
+      },
+      "pairwise_overlap": {
+        "5pct_vs_2pct": {
+          "n_shared_cells": 6,
+          "n_cells_5pct": 120,
+          "n_cells_2pct": 50,
+          "n_distinct_x_of_smaller_set": 29,
+          "smaller_distinct_x_set_is_subset_of_larger": true,
+          "n_distinct_y_of_smaller_set": 30,
+          "smaller_distinct_y_set_is_subset_of_larger": false,
+          "raw_draw_common_prefix_length": 50,
+          "raw_x_draws_identical_over_common_prefix": true,
+          "raw_y_draws_identical_over_common_prefix": false
+        },
+        "5pct_vs_1pct": {
+          "n_shared_cells": 2,
+          "n_cells_5pct": 120,
+          "n_cells_1pct": 25,
+          "n_distinct_x_of_smaller_set": 20,
+          "smaller_distinct_x_set_is_subset_of_larger": true,
+          "n_distinct_y_of_smaller_set": 19,
+          "smaller_distinct_y_set_is_subset_of_larger": true,
+          "raw_draw_common_prefix_length": 25,
+          "raw_x_draws_identical_over_common_prefix": true,
+          "raw_y_draws_identical_over_common_prefix": false
+        },
+        "2pct_vs_1pct": {
+          "n_shared_cells": 3,
+          "n_cells_2pct": 50,
+          "n_cells_1pct": 25,
+          "n_distinct_x_of_smaller_set": 20,
+          "smaller_distinct_x_set_is_subset_of_larger": true,
+          "n_distinct_y_of_smaller_set": 19,
+          "smaller_distinct_y_set_is_subset_of_larger": false,
+          "raw_draw_common_prefix_length": 25,
+          "raw_x_draws_identical_over_common_prefix": true,
+          "raw_y_draws_identical_over_common_prefix": false
+        }
+      }
+    },
+    "rep6": {
+      "sample_seed": 1007,
+      "n_samples_actual": {
+        "5": 121,
+        "2": 50,
+        "1": 25
+      },
+      "pairwise_overlap": {
+        "5pct_vs_2pct": {
+          "n_shared_cells": 7,
+          "n_cells_5pct": 121,
+          "n_cells_2pct": 50,
+          "n_distinct_x_of_smaller_set": 29,
+          "smaller_distinct_x_set_is_subset_of_larger": true,
+          "n_distinct_y_of_smaller_set": 28,
+          "smaller_distinct_y_set_is_subset_of_larger": false,
+          "raw_draw_common_prefix_length": 50,
+          "raw_x_draws_identical_over_common_prefix": true,
+          "raw_y_draws_identical_over_common_prefix": false
+        },
+        "5pct_vs_1pct": {
+          "n_shared_cells": 5,
+          "n_cells_5pct": 121,
+          "n_cells_1pct": 25,
+          "n_distinct_x_of_smaller_set": 20,
+          "smaller_distinct_x_set_is_subset_of_larger": true,
+          "n_distinct_y_of_smaller_set": 18,
+          "smaller_distinct_y_set_is_subset_of_larger": false,
+          "raw_draw_common_prefix_length": 25,
+          "raw_x_draws_identical_over_common_prefix": true,
+          "raw_y_draws_identical_over_common_prefix": false
+        },
+        "2pct_vs_1pct": {
+          "n_shared_cells": 0,
+          "n_cells_2pct": 50,
+          "n_cells_1pct": 25,
+          "n_distinct_x_of_smaller_set": 20,
+          "smaller_distinct_x_set_is_subset_of_larger": true,
+          "n_distinct_y_of_smaller_set": 18,
+          "smaller_distinct_y_set_is_subset_of_larger": false,
+          "raw_draw_common_prefix_length": 25,
+          "raw_x_draws_identical_over_common_prefix": true,
+          "raw_y_draws_identical_over_common_prefix": false
+        }
+      }
+    },
+    "rep7": {
+      "sample_seed": 1008,
+      "n_samples_actual": {
+        "5": 118,
+        "2": 50,
+        "1": 24
+      },
+      "pairwise_overlap": {
+        "5pct_vs_2pct": {
+          "n_shared_cells": 2,
+          "n_cells_5pct": 118,
+          "n_cells_2pct": 50,
+          "n_distinct_x_of_smaller_set": 31,
+          "smaller_distinct_x_set_is_subset_of_larger": true,
+          "n_distinct_y_of_smaller_set": 29,
+          "smaller_distinct_y_set_is_subset_of_larger": true,
+          "raw_draw_common_prefix_length": 50,
+          "raw_x_draws_identical_over_common_prefix": true,
+          "raw_y_draws_identical_over_common_prefix": false
+        },
+        "5pct_vs_1pct": {
+          "n_shared_cells": 1,
+          "n_cells_5pct": 118,
+          "n_cells_1pct": 24,
+          "n_distinct_x_of_smaller_set": 19,
+          "smaller_distinct_x_set_is_subset_of_larger": true,
+          "n_distinct_y_of_smaller_set": 19,
+          "smaller_distinct_y_set_is_subset_of_larger": false,
+          "raw_draw_common_prefix_length": 25,
+          "raw_x_draws_identical_over_common_prefix": true,
+          "raw_y_draws_identical_over_common_prefix": false
+        },
+        "2pct_vs_1pct": {
+          "n_shared_cells": 2,
+          "n_cells_2pct": 50,
+          "n_cells_1pct": 24,
+          "n_distinct_x_of_smaller_set": 19,
+          "smaller_distinct_x_set_is_subset_of_larger": true,
+          "n_distinct_y_of_smaller_set": 19,
+          "smaller_distinct_y_set_is_subset_of_larger": false,
+          "raw_draw_common_prefix_length": 25,
+          "raw_x_draws_identical_over_common_prefix": true,
+          "raw_y_draws_identical_over_common_prefix": false
+        }
+      }
+    },
+    "rep8": {
+      "sample_seed": 1009,
+      "n_samples_actual": {
+        "5": 121,
+        "2": 49,
+        "1": 25
+      },
+      "pairwise_overlap": {
+        "5pct_vs_2pct": {
+          "n_shared_cells": 5,
+          "n_cells_5pct": 121,
+          "n_cells_2pct": 49,
+          "n_distinct_x_of_smaller_set": 33,
+          "smaller_distinct_x_set_is_subset_of_larger": true,
+          "n_distinct_y_of_smaller_set": 28,
+          "smaller_distinct_y_set_is_subset_of_larger": false,
+          "raw_draw_common_prefix_length": 50,
+          "raw_x_draws_identical_over_common_prefix": true,
+          "raw_y_draws_identical_over_common_prefix": false
+        },
+        "5pct_vs_1pct": {
+          "n_shared_cells": 0,
+          "n_cells_5pct": 121,
+          "n_cells_1pct": 25,
+          "n_distinct_x_of_smaller_set": 20,
+          "smaller_distinct_x_set_is_subset_of_larger": true,
+          "n_distinct_y_of_smaller_set": 23,
+          "smaller_distinct_y_set_is_subset_of_larger": false,
+          "raw_draw_common_prefix_length": 25,
+          "raw_x_draws_identical_over_common_prefix": true,
+          "raw_y_draws_identical_over_common_prefix": false
+        },
+        "2pct_vs_1pct": {
+          "n_shared_cells": 3,
+          "n_cells_2pct": 49,
+          "n_cells_1pct": 25,
+          "n_distinct_x_of_smaller_set": 20,
+          "smaller_distinct_x_set_is_subset_of_larger": true,
+          "n_distinct_y_of_smaller_set": 23,
+          "smaller_distinct_y_set_is_subset_of_larger": false,
+          "raw_draw_common_prefix_length": 25,
+          "raw_x_draws_identical_over_common_prefix": true,
+          "raw_y_draws_identical_over_common_prefix": false
+        }
+      }
+    },
+    "rep9": {
+      "sample_seed": 1010,
+      "n_samples_actual": {
+        "5": 120,
+        "2": 49,
+        "1": 25
+      },
+      "pairwise_overlap": {
+        "5pct_vs_2pct": {
+          "n_shared_cells": 4,
+          "n_cells_5pct": 120,
+          "n_cells_2pct": 49,
+          "n_distinct_x_of_smaller_set": 27,
+          "smaller_distinct_x_set_is_subset_of_larger": true,
+          "n_distinct_y_of_smaller_set": 33,
+          "smaller_distinct_y_set_is_subset_of_larger": false,
+          "raw_draw_common_prefix_length": 50,
+          "raw_x_draws_identical_over_common_prefix": true,
+          "raw_y_draws_identical_over_common_prefix": false
+        },
+        "5pct_vs_1pct": {
+          "n_shared_cells": 2,
+          "n_cells_5pct": 120,
+          "n_cells_1pct": 25,
+          "n_distinct_x_of_smaller_set": 18,
+          "smaller_distinct_x_set_is_subset_of_larger": true,
+          "n_distinct_y_of_smaller_set": 17,
+          "smaller_distinct_y_set_is_subset_of_larger": true,
+          "raw_draw_common_prefix_length": 25,
+          "raw_x_draws_identical_over_common_prefix": true,
+          "raw_y_draws_identical_over_common_prefix": false
+        },
+        "2pct_vs_1pct": {
+          "n_shared_cells": 0,
+          "n_cells_2pct": 49,
+          "n_cells_1pct": 25,
+          "n_distinct_x_of_smaller_set": 18,
+          "smaller_distinct_x_set_is_subset_of_larger": true,
+          "n_distinct_y_of_smaller_set": 17,
+          "smaller_distinct_y_set_is_subset_of_larger": false,
+          "raw_draw_common_prefix_length": 25,
+          "raw_x_draws_identical_over_common_prefix": true,
+          "raw_y_draws_identical_over_common_prefix": false
+        }
+      }
+    }
+  }
+}

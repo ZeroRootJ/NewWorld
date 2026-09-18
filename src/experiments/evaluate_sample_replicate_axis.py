@@ -1,14 +1,18 @@
 """Evaluate the sample-seed replicate axis (src/experiments/
-sample_replicate_axis.py): 10 fresh sample-location draws (sample_seed in
-{1001, ..., 1010}) at the SAME ground truth (TRUTH_SEED=101, range=300 m)
-and the SAME requested sample count (n_samples=125, the base case's "5%"
-density level), for all 4 methods (kriging / SGS / RBF+bootstrap / GP-MLE).
+sample_replicate_axis.py), NOW EXTENDED (2026-09-18) to all 3 sample-density
+axis levels: 10 sample-location draws (sample_seed in {1001, ..., 1010},
+reused UNCHANGED at every level) x 3 density levels ("5"/"2"/"1" ->
+n_samples_requested = 125/50/25) x 4 methods (kriging / SGS / RBF+bootstrap /
+GP-MLE) = 120 (level, replicate, method) cells.
 
 Purpose: quantify how much each method's accuracy/calibration/predictive-
 variance moves from sample PLACEMENT alone, with sample count and ground
-truth held fixed -- a different question from the sample-density axis
-(src/experiments/evaluate_sample_density_axis.py), which varies n_samples
-and reports levels that are NOT scored on the same cell set.
+truth held fixed WITHIN a level -- a different question from the
+sample-density axis (src/experiments/evaluate_sample_density_axis.py), which
+varies n_samples at ONE fixed sample_seed per level and reports levels that
+are NOT scored on the same cell set. This module answers that same
+placement-only question at all 3 of that axis's density levels, using the
+SAME 10 replicate seeds at each.
 
 Metrics -- reported SEPARATELY (never combined into one number), reusing
 src/evaluation.py's functions exactly as evaluate_sample_density_axis.py
@@ -20,14 +24,24 @@ does, with the SAME per-method source-array convention:
     - ``umg``            (coverage goodness, 1.0 = ideal)
   predictive-variance magnitude
     - ``variance_mean``  (porosity %^2, the predictive variance averaged
-                          over that replicate's evaluated cells)
+                          over that (level, replicate)'s evaluated cells)
 
 ``variance_sum`` is deliberately NOT computed here (user decision,
-2026-09-18, specific to this experiment): variance_mean already normalizes
-for the (small, replicate-to-replicate) differences in evaluated-cell count
-the way evaluate_sample_density_axis.py's own comment explains, and the sum
-adds no information for a fixed-n comparison across replicates that this
-mean does not already carry more comparably.
+2026-09-18, unchanged by this extension): variance_mean already normalizes
+for the (small, replicate-to-replicate AND level-to-level) differences in
+evaluated-cell count the way evaluate_sample_density_axis.py's own comment
+explains, and the sum adds no information this mean does not already carry
+more comparably.
+
+Tidy output: metrics.csv has columns (case, axis, axis_level, replicate,
+method, metric, value) -- 3 levels x 10 replicates x 4 methods x 3 metrics
+= 360 rows. ``axis_level`` uses the SAME "5"/"2"/"1" labels/semantics as
+sample_density_axis.ALL_AXIS_LEVELS (so this table can be joined against
+sample_density_axis/metrics.csv's single-realization values), and
+``replicate`` is the "rep0".."rep9" identifier (the SAME representation used
+throughout sample_replicate_axis.py) -- kept as its OWN column (not folded
+into axis_level) so a reader can group by density level and by replicate
+independently.
 
 NOTE on the variance metric's source array (fact, not interpretation, same
 as evaluate_sample_density_axis.py): three of the four methods supply a
@@ -39,26 +53,61 @@ normal-score space, and its physical-unit variance
 obtained by back-transforming samples of the normal-score predictive
 distribution. This asymmetry is recorded in ``variance_metric_sources.csv``.
 
-IMPORTANT -- the evaluation cell set is NOT identical across replicates
+IMPORTANT -- the evaluation cell set is NOT identical across (level,
+replicate) cells
 ------------------------------------------------------------------------
 All four methods exclude the conditioning-sample cells before any metric is
 computed (``conditioning_cell_mask``), identically for all 4 methods WITHIN
-a replicate, but the excluded set can differ slightly BETWEEN replicates
-because n_samples_actual (after grid-cell dedup) is not always exactly 125
-and lands on different cells for each sample_seed. The exact evaluated-cell
-count per replicate is written to ``evaluation_cell_counts.csv``.
+a (level, replicate) cell, but the excluded set differs BETWEEN replicates
+(different sample_seed -> different cells) AND BETWEEN levels (different
+n_samples_requested). The exact evaluated-cell count per (level, replicate)
+is written to ``evaluation_cell_counts.csv``.
+
+Per-method structural "length scale" (NOT part of the main tidy table)
+-------------------------------------------------------------------------
+GP-MLE's MLE-fitted RBF length_scale (converted to a practical range at the
+same 0.05-correlation-cutoff convention) and RBF+bootstrap's CV-selected
+epsilon (converted to an equivalent 0.05-cutoff distance) are BOTH
+replicate-varying quantities -- unlike kriging/SGS, whose variogram range is
+a FIXED INPUT CONSTANT (300 m) at every level and every replicate, not
+fitted from the conditioning data at all. Putting a per-replicate "length"
+number in the SAME tidy metrics.csv for kriging/SGS would misrepresent a
+structural constant as if it varied per replicate (it does not -- there is
+nothing to average over 10 replicates), so these two methods are
+deliberately given NO length-scale rows anywhere, and this fact is recorded
+in ``length_scale_by_replicate.csv``'s own header note rather than
+represented by a fabricated/NaN row. GP-MLE and RBF+bootstrap's per-replicate
+length values are written to a SEPARATE small table,
+``length_scale_by_replicate.csv`` (columns: axis_level, replicate, method,
+length_scale_m, length_definition, source), using the EXACT SAME conversion
+formulas results/processed/sample_density_axis/
+make_length_and_variogram_figures.py already uses (not reimplemented
+differently):
+  - GP-MLE: practical_range_m = sqrt(-2*ln(0.05)) * length_scale_m (factor
+    ~= 2.4477), reading length_scale_m from the run's own manifest
+    (params.fitted_hyperparameters.length_scale_m).
+  - RBF+bootstrap: r_0.05 = sqrt(-ln(0.05)) / epsilon, reading epsilon from
+    the run's own manifest (params.best_epsilon), only valid for
+    params.rbf_kernel == "gaussian" (checked, not assumed).
+Their (axis_level, method) aggregates (mean/std/min/max across the 10
+replicates) are appended as EXTRA rows to metrics_summary.csv (metric names
+"length_scale_practical_range_m" for gp_mle, "length_scale_rbf_converted_m"
+for rbf_bootstrap) -- on top of, not replacing, the 3-levels x 4-methods x
+3-metrics = 36 core summary rows.
 
 Cross-method fairness / source-run provenance
 -----------------------------------------------
 Run directories come from
 results/processed/sample_replicate_axis/source_runs.json (written by
-src.experiments.sample_replicate_axis, which already verified every run
-against its own replicate's conditioning samples before writing that file).
-This script INDEPENDENTLY re-verifies the same thing here (regenerating each
-replicate's conditioning samples and cross-checking every method's recorded
-samples.csv against them) before trusting any run -- belt-and-suspenders,
-same convention evaluate_sample_density_axis.py follows for the runs it
-consumes.
+src.experiments.sample_replicate_axis, which already verified EVERY run --
+both the reused level-5 runs and the fresh level-2/1 runs -- against its own
+(level, replicate)'s conditioning samples before writing that file). This
+script INDEPENDENTLY re-verifies the same thing here (regenerating each
+(level, replicate)'s conditioning samples and cross-checking every method's
+recorded samples.csv against them) before trusting any run -- belt-and-
+suspenders, applied identically to all 120 (level, replicate, method) cells,
+REUSED and FRESH alike (the project's standing convention: never silently
+trust a reused run).
 
 Run with:
 .venv/Scripts/python.exe -m src.experiments.evaluate_sample_replicate_axis
@@ -87,11 +136,12 @@ from src.experiments.base_case_conditioning import (
     get_conditioning_samples,
 )
 from src.experiments.kriging import BACKTR_ZMAX, BACKTR_ZMIN, LTAIL, LTPAR, UTAIL, UTPAR
+from src.experiments.sample_density_axis import ALL_AXIS_LEVELS
 from src.experiments.sample_replicate_axis import (
     AXIS_HMAJ1,
     AXIS_HMIN1,
     METHODS,
-    N_SAMPLES_REQUESTED,
+    N_SAMPLES_REQUESTED_BY_LEVEL,
     REPLICATE_IDS,
     REPLICATE_SEED,
     TRUTH_SEED,
@@ -128,6 +178,21 @@ VARIANCE_SOURCE_IS_MC_BACKTRANSFORM = {
 VARIANCE_CLIP_TOLERANCE = 1e-6
 SAMPLES_MATCH_ATOL = 1e-10
 
+# Same 0.05-correlation-cutoff convention used by
+# results/processed/sample_density_axis/make_length_and_variogram_figures.py
+# (and src/experiments/diagnose_sample_density_axis.py for GP-MLE) -- reused
+# verbatim, not redefined differently, for both GP-MLE and RBF+bootstrap's
+# length-scale conversions.
+CORRELATION_CUTOFF = 0.05
+GP_PRACTICAL_RANGE_FACTOR = float(np.sqrt(-2.0 * np.log(CORRELATION_CUTOFF)))  # ~=2.4477
+
+# Methods with NO per-replicate length-scale concept: kriging/SGS's
+# variogram range is a fixed INPUT constant (300 m) at every level and every
+# replicate, never fitted from the conditioning data. Deliberately excluded
+# from length_scale_by_replicate.csv -- see module docstring.
+LENGTH_SCALE_METHODS = ("gp_mle", "rbf_bootstrap")
+STRUCTURALLY_FIXED_METHODS = ("kriging", "sgs")
+
 
 def safe_sqrt_variance(var_map: np.ndarray, name: str) -> np.ndarray:
     """sqrt of a variance map, defensively clipping small-negative
@@ -148,35 +213,98 @@ def safe_sqrt_variance(var_map: np.ndarray, name: str) -> np.ndarray:
     return np.sqrt(np.clip(var_map, 0.0, None))
 
 
-def _replicate_mask(replicate_id: str):
-    """Regenerate this replicate's truth + conditioning samples and return
-    (truth, samples_df, mask). The truth field is IDENTICAL across all 10
-    replicates (same TRUTH_SEED, same range) -- only the samples differ."""
+def _manifest_params(rel_run_dir: str) -> dict:
+    return json.loads(
+        (_REPO_ROOT / rel_run_dir / "manifest.json").read_text(encoding="utf-8")
+    )["params"]
+
+
+def _level_replicate_mask(axis_level: str, replicate_id: str):
+    """Regenerate this (level, replicate)'s truth + conditioning samples and
+    return (truth, samples_df, mask). The truth field is IDENTICAL across all
+    3 levels x 10 replicates (same TRUTH_SEED, same range) -- only the
+    samples differ."""
     seed = REPLICATE_SEED[replicate_id]
+    n = N_SAMPLES_REQUESTED_BY_LEVEL[axis_level]
     truth = get_base_case_truth(truth_seed=TRUTH_SEED, hmaj1=AXIS_HMAJ1, hmin1=AXIS_HMIN1)
-    samples_df = get_conditioning_samples(truth, sample_seed=seed, n_samples=N_SAMPLES_REQUESTED)
+    samples_df = get_conditioning_samples(truth, sample_seed=seed, n_samples=n)
     mask = conditioning_cell_mask(samples_df, NX, NY, XMN, YMN, XSIZ, YSIZ)
     return truth, samples_df, mask
 
 
-def evaluate_one_replicate(replicate_id: str, run_dirs: dict):
-    """Compute mse / umg / variance_mean for all 4 methods at one replicate.
+def length_scale_rows_for_cell(axis_level: str, replicate_id: str, run_dirs: dict) -> list:
+    """GP-MLE / RBF+bootstrap length-scale rows for one (level, replicate)
+    cell, using the exact conversion formulas
+    make_length_and_variogram_figures.py already uses (see module
+    docstring). Kriging/SGS are NOT represented here (see
+    STRUCTURALLY_FIXED_METHODS note)."""
+    rows = []
+
+    gp_params = _manifest_params(run_dirs["gp_mle"])
+    ell = float(gp_params["fitted_hyperparameters"]["length_scale_m"])
+    rows.append(
+        {
+            "axis_level": axis_level,
+            "replicate": replicate_id,
+            "method": "gp_mle",
+            "length_scale_m": GP_PRACTICAL_RANGE_FACTOR * ell,
+            "length_definition": (
+                f"MLE-fitted sklearn RBF kernel length_scale converted to a practical range "
+                f"at the {CORRELATION_CUTOFF} correlation cutoff "
+                f"(factor=sqrt(2*ln(20))~={GP_PRACTICAL_RANGE_FACTOR:.4f})"
+            ),
+            "source": f"{run_dirs['gp_mle']}/manifest.json:params.fitted_hyperparameters.length_scale_m",
+        }
+    )
+
+    rbf_params = _manifest_params(run_dirs["rbf_bootstrap"])
+    kernel = rbf_params["rbf_kernel"]
+    if kernel != "gaussian":
+        raise ValueError(
+            f"level '{axis_level}' {replicate_id}: rbf_bootstrap manifest records "
+            f"rbf_kernel='{kernel}', not 'gaussian' -- the phi(r)=exp(-(epsilon*r)^2) "
+            "conversion used here does not apply to a different kernel family."
+        )
+    epsilon = float(rbf_params["best_epsilon"])
+    r_cutoff = float(np.sqrt(-np.log(CORRELATION_CUTOFF)) / epsilon)
+    rows.append(
+        {
+            "axis_level": axis_level,
+            "replicate": replicate_id,
+            "method": "rbf_bootstrap",
+            "length_scale_m": r_cutoff,
+            "length_definition": (
+                f"CV-tuned gaussian RBF interpolation kernel shape parameter epsilon "
+                f"converted to an equivalent {CORRELATION_CUTOFF}-cutoff distance "
+                f"(r=sqrt(-ln({CORRELATION_CUTOFF}))/epsilon); NOT a fitted spatial "
+                "correlation length -- see module docstring"
+            ),
+            "source": f"{run_dirs['rbf_bootstrap']}/manifest.json:params.best_epsilon",
+        }
+    )
+    return rows
+
+
+def evaluate_one_cell(axis_level: str, replicate_id: str, run_dirs: dict):
+    """Compute mse / umg / variance_mean for all 4 methods at one (level,
+    replicate) cell.
 
     Returns (metrics, diagnostics, variance_sources).
     """
     seed = REPLICATE_SEED[replicate_id]
-    truth, samples_df, mask = _replicate_mask(replicate_id)
+    truth, samples_df, mask = _level_replicate_mask(axis_level, replicate_id)
     n_excluded = int((~mask).sum())
     n_evaluated = int(mask.sum())
     print(
-        f"  {replicate_id} (sample_seed={seed}, n_actual={len(samples_df)}): "
-        f"conditioning-sample cells excluded: {n_excluded} of {mask.size} "
-        f"-> {n_evaluated} evaluated cells"
+        f"  level '{axis_level}' {replicate_id} (sample_seed={seed}, n_actual="
+        f"{len(samples_df)}): conditioning-sample cells excluded: {n_excluded} of "
+        f"{mask.size} -> {n_evaluated} evaluated cells"
     )
 
     # Cross-check every method's own recorded samples.csv against the
     # regenerated conditioning samples -- independent re-verification of what
-    # sample_replicate_axis.py already checked once at run time.
+    # sample_replicate_axis.py already checked once at run time (applied here
+    # identically to REUSED and FRESH runs).
     for m in METHODS:
         recorded = pd.read_csv(_REPO_ROOT / run_dirs[m] / "samples.csv")
         if len(recorded) != len(samples_df) or not np.allclose(
@@ -185,16 +313,18 @@ def evaluate_one_replicate(replicate_id: str, run_dirs: dict):
         ):
             raise ValueError(
                 f"{m}'s recorded samples.csv does NOT match the regenerated conditioning "
-                f"samples for {replicate_id} (sample_seed={seed}) -- the identical-sample-"
-                "locations-across-methods assumption is violated for this run."
+                f"samples for level '{axis_level}' {replicate_id} (sample_seed={seed}) -- "
+                "the identical-sample-locations-across-methods assumption is violated for "
+                "this run."
             )
 
     truth_masked = truth[mask]
     metrics = {m: {} for m in METHODS}
     diagnostics = {
-        "replicate_id": replicate_id,
+        "axis_level": axis_level,
+        "replicate": replicate_id,
         "sample_seed": seed,
-        "n_samples_requested": N_SAMPLES_REQUESTED,
+        "n_samples_requested": N_SAMPLES_REQUESTED_BY_LEVEL[axis_level],
         "n_samples_actual": len(samples_df),
         "n_cells_total": int(mask.size),
         "n_cells_excluded": n_excluded,
@@ -269,7 +399,8 @@ def evaluate_one_replicate(replicate_id: str, run_dirs: dict):
         metrics[method]["variance_mean"] = float(np.mean(var_masked))
         variance_sources.append(
             {
-                "replicate_id": replicate_id,
+                "axis_level": axis_level,
+                "replicate": replicate_id,
                 "method": method,
                 "variance_source_file": fname,
                 "units": "porosity %^2",
@@ -290,46 +421,62 @@ def main():
     with open(SOURCE_RUNS_PATH, "r", encoding="utf-8") as f:
         source_runs = json.load(f)
 
-    if set(source_runs) != set(REPLICATE_IDS):
+    if set(source_runs) != set(ALL_AXIS_LEVELS):
         raise ValueError(
-            f"{SOURCE_RUNS_PATH} has replicate ids {sorted(source_runs)}; expected "
-            f"{sorted(REPLICATE_IDS)}."
+            f"{SOURCE_RUNS_PATH} has axis levels {sorted(source_runs)}; expected "
+            f"{sorted(ALL_AXIS_LEVELS)}."
         )
+    for lvl in ALL_AXIS_LEVELS:
+        if set(source_runs[lvl]) != set(REPLICATE_IDS):
+            raise ValueError(
+                f"{SOURCE_RUNS_PATH} level '{lvl}' has replicate ids "
+                f"{sorted(source_runs[lvl])}; expected {sorted(REPLICATE_IDS)}."
+            )
 
     rows = []
     diagnostics_rows = []
     variance_source_rows = []
+    length_scale_rows = []
 
-    for replicate_id in REPLICATE_IDS:
-        print(f"\nEvaluating {replicate_id} (sample_seed={REPLICATE_SEED[replicate_id]})...")
-        metrics, diagnostics, variance_sources = evaluate_one_replicate(
-            replicate_id, source_runs[replicate_id]
-        )
-        variance_source_rows.extend(variance_sources)
-        diagnostics_rows.append(diagnostics)
-        for method in METHODS:
-            for metric_name, value in metrics[method].items():
-                rows.append(
-                    {
-                        "case": CASE,
-                        "axis": AXIS,
-                        "axis_level": replicate_id,
-                        "method": method,
-                        "metric": metric_name,
-                        "value": value,
-                    }
-                )
+    for axis_level in ALL_AXIS_LEVELS:
+        for replicate_id in REPLICATE_IDS:
+            print(
+                f"\nEvaluating level '{axis_level}' {replicate_id} "
+                f"(sample_seed={REPLICATE_SEED[replicate_id]})..."
+            )
+            run_dirs = source_runs[axis_level][replicate_id]
+            metrics, diagnostics, variance_sources = evaluate_one_cell(
+                axis_level, replicate_id, run_dirs
+            )
+            variance_source_rows.extend(variance_sources)
+            diagnostics_rows.append(diagnostics)
+            length_scale_rows.extend(
+                length_scale_rows_for_cell(axis_level, replicate_id, run_dirs)
+            )
+            for method in METHODS:
+                for metric_name, value in metrics[method].items():
+                    rows.append(
+                        {
+                            "case": CASE,
+                            "axis": AXIS,
+                            "axis_level": axis_level,
+                            "replicate": replicate_id,
+                            "method": method,
+                            "metric": metric_name,
+                            "value": value,
+                        }
+                    )
 
     metrics_df = pd.DataFrame(rows)
     if metrics_df["value"].isna().any() or not np.all(np.isfinite(metrics_df["value"].values)):
         raise ValueError("metrics_df contains NaN/inf values -- see printed metrics above.")
 
-    expected_n_rows = len(REPLICATE_IDS) * len(METHODS) * len(METRICS)
+    expected_n_rows = len(ALL_AXIS_LEVELS) * len(REPLICATE_IDS) * len(METHODS) * len(METRICS)
     if len(metrics_df) != expected_n_rows:
         raise ValueError(
             f"metrics_df has {len(metrics_df)} rows; expected {expected_n_rows} "
-            f"({len(REPLICATE_IDS)} replicates x {len(METHODS)} methods x "
-            f"{len(METRICS)} metrics: {', '.join(METRICS)})."
+            f"({len(ALL_AXIS_LEVELS)} levels x {len(REPLICATE_IDS)} replicates x "
+            f"{len(METHODS)} methods x {len(METRICS)} metrics: {', '.join(METRICS)})."
         )
     if set(metrics_df["metric"]) != set(METRICS):
         raise ValueError(
@@ -337,13 +484,18 @@ def main():
             f"{sorted(METRICS)}."
         )
 
-    # Reading order: rep0 .. rep9.
+    # Reading order: level 5 -> 2 -> 1 (dense -> sparse), rep0 .. rep9 within
+    # a level.
+    metrics_df["_axis_level_numeric"] = metrics_df["axis_level"].astype(float)
     metrics_df["_rep_numeric"] = (
-        metrics_df["axis_level"].str.replace("rep", "", regex=False).astype(int)
+        metrics_df["replicate"].str.replace("rep", "", regex=False).astype(int)
     )
     metrics_df = (
-        metrics_df.sort_values(["_rep_numeric", "method", "metric"])
-        .drop(columns="_rep_numeric")
+        metrics_df.sort_values(
+            ["_axis_level_numeric", "_rep_numeric", "method", "metric"],
+            ascending=[False, True, True, True],
+        )
+        .drop(columns=["_axis_level_numeric", "_rep_numeric"])
         .reset_index(drop=True)
     )
 
@@ -356,51 +508,110 @@ def main():
 
     cell_counts = diagnostics_df[
         [
-            "replicate_id", "sample_seed", "n_samples_requested", "n_samples_actual",
-            "n_cells_total", "n_cells_excluded", "n_cells_evaluated",
+            "axis_level", "replicate", "sample_seed", "n_samples_requested",
+            "n_samples_actual", "n_cells_total", "n_cells_excluded", "n_cells_evaluated",
         ]
     ].copy()
     cell_counts["note"] = (
         "Conditioning-sample cells are excluded from evaluation for all 4 methods "
-        "identically WITHIN a replicate, but the excluded set can differ slightly BETWEEN "
-        "replicates (different sample_seed -> different cells, and n_samples_actual is not "
-        "always exactly 125 after grid-cell dedup)."
+        "identically WITHIN a (level, replicate) cell, but the excluded set differs "
+        "BETWEEN replicates (different sample_seed -> different cells) AND BETWEEN levels "
+        "(different n_samples_requested)."
     )
     cell_counts_csv = PROCESSED_DIR / "evaluation_cell_counts.csv"
     cell_counts.to_csv(cell_counts_csv, index=False)
 
     variance_sources_df = pd.DataFrame(variance_source_rows)[
         [
-            "replicate_id", "method", "variance_source_file", "units",
+            "axis_level", "replicate", "method", "variance_source_file", "units",
             "is_monte_carlo_backtransform_approximation", "n_cells_averaged", "variance_mean",
         ]
     ]
     variance_sources_df["note"] = (
-        "variance_mean is taken over this replicate's evaluated cells (its conditioning "
-        "cells excluded). All four arrays are porosity %^2, but kriging's physical-unit "
-        "variance is a Monte Carlo back-transform of its normal-score variance, whereas "
-        "sgs/rbf_bootstrap/gp_mle variances are native physical-unit arrays."
+        "variance_mean is taken over this (level, replicate) cell's evaluated cells (its "
+        "conditioning cells excluded). All four arrays are porosity %^2, but kriging's "
+        "physical-unit variance is a Monte Carlo back-transform of its normal-score "
+        "variance, whereas sgs/rbf_bootstrap/gp_mle variances are native physical-unit "
+        "arrays."
     )
     variance_sources_csv = PROCESSED_DIR / "variance_metric_sources.csv"
     variance_sources_df.to_csv(variance_sources_csv, index=False)
 
-    # --- Aggregated summary across the 10 replicates -----------------------
+    # --- Length-scale-by-replicate (GP-MLE / RBF+bootstrap only) -----------
+    length_scale_df = pd.DataFrame(length_scale_rows)[
+        ["axis_level", "replicate", "method", "length_scale_m", "length_definition", "source"]
+    ]
+    expected_length_rows = len(ALL_AXIS_LEVELS) * len(REPLICATE_IDS) * len(LENGTH_SCALE_METHODS)
+    if len(length_scale_df) != expected_length_rows:
+        raise ValueError(
+            f"length_scale_df has {len(length_scale_df)} rows; expected "
+            f"{expected_length_rows} ({len(ALL_AXIS_LEVELS)} levels x {len(REPLICATE_IDS)} "
+            f"replicates x {len(LENGTH_SCALE_METHODS)} methods: {LENGTH_SCALE_METHODS})."
+        )
+    length_scale_csv = PROCESSED_DIR / "length_scale_by_replicate.csv"
+    with open(length_scale_csv, "w", encoding="utf-8", newline="") as f:
+        f.write(
+            "# kriging/sgs are intentionally NOT represented in this table: their "
+            f"variogram range is a FIXED INPUT CONSTANT ({AXIS_HMAJ1:g} m) at every level "
+            "and every replicate, never fitted from the conditioning data, so there is no "
+            "per-replicate value to aggregate for them (see "
+            "src/experiments/evaluate_sample_replicate_axis.py module docstring).\n"
+        )
+        length_scale_df.to_csv(f, index=False)
+
+    # --- Aggregated summary across the 10 replicates, per (axis_level, ----
+    # method, metric) -- 3 levels x 4 methods x 3 metrics = 36 core rows,
+    # PLUS gp_mle/rbf_bootstrap length-scale summary rows (3 levels x 2
+    # methods = 6 more).
     summary_rows = []
-    for method in METHODS:
-        for metric_name in METRICS:
-            vals = metrics_df.loc[
-                (metrics_df["method"] == method) & (metrics_df["metric"] == metric_name),
-                "value",
+    for axis_level in ALL_AXIS_LEVELS:
+        for method in METHODS:
+            for metric_name in METRICS:
+                vals = metrics_df.loc[
+                    (metrics_df["axis_level"] == axis_level)
+                    & (metrics_df["method"] == method)
+                    & (metrics_df["metric"] == metric_name),
+                    "value",
+                ].values
+                if len(vals) != len(REPLICATE_IDS):
+                    raise ValueError(
+                        f"level '{axis_level}' {method}/{metric_name}: expected "
+                        f"{len(REPLICATE_IDS)} replicate values, found {len(vals)}."
+                    )
+                summary_rows.append(
+                    {
+                        "axis_level": axis_level,
+                        "method": method,
+                        "metric": metric_name,
+                        "mean": float(np.mean(vals)),
+                        "std": float(np.std(vals, ddof=1)),
+                        "min": float(np.min(vals)),
+                        "max": float(np.max(vals)),
+                        "n_replicates": len(vals),
+                    }
+                )
+
+    length_scale_metric_name = {
+        "gp_mle": "length_scale_practical_range_m",
+        "rbf_bootstrap": "length_scale_rbf_converted_m",
+    }
+    for axis_level in ALL_AXIS_LEVELS:
+        for method in LENGTH_SCALE_METHODS:
+            vals = length_scale_df.loc[
+                (length_scale_df["axis_level"] == axis_level)
+                & (length_scale_df["method"] == method),
+                "length_scale_m",
             ].values
             if len(vals) != len(REPLICATE_IDS):
                 raise ValueError(
-                    f"{method}/{metric_name}: expected {len(REPLICATE_IDS)} replicate "
-                    f"values, found {len(vals)}."
+                    f"level '{axis_level}' {method} length scale: expected "
+                    f"{len(REPLICATE_IDS)} replicate values, found {len(vals)}."
                 )
             summary_rows.append(
                 {
+                    "axis_level": axis_level,
                     "method": method,
-                    "metric": metric_name,
+                    "metric": length_scale_metric_name[method],
                     "mean": float(np.mean(vals)),
                     "std": float(np.std(vals, ddof=1)),
                     "min": float(np.min(vals)),
@@ -408,6 +619,7 @@ def main():
                     "n_replicates": len(vals),
                 }
             )
+
     summary_df = pd.DataFrame(summary_rows)
     summary_csv = PROCESSED_DIR / "metrics_summary.csv"
     summary_df.to_csv(summary_csv, index=False)
@@ -415,16 +627,20 @@ def main():
     pd.set_option("display.width", 220)
     pd.set_option("display.max_columns", 50)
 
-    print("\nSample-replicate axis metrics (10 replicates x 4 methods x 3 metrics):")
+    print("\nSample-replicate axis metrics (3 levels x 10 replicates x 4 methods x 3 metrics):")
     print(metrics_df.to_string(index=False))
-    print("\nAggregated across the 10 replicates (mean/std/min/max per method x metric):")
+    print(
+        "\nAggregated across the 10 replicates (mean/std/min/max per axis_level x method x "
+        "metric, plus gp_mle/rbf_bootstrap length-scale rows):"
+    )
     print(summary_df.to_string(index=False))
-    print("\nEvaluated-cell counts per replicate:")
+    print("\nEvaluated-cell counts per (level, replicate):")
     print(cell_counts.drop(columns="note").to_string(index=False))
     print("\nPredictive-variance metric sources:")
     print(variance_sources_df.drop(columns="note").to_string(index=False))
     print(f"\nmetrics.csv: {metrics_csv}")
     print(f"metrics_summary.csv: {summary_csv}")
+    print(f"length_scale_by_replicate.csv: {length_scale_csv}")
     print(f"evaluation_cell_counts.csv: {cell_counts_csv}")
     print(f"variance_metric_sources.csv: {variance_sources_csv}")
     print(f"evaluation_diagnostics.csv: {diagnostics_csv}")

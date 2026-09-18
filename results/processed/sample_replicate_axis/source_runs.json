@@ -1,62 +1,188 @@
 {
-  "rep0": {
-    "kriging": "results/raw/kriging/20260918T161953188637Z",
-    "sgs": "results/raw/sgs/20260918T162111984240Z",
-    "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T161937800451Z",
-    "gp_mle": "results/raw/gp_mle/20260918T161948245046Z"
+  "5": {
+    "rep0": {
+      "kriging": "results/raw/kriging/20260918T161953188637Z",
+      "sgs": "results/raw/sgs/20260918T162111984240Z",
+      "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T161937800451Z",
+      "gp_mle": "results/raw/gp_mle/20260918T161948245046Z"
+    },
+    "rep1": {
+      "kriging": "results/raw/kriging/20260918T161953087836Z",
+      "sgs": "results/raw/sgs/20260918T162111558764Z",
+      "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T161937561217Z",
+      "gp_mle": "results/raw/gp_mle/20260918T161948110004Z"
+    },
+    "rep2": {
+      "kriging": "results/raw/kriging/20260918T161953230593Z",
+      "sgs": "results/raw/sgs/20260918T162111421321Z",
+      "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T161937482911Z",
+      "gp_mle": "results/raw/gp_mle/20260918T161947908382Z"
+    },
+    "rep3": {
+      "kriging": "results/raw/kriging/20260918T162000756892Z",
+      "sgs": "results/raw/sgs/20260918T162121148088Z",
+      "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T161945122489Z",
+      "gp_mle": "results/raw/gp_mle/20260918T162001077066Z"
+    },
+    "rep4": {
+      "kriging": "results/raw/kriging/20260918T162009936765Z",
+      "sgs": "results/raw/sgs/20260918T162127728079Z",
+      "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T161954335960Z",
+      "gp_mle": "results/raw/gp_mle/20260918T162008856670Z"
+    },
+    "rep5": {
+      "kriging": "results/raw/kriging/20260918T162013862413Z",
+      "sgs": "results/raw/sgs/20260918T162131934702Z",
+      "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T162000794894Z",
+      "gp_mle": "results/raw/gp_mle/20260918T162016253278Z"
+    },
+    "rep6": {
+      "kriging": "results/raw/kriging/20260918T162020923370Z",
+      "sgs": "results/raw/sgs/20260918T162136326114Z",
+      "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T162014953239Z",
+      "gp_mle": "results/raw/gp_mle/20260918T162024842665Z"
+    },
+    "rep7": {
+      "kriging": "results/raw/kriging/20260918T162034223896Z",
+      "sgs": "results/raw/sgs/20260918T162146059194Z",
+      "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T162022120617Z",
+      "gp_mle": "results/raw/gp_mle/20260918T162035303801Z"
+    },
+    "rep8": {
+      "kriging": "results/raw/kriging/20260918T162042837584Z",
+      "sgs": "results/raw/sgs/20260918T162155489122Z",
+      "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T162039881275Z",
+      "gp_mle": "results/raw/gp_mle/20260918T162050063780Z"
+    },
+    "rep9": {
+      "kriging": "results/raw/kriging/20260918T162059851281Z",
+      "sgs": "results/raw/sgs/20260918T162210006525Z",
+      "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T162055731259Z",
+      "gp_mle": "results/raw/gp_mle/20260918T162109707579Z"
+    }
   },
-  "rep1": {
-    "kriging": "results/raw/kriging/20260918T161953087836Z",
-    "sgs": "results/raw/sgs/20260918T162111558764Z",
-    "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T161937561217Z",
-    "gp_mle": "results/raw/gp_mle/20260918T161948110004Z"
+  "2": {
+    "rep0": {
+      "kriging": "results/raw/kriging/20260918T165228655488Z",
+      "sgs": "results/raw/sgs/20260918T165324305913Z",
+      "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T165212859109Z",
+      "gp_mle": "results/raw/gp_mle/20260918T165224272148Z"
+    },
+    "rep1": {
+      "kriging": "results/raw/kriging/20260918T165229737923Z",
+      "sgs": "results/raw/sgs/20260918T165325865136Z",
+      "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T165213038655Z",
+      "gp_mle": "results/raw/gp_mle/20260918T165224149439Z"
+    },
+    "rep2": {
+      "kriging": "results/raw/kriging/20260918T165229489359Z",
+      "sgs": "results/raw/sgs/20260918T165324484083Z",
+      "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T165213030120Z",
+      "gp_mle": "results/raw/gp_mle/20260918T165223617358Z"
+    },
+    "rep3": {
+      "kriging": "results/raw/kriging/20260918T165234533738Z",
+      "sgs": "results/raw/sgs/20260918T165334448936Z",
+      "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T165218889314Z",
+      "gp_mle": "results/raw/gp_mle/20260918T165234749552Z"
+    },
+    "rep4": {
+      "kriging": "results/raw/kriging/20260918T165245099421Z",
+      "sgs": "results/raw/sgs/20260918T165342086908Z",
+      "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T165230110794Z",
+      "gp_mle": "results/raw/gp_mle/20260918T165244252935Z"
+    },
+    "rep5": {
+      "kriging": "results/raw/kriging/20260918T165250672593Z",
+      "sgs": "results/raw/sgs/20260918T165347065528Z",
+      "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T165236088877Z",
+      "gp_mle": "results/raw/gp_mle/20260918T165250172327Z"
+    },
+    "rep6": {
+      "kriging": "results/raw/kriging/20260918T165255389647Z",
+      "sgs": "results/raw/sgs/20260918T165357109920Z",
+      "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T165250191808Z",
+      "gp_mle": "results/raw/gp_mle/20260918T165300085564Z"
+    },
+    "rep7": {
+      "kriging": "results/raw/kriging/20260918T165311122252Z",
+      "sgs": "results/raw/sgs/20260918T165411379822Z",
+      "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T165256247099Z",
+      "gp_mle": "results/raw/gp_mle/20260918T165310238001Z"
+    },
+    "rep8": {
+      "kriging": "results/raw/kriging/20260918T165316422265Z",
+      "sgs": "results/raw/sgs/20260918T165417783723Z",
+      "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T165315955538Z",
+      "gp_mle": "results/raw/gp_mle/20260918T165326349020Z"
+    },
+    "rep9": {
+      "kriging": "results/raw/kriging/20260918T165336452794Z",
+      "sgs": "results/raw/sgs/20260918T165434540011Z",
+      "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T165331672459Z",
+      "gp_mle": "results/raw/gp_mle/20260918T165343006034Z"
+    }
   },
-  "rep2": {
-    "kriging": "results/raw/kriging/20260918T161953230593Z",
-    "sgs": "results/raw/sgs/20260918T162111421321Z",
-    "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T161937482911Z",
-    "gp_mle": "results/raw/gp_mle/20260918T161947908382Z"
-  },
-  "rep3": {
-    "kriging": "results/raw/kriging/20260918T162000756892Z",
-    "sgs": "results/raw/sgs/20260918T162121148088Z",
-    "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T161945122489Z",
-    "gp_mle": "results/raw/gp_mle/20260918T162001077066Z"
-  },
-  "rep4": {
-    "kriging": "results/raw/kriging/20260918T162009936765Z",
-    "sgs": "results/raw/sgs/20260918T162127728079Z",
-    "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T161954335960Z",
-    "gp_mle": "results/raw/gp_mle/20260918T162008856670Z"
-  },
-  "rep5": {
-    "kriging": "results/raw/kriging/20260918T162013862413Z",
-    "sgs": "results/raw/sgs/20260918T162131934702Z",
-    "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T162000794894Z",
-    "gp_mle": "results/raw/gp_mle/20260918T162016253278Z"
-  },
-  "rep6": {
-    "kriging": "results/raw/kriging/20260918T162020923370Z",
-    "sgs": "results/raw/sgs/20260918T162136326114Z",
-    "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T162014953239Z",
-    "gp_mle": "results/raw/gp_mle/20260918T162024842665Z"
-  },
-  "rep7": {
-    "kriging": "results/raw/kriging/20260918T162034223896Z",
-    "sgs": "results/raw/sgs/20260918T162146059194Z",
-    "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T162022120617Z",
-    "gp_mle": "results/raw/gp_mle/20260918T162035303801Z"
-  },
-  "rep8": {
-    "kriging": "results/raw/kriging/20260918T162042837584Z",
-    "sgs": "results/raw/sgs/20260918T162155489122Z",
-    "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T162039881275Z",
-    "gp_mle": "results/raw/gp_mle/20260918T162050063780Z"
-  },
-  "rep9": {
-    "kriging": "results/raw/kriging/20260918T162059851281Z",
-    "sgs": "results/raw/sgs/20260918T162210006525Z",
-    "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T162055731259Z",
-    "gp_mle": "results/raw/gp_mle/20260918T162109707579Z"
+  "1": {
+    "rep0": {
+      "kriging": "results/raw/kriging/20260918T165340622856Z",
+      "sgs": "results/raw/sgs/20260918T165427937339Z",
+      "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T165337007254Z",
+      "gp_mle": "results/raw/gp_mle/20260918T165352338531Z"
+    },
+    "rep1": {
+      "kriging": "results/raw/kriging/20260918T165348857641Z",
+      "sgs": "results/raw/sgs/20260918T165437255377Z",
+      "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T165346518224Z",
+      "gp_mle": "results/raw/gp_mle/20260918T165358490498Z"
+    },
+    "rep2": {
+      "kriging": "results/raw/kriging/20260918T165357872630Z",
+      "sgs": "results/raw/sgs/20260918T165444496159Z",
+      "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T165354423892Z",
+      "gp_mle": "results/raw/gp_mle/20260918T165406442112Z"
+    },
+    "rep3": {
+      "kriging": "results/raw/kriging/20260918T165403722867Z",
+      "sgs": "results/raw/sgs/20260918T165455277112Z",
+      "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T165403590240Z",
+      "gp_mle": "results/raw/gp_mle/20260918T165414307239Z"
+    },
+    "rep4": {
+      "kriging": "results/raw/kriging/20260918T165413493402Z",
+      "sgs": "results/raw/sgs/20260918T165501940923Z",
+      "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T165409603105Z",
+      "gp_mle": "results/raw/gp_mle/20260918T165422689655Z"
+    },
+    "rep5": {
+      "kriging": "results/raw/kriging/20260918T165422167304Z",
+      "sgs": "results/raw/sgs/20260918T165509917320Z",
+      "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T165420322949Z",
+      "gp_mle": "results/raw/gp_mle/20260918T165431081211Z"
+    },
+    "rep6": {
+      "kriging": "results/raw/kriging/20260918T165433256923Z",
+      "sgs": "results/raw/sgs/20260918T165515523360Z",
+      "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T165427954375Z",
+      "gp_mle": "results/raw/gp_mle/20260918T165438372738Z"
+    },
+    "rep7": {
+      "kriging": "results/raw/kriging/20260918T165439424420Z",
+      "sgs": "results/raw/sgs/20260918T165521976479Z",
+      "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T165437258374Z",
+      "gp_mle": "results/raw/gp_mle/20260918T165448923604Z"
+    },
+    "rep8": {
+      "kriging": "results/raw/kriging/20260918T165449857679Z",
+      "sgs": "results/raw/sgs/20260918T165528990805Z",
+      "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T165443829644Z",
+      "gp_mle": "results/raw/gp_mle/20260918T165456040274Z"
+    },
+    "rep9": {
+      "kriging": "results/raw/kriging/20260918T165454471294Z",
+      "sgs": "results/raw/sgs/20260918T165534374862Z",
+      "rbf_bootstrap": "results/raw/rbf_bootstrap/20260918T165454256367Z",
+      "gp_mle": "results/raw/gp_mle/20260918T165503941471Z"
+    }
   }
 }

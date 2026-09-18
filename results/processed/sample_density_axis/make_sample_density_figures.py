@@ -130,6 +130,11 @@ from src.experiments.base_case import NX, NY, XMN, XSIZ, YMN, YSIZ  # noqa: E402
 PROCESSED_DIR = _REPO_ROOT / "results" / "processed" / "sample_density_axis"
 FIGURES_DIR = _REPO_ROOT / "results" / "figures" / "sample_density_axis"
 
+# 2026-09-18 extension: make_metric_vs_density_figure() below now reads the
+# 10-replicate sample_replicate_axis outputs instead of this module's own
+# single-pinned-run metrics.csv. See that function's docstring for why.
+REPLICATE_PROCESSED_DIR = _REPO_ROOT / "results" / "processed" / "sample_replicate_axis"
+
 METHODS = ["kriging", "sgs", "rbf_bootstrap", "gp_mle"]
 
 QC_FIG_DPI = 300
@@ -225,6 +230,63 @@ LIMITATION_CAPTION = (
     "cells at n=121 / 50 / 25)."
 )
 
+# --- 2026-09-18: replicate-spread captions for make_metric_vs_density_figure() ---
+# ONLY used by that function -- SUPTITLE_NOTE/LIMITATION_CAPTION above are NOT
+# edited in place because they are still shared with make_calibration_grid_figure()
+# / make_truth_figure() / make_crossplot_figure(), which still plot the SINGLE
+# pinned run per level (unchanged by this extension) and therefore still
+# genuinely carry the "one realization per level" limitation those constants
+# describe. Only the main metric-vs-density figure's data source changed (to
+# results/processed/sample_replicate_axis/, 10 replicates x 3 levels x 4
+# methods), so only it gets updated caption text.
+REPLICATE_SUPTITLE_NOTE = (
+    "10 sample-location replicates per level (sample_seed 1001-1010, reused IDENTICALLY "
+    "at all 3 levels -- see caption below), same ground-truth field at every level and "
+    "every replicate (TRUTH_SEED=101, range=300 m); identical sample locations across "
+    "methods within a (level, replicate) cell"
+)
+
+REPLICATE_FIGURE_CAPTION = (
+    "Each point at a given density level is now ONE OF 10 sample-location replicates "
+    "(sample_seed 1001-1010, small jittered marker, one method's color/marker) rather "
+    "than a single realization; the larger black-edged marker is that method's mean "
+    "across the 10 replicates and the error bar is +-1 sample std (ddof=1) -- see "
+    "results/processed/sample_replicate_axis/metrics.csv / metrics_summary.csv. This "
+    "ADDRESSES the single-realization-per-level limitation of the ORIGINAL "
+    "sample-density-axis design (see sample_density_axis.py's module docstring) for "
+    "THIS figure only -- the calibration-curve grid, truth figure and crossplot figures "
+    "below still plot the single pinned run per level and still carry that limitation. "
+    "Caveats that STILL apply here: (1) evaluated-cell count differs by level AND by "
+    "replicate (n_cells_evaluated ranges 2376-2382 at the ~5% level, 2450-2453 at ~2%, "
+    "2475-2476 at ~1%; n_samples_actual ranges 118-124 / 47-50 / 24-25 -- see "
+    "results/processed/sample_replicate_axis/evaluation_cell_counts.csv), so no two "
+    "points here are scored on an identical cell set. (2) Reusing the SAME 10 "
+    "sample_seed replicates at all 3 density levels reproduces the sample_density_axis.py "
+    "-documented X/Y draw coupling BETWEEN levels for every one of the 30 (replicate, "
+    "level-pair) combinations checked (measured, not assumed -- see "
+    "results/processed/sample_replicate_axis/sample_seed_level_overlap.json): the RAW "
+    "pre-snapping X draws are IDENTICAL over the shared prefix in 30/30 cases and the RAW "
+    "Y draws are NEVER identical (0/30); at the level of the resulting DISTINCT snapped "
+    "coordinate SETS, the smaller level's distinct X values are always a subset of the "
+    "larger level's (30/30), while its distinct Y values happen to also be a subset in "
+    "only 6/30 cases (a coincidence of small-n snapping/dedup, not a designed property). "
+    "So a difference between two density levels in this figure still mixes 'less data' "
+    "with 'the data landed in different (but X-coupled) places', now averaged over 10 "
+    "replicate draws of that same coupling rather than resting on one."
+)
+
+REPLICATE_VARIANCE_PANEL_CAPTION = (
+    "PREDICTIVE-VARIANCE PANEL: each point is that method's predictive variance averaged "
+    "over that (level, replicate) cell's EVALUATED cells (all 2500 grid cells minus that "
+    "cell's own conditioning cells); the mean (rather than the sum) is plotted because "
+    "the evaluated-cell count differs by level AND by replicate (see the caption above). "
+    "Source arrays (all porosity %^2): kriging kriging_var_map_physical_mc.npy, sgs "
+    "sgs_var_map.npy, rbf_bootstrap bootstrap_var_map.npy, gp_mle posterior_var_map.npy. "
+    "Kriging's physical-unit variance is a MONTE CARLO back-transform approximation of "
+    "its normal-score variance; the other three are native physical-unit arrays. See "
+    "results/processed/sample_replicate_axis/variance_metric_sources.csv."
+)
+
 # CURRENTLY UNUSED: this was printed on the 95%-interval-width figure, which is
 # no longer generated (sharpness metrics parked 2026-09-15). Kept verbatim so it
 # comes back with the figure, and because it documents the preserved values in
@@ -269,30 +331,84 @@ def _style_density_axis(ax):
 # ---------------------------------------------------------------------------
 # (a) Main 4-panel metric-vs-sample-density figure
 # ---------------------------------------------------------------------------
+# Deterministic, purely cosmetic multiplicative jitter (log-x direction) so
+# the 10 replicate points per (level, method) are visible without one point
+# hiding another. Width chosen small relative to the >=2x spacing between
+# neighboring density levels (4.84% -> 2.00% -> 1.00%) so a jittered point
+# never crosses into a neighboring level's territory.
+REPLICATE_JITTER_FRAC = 0.045
+REPLICATE_JITTER_SEED = 11
+
+
 def make_metric_vs_density_figure():
-    metrics_df = pd.read_csv(PROCESSED_DIR / "metrics.csv")
-    # metrics.csv's axis_level ("5"/"2"/"1") is an IDENTIFIER, not a measured
-    # fraction -- map it to the ACTUAL sampled fraction for plotting.
-    metrics_df["axis_level_numeric"] = (
-        metrics_df["axis_level"].astype(str).map(PCT_ACTUAL)
-    )
-    if metrics_df["axis_level_numeric"].isna().any():
+    """2026-09-18: reads results/processed/sample_replicate_axis/ (10
+    sample-location replicates x 3 density levels x 4 methods) instead of
+    this module's own single-pinned-run metrics.csv, so each (level, method)
+    is now a DISTRIBUTION of 10 values rather than one. The 3 x-positions
+    (ACTUAL sampled fraction of the pinned single run at each level -- 4.84%
+    / 2.00% / 1.00%, from PCT_ACTUAL/AXIS_LEVEL_FLOATS) are UNCHANGED from
+    before, for continuity with every other figure in this module; the
+    replicate axis's OWN actual-sample-count range per level (see
+    REPLICATE_FIGURE_CAPTION) is reported in the caption rather than moving
+    the tick positions.
+    """
+    metrics_df = pd.read_csv(REPLICATE_PROCESSED_DIR / "metrics.csv")
+    summary_df = pd.read_csv(REPLICATE_PROCESSED_DIR / "metrics_summary.csv")
+    metrics_df["axis_level"] = metrics_df["axis_level"].astype(str)
+    summary_df["axis_level"] = summary_df["axis_level"].astype(str)
+
+    if set(metrics_df["axis_level"]) != set(ALL_AXIS_LEVELS):
         raise ValueError(
-            "metrics.csv contains an axis_level with no entry in sample_overlap.json's "
-            "sample_fraction_actual_pct."
+            f"{REPLICATE_PROCESSED_DIR / 'metrics.csv'} has axis levels "
+            f"{sorted(set(metrics_df['axis_level']))}; expected {sorted(ALL_AXIS_LEVELS)}."
         )
+    n_replicates = metrics_df["replicate"].nunique()
+
+    rng = np.random.default_rng(REPLICATE_JITTER_SEED)
 
     fig, axes = plt.subplots(1, 3, figsize=(18, 7.5))
     for ax, (metric_name, title, ylabel) in zip(axes.ravel(), MAIN_PANELS):
-        sub = metrics_df[metrics_df["metric"] == metric_name]
         for method in METHODS:
-            m_sub = sub[sub["method"] == method].sort_values(
-                "axis_level_numeric", ascending=False
-            )
-            ax.plot(
-                m_sub["axis_level_numeric"], m_sub["value"],
-                marker=METHOD_MARKERS[method], color=METHOD_COLORS[method],
-                label=method, linewidth=2,
+            mean_xs, mean_ys, mean_stds = [], [], []
+            for lvl in ALL_AXIS_LEVELS:  # dense -> sparse, matches AXIS_LEVEL_FLOATS order
+                x0 = PCT_ACTUAL[lvl]
+                m_sub = metrics_df[
+                    (metrics_df["axis_level"] == lvl)
+                    & (metrics_df["method"] == method)
+                    & (metrics_df["metric"] == metric_name)
+                ]
+                if len(m_sub) != n_replicates:
+                    raise ValueError(
+                        f"level '{lvl}' {method}/{metric_name}: expected {n_replicates} "
+                        f"replicate rows, found {len(m_sub)}."
+                    )
+                jitter = rng.uniform(-REPLICATE_JITTER_FRAC, REPLICATE_JITTER_FRAC, size=len(m_sub))
+                ax.scatter(
+                    x0 * (1.0 + jitter), m_sub["value"],
+                    color=METHOD_COLORS[method], marker=METHOD_MARKERS[method],
+                    alpha=0.4, s=26, zorder=2, edgecolors="none", label="_nolegend_",
+                )
+                row = summary_df[
+                    (summary_df["axis_level"] == lvl)
+                    & (summary_df["method"] == method)
+                    & (summary_df["metric"] == metric_name)
+                ]
+                if len(row) != 1:
+                    raise ValueError(
+                        f"level '{lvl}' {method}/{metric_name}: expected 1 summary row, "
+                        f"found {len(row)}."
+                    )
+                row = row.iloc[0]
+                mean_xs.append(x0)
+                mean_ys.append(row["mean"])
+                mean_stds.append(row["std"])
+
+            ax.errorbar(
+                mean_xs, mean_ys, yerr=mean_stds,
+                color=METHOD_COLORS[method], marker=METHOD_MARKERS[method],
+                markersize=9, markeredgecolor="black", markeredgewidth=1.0,
+                capsize=5, linewidth=2, label=f"{method} (mean +-1 std, n={n_replicates})",
+                zorder=3,
             )
         _style_density_axis(ax)
         ax.set_ylabel(ylabel)
@@ -300,23 +416,22 @@ def make_metric_vs_density_figure():
         ax.grid(alpha=0.3)
         if metric_name == "umg":
             ax.axhline(1.0, color="gray", linestyle="--", linewidth=1, label="ideal (UMG=1.0)")
-        ax.legend(fontsize=9)
+        ax.legend(fontsize=7.5)
 
     plt.suptitle(
         "Sample-density axis: accuracy (MSE) vs. uncertainty quality (UMG) vs. "
-        "predictive-variance magnitude (mean)\n"
-        + textwrap.fill(SUPTITLE_NOTE, 130),
+        "predictive-variance magnitude (mean), 10-replicate spread per level\n"
+        + textwrap.fill(REPLICATE_SUPTITLE_NOTE, 150),
         fontsize=11,
     )
     fig.text(
-        0.5, 0.155, textwrap.fill(LIMITATION_CAPTION, 160),
-        ha="center", va="top", fontsize=7.5, color="dimgray",
+        0.5, 0.335,
+        textwrap.fill(REPLICATE_FIGURE_CAPTION, 165)
+        + "\n\n"
+        + textwrap.fill(REPLICATE_VARIANCE_PANEL_CAPTION, 165),
+        ha="center", va="top", fontsize=7, color="dimgray",
     )
-    fig.text(
-        0.5, 0.045, textwrap.fill(VARIANCE_PANEL_CAPTION, 160),
-        ha="center", va="top", fontsize=7.5, color="dimgray",
-    )
-    plt.subplots_adjust(left=0.06, bottom=0.32, right=0.98, top=0.86, wspace=0.3)
+    plt.subplots_adjust(left=0.06, bottom=0.44, right=0.98, top=0.85, wspace=0.3)
     FIGURES_DIR.mkdir(parents=True, exist_ok=True)
     out = FIGURES_DIR / "metrics_vs_sample_density.png"
     plt.savefig(out, dpi=MAIN_FIG_DPI, bbox_inches="tight")

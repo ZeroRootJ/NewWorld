@@ -279,11 +279,40 @@ def build_length_scale_table(source_runs: dict, pct_actual: dict) -> pd.DataFram
     return df
 
 
+# 2026-09-18 extension: GP-MLE / RBF+bootstrap now show the 10-replicate
+# spread (sample_seed 1001-1010, reused unchanged from
+# src/experiments/sample_replicate_axis.py) at each density level, read from
+# results/processed/sample_replicate_axis/length_scale_by_replicate.csv --
+# jittered points + mean+-1std errorbar, connected level-to-level by a line
+# through the means, matching make_sample_density_figures.py's
+# make_metric_vs_density_figure() treatment. kriging/SGS are LEFT EXACTLY AS
+# THEY WERE (flat lines, no spread): their range is a FIXED INPUT CONSTANT
+# (300 m) at every level and every replicate, never fitted from the
+# conditioning data, so there is nothing to average over 10 replicates --
+# this is stated explicitly in the caption below, not left to look like an
+# oversight that only 2 of 4 lines carry error bars.
+REPLICATE_PROCESSED_DIR = _REPO_ROOT / "results" / "processed" / "sample_replicate_axis"
+SPREAD_METHODS = ("gp_mle", "rbf_bootstrap")
+FLAT_METHODS = ("kriging", "sgs")
+LENGTH_SCALE_JITTER_FRAC = 0.045
+LENGTH_SCALE_JITTER_SEED = 13
+
+
 def make_length_scale_figure(df: pd.DataFrame, pct_actual: dict, n_samples_actual: dict):
     axis_level_floats = [pct_actual[lvl] for lvl in ALL_AXIS_LEVELS]
 
+    replicate_df = pd.read_csv(
+        REPLICATE_PROCESSED_DIR / "length_scale_by_replicate.csv", comment="#"
+    )
+    replicate_df["axis_level"] = replicate_df["axis_level"].astype(str)
+    n_replicates = replicate_df["replicate"].nunique()
+
+    rng = np.random.default_rng(LENGTH_SCALE_JITTER_SEED)
+
     fig, ax = plt.subplots(figsize=(9, 6.5))
-    for method in METHODS:
+
+    # --- kriging / SGS: UNCHANGED, flat lines, no spread (see note above) --
+    for method in FLAT_METHODS:
         sub = df[df["method"] == method].copy()
         sub["density_pct_actual"] = sub["axis_level"].map(pct_actual)
         sub = sub.sort_values("density_pct_actual", ascending=False)
@@ -291,7 +320,37 @@ def make_length_scale_figure(df: pd.DataFrame, pct_actual: dict, n_samples_actua
             sub["density_pct_actual"], sub["length_scale_m"],
             marker=METHOD_MARKERS[method], color=METHOD_COLORS[method],
             linestyle=METHOD_LINESTYLES[method], linewidth=2, markersize=9,
-            label=method, alpha=0.9,
+            label=f"{method} (fixed input, no per-replicate spread)", alpha=0.9,
+        )
+
+    # --- GP-MLE / RBF+bootstrap: 10-replicate spread ------------------------
+    for method in SPREAD_METHODS:
+        mean_xs, mean_ys, mean_stds = [], [], []
+        for lvl in ALL_AXIS_LEVELS:
+            x0 = pct_actual[lvl]
+            m_sub = replicate_df[
+                (replicate_df["axis_level"] == lvl) & (replicate_df["method"] == method)
+            ]
+            if len(m_sub) != n_replicates:
+                raise ValueError(
+                    f"level '{lvl}' {method}: expected {n_replicates} replicate length-scale "
+                    f"rows, found {len(m_sub)}."
+                )
+            jitter = rng.uniform(-LENGTH_SCALE_JITTER_FRAC, LENGTH_SCALE_JITTER_FRAC, size=len(m_sub))
+            ax.scatter(
+                x0 * (1.0 + jitter), m_sub["length_scale_m"],
+                color=METHOD_COLORS[method], marker=METHOD_MARKERS[method],
+                alpha=0.4, s=30, zorder=2, edgecolors="none", label="_nolegend_",
+            )
+            mean_xs.append(x0)
+            mean_ys.append(float(m_sub["length_scale_m"].mean()))
+            mean_stds.append(float(m_sub["length_scale_m"].std(ddof=1)))
+        ax.errorbar(
+            mean_xs, mean_ys, yerr=mean_stds,
+            color=METHOD_COLORS[method], marker=METHOD_MARKERS[method],
+            linestyle=METHOD_LINESTYLES[method], markersize=9, markeredgecolor="black",
+            markeredgewidth=1.0, capsize=5, linewidth=2, zorder=3,
+            label=f"{method} (mean +-1 std, n={n_replicates} replicates)", alpha=0.95,
         )
 
     truth_range = float(df[df["method"] == "kriging"]["length_scale_m"].iloc[0])
@@ -311,23 +370,30 @@ def make_length_scale_figure(df: pd.DataFrame, pct_actual: dict, n_samples_actua
     ax.set_ylabel("Length scale (m)")
     ax.set_title(
         "Sample-density axis: each method's length scale vs. sample density\n"
-        "(kriging/SGS: fixed input range; GP-MLE: MLE-fitted; RBF+bootstrap: CV-tuned "
-        "shape parameter converted for comparability -- see caption)",
+        "(kriging/SGS: fixed input range, no spread; GP-MLE/RBF+bootstrap: 10-replicate "
+        "spread -- see caption)",
         fontsize=11,
     )
     ax.grid(alpha=0.3)
-    ax.legend(fontsize=9, loc="center left")
+    ax.legend(fontsize=8, loc="center left")
 
     fig.text(
         0.5, 0.01, textwrap.fill(
-            "kriging and SGS overlap exactly at " + f"{truth_range:g} m (both use the same "
-            "fixed input variogram range at every density level, by one-factor-at-a-time "
-            "design -- see line styles: kriging solid circles, SGS dotted squares). " + RBF_CAVEAT,
+            "kriging and SGS overlap exactly at " + f"{truth_range:g} m at EVERY density "
+            "level AND every replicate (both use the same fixed INPUT variogram range, by "
+            "one-factor-at-a-time design -- see line styles: kriging solid circles, SGS "
+            "dotted squares) -- this is a structural constant, not something fitted from "
+            "the conditioning data, so there is nothing to average over the 10 sample-seed "
+            "replicates and these two lines deliberately carry NO error bars. GP-MLE and "
+            "RBF+bootstrap DO vary per replicate (small jittered points = each of the 10 "
+            "replicates' value; solid marker = mean +-1 std, ddof=1, across them -- see "
+            "results/processed/sample_replicate_axis/length_scale_by_replicate.csv). "
+            + RBF_CAVEAT,
             150,
         ),
         ha="center", fontsize=7.5, color="dimgray",
     )
-    plt.subplots_adjust(left=0.1, bottom=0.22, right=0.97, top=0.86)
+    plt.subplots_adjust(left=0.1, bottom=0.28, right=0.97, top=0.86)
     FIGURES_DIR.mkdir(parents=True, exist_ok=True)
     out = FIGURES_DIR / "00_length_scale_vs_density.png"
     plt.savefig(out, dpi=FIG_DPI, bbox_inches="tight")

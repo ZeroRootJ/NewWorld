@@ -1,9 +1,18 @@
 {
-  "note": "10 fresh sample-location replicates at the SAME ground truth (TRUTH_SEED=101, range=300 m) and the SAME requested sample count (n_samples_requested=125, the base case's own 5% density level), varying ONLY sample_seed. Distinct from the project's pinned base-case SAMPLE_SEED=20 (an 11th, pre-existing point of reference at the same n_samples, NOT folded into this set -- see module docstring) and from TRUTH_SEED=101. n_samples_actual can differ slightly between replicates because random_interior_samples snaps draws to grid-cell centroids and drops duplicate-cell collisions.",
+  "note": "10 sample-location replicates (SAME 10 seeds reused at every level -- see module docstring) at the SAME ground truth (TRUTH_SEED=101, range=300 m), now repeated at all 3 sample-density axis levels ('5'/'2'/'1' -> n_samples_requested=125/50/25). ONLY sample_seed and n_samples vary. Distinct from the project's pinned base-case SAMPLE_SEED=20 (an 11th, pre-existing point of reference at n=125, NOT folded into this set) and from TRUTH_SEED=101. n_samples_actual can differ slightly between replicates AND between levels because random_interior_samples snaps draws to grid-cell centroids and drops duplicate-cell collisions.",
   "truth_seed": 101,
   "hmaj1": 300.0,
   "hmin1": 300.0,
-  "n_samples_requested": 125,
+  "n_samples_requested_by_level": {
+    "5": 125,
+    "2": 50,
+    "1": 25
+  },
+  "reused_axis_level": "5",
+  "new_axis_levels": [
+    "2",
+    "1"
+  ],
   "sample_seed_replicates": {
     "rep0": 1001,
     "rep1": 1002,
@@ -17,16 +26,42 @@
     "rep9": 1010
   },
   "n_samples_actual": {
-    "rep0": 120,
-    "rep1": 121,
-    "rep2": 124,
-    "rep3": 122,
-    "rep4": 119,
-    "rep5": 120,
-    "rep6": 121,
-    "rep7": 118,
-    "rep8": 121,
-    "rep9": 120
+    "5": {
+      "rep0": 120,
+      "rep1": 121,
+      "rep2": 124,
+      "rep3": 122,
+      "rep4": 119,
+      "rep5": 120,
+      "rep6": 121,
+      "rep7": 118,
+      "rep8": 121,
+      "rep9": 120
+    },
+    "2": {
+      "rep0": 48,
+      "rep1": 50,
+      "rep2": 49,
+      "rep3": 50,
+      "rep4": 47,
+      "rep5": 50,
+      "rep6": 50,
+      "rep7": 50,
+      "rep8": 49,
+      "rep9": 49
+    },
+    "1": {
+      "rep0": 25,
+      "rep1": 25,
+      "rep2": 24,
+      "rep3": 25,
+      "rep4": 25,
+      "rep5": 25,
+      "rep6": 25,
+      "rep7": 24,
+      "rep8": 25,
+      "rep9": 25
+    }
   },
   "base_case_reference_sample_seed": 20,
   "methods": [
