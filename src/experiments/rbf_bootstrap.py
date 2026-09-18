@@ -74,16 +74,61 @@ RBF_KERNEL = "gaussian"
 CV_FOLDS = 5
 CV_SEED = 40  # controls the KFold shuffle only
 
-# Grid spans distances relevant to this domain: sample spacing for the
-# current N_SAMPLES (125 requested / 121 actual) over the ~900m x 900m
-# interior sampling region is ~sqrt(900*900/121) ~ 82m (was ~40m under the
-# prior N_SAMPLES=500 design this grid was originally sized for), and the
-# variogram range used to generate the truth is 300m, so epsilon (acting
-# as an inverse length scale) is swept from well below 1/900 to above 1/82.
-# The grid values themselves are unchanged from the N_SAMPLES=500 design
-# (still bracket 1/82 comfortably at the dense end, 0.3 and 1.0), so this is
-# a comment-only update, not a re-tuned grid.
-EPSILON_GRID = np.array([0.001, 0.003, 0.01, 0.02, 0.03, 0.05, 0.1, 0.3, 1.0])
+# --- RBF shape parameter (epsilon) grid ---------------------------------
+# The grid is defined in LENGTH units and then converted to epsilon, because
+# every justification for its span is physical (grid cell size, domain
+# diagonal). For the 'gaussian' kernel phi(r) = exp(-(eps*r)**2), the
+# distance at which the kernel has decayed to EPSILON_CUTOFF is
+# r = sqrt(-ln(cutoff)) / eps, hence eps = sqrt(-ln(cutoff)) / r.
+#
+# WHY THIS REPLACED THE PREVIOUS HAND-WRITTEN GRID (2026-09-17)
+# -------------------------------------------------------------
+# The grid used until 2026-09-17 was the literal list
+#     [0.001, 0.003, 0.01, 0.02, 0.03, 0.05, 0.1, 0.3, 1.0]
+# sized for the original N_SAMPLES=500 design (~40 m sample spacing). When
+# N_SAMPLES was reduced to 125 only the surrounding comment was updated --
+# the grid itself was never re-tuned (the old comment said so explicitly:
+# "a comment-only update, not a re-tuned grid"). Converted to 0.05-cutoff
+# lengths those 9 points are 1730.8 / 576.9 / 173.1 / 86.5 / 57.7 / 34.6 /
+# 17.3 / 5.8 / 1.7 m. MEASURED consequences (facts from the runs, not
+# speculation):
+#   * 3 of the 9 points (17.3, 5.8, 1.7 m) are shorter than ONE 20 m grid
+#     cell -- physically meaningless on this grid -- and 1 point (1730.8 m)
+#     exceeds the 1414 m domain diagonal: only 5 points were usable.
+#   * There was NO grid point between 173.1 m and 576.9 m (a 3.3x hole),
+#     which is exactly the band the data want.
+#   * All 3 sample-density levels (5% / 2% / 1%) froze on eps = 0.01
+#     (173.1 m), and the 8 range-axis levels returned only 3 distinct
+#     values (86.5 / 173.1 / 576.9 m), with five levels -- 400, 500, 600,
+#     700 and 800 m -- all collapsing onto the single value 576.9 m.
+#   * Replaying the identical CV procedure (same folds, same CV_SEED, same
+#     SMOOTHING_GRID) on a 45-point fine epsilon grid put the actual CV
+#     optimum at 268.5 / 268.5 / 215.6 m for the 5% / 2% / 1% density
+#     levels; the production choice (173.1 m) was worse in CV-MSE by
+#     9.9% / 15.2% / 3.7% respectively.
+#
+# Grid span is justified by DOMAIN GEOMETRY, not by any observed optimum:
+# the 20 m cell size is the finest structure this 50x50 grid can represent,
+# and the 1414 m domain diagonal is the largest separation in the data. The
+# grid deliberately extends past BOTH (10 m is below one cell, 2000 m is
+# beyond the diagonal) so the CV optimum is always strictly bracketed and a
+# runaway selection is detectable rather than silently pinned to an endpoint.
+#
+# INTENDED CONSEQUENCE: RBF+bootstrap results produced with this grid DIFFER
+# from every RBF result produced before 2026-09-17. The bit-for-bit
+# regression check against the previously pinned base-case RBF run is
+# therefore no longer expected to hold FOR RBF (it still holds for
+# kriging / SGS / GP-MLE, whose code is untouched). This is a change of the
+# epsilon grid ONLY -- SMOOTHING_GRID, CV_FOLDS, CV_SEED, N_BOOTSTRAP,
+# BOOTSTRAP_SEED, RBF_KERNEL and the duplicate-point dedup logic are all
+# unchanged (one-factor-at-a-time).
+EPSILON_CUTOFF = 0.05          # same correlation cutoff used for GP-MLE's
+                               # length_scale -> practical range conversion
+_EPS_LENGTH_MAX_M = 2000.0     # > 1414 m domain diagonal
+_EPS_LENGTH_MIN_M = 10.0       # < one 20 m grid cell
+N_EPSILON = 25                 # -> 24.7% steps, log-uniform
+_EPSILON_LENGTHS_M = np.geomspace(_EPS_LENGTH_MAX_M, _EPS_LENGTH_MIN_M, N_EPSILON)
+EPSILON_GRID = np.sqrt(-np.log(EPSILON_CUTOFF)) / _EPSILON_LENGTHS_M  # ascending
 # Smoothing (lambda) swept from 0 (exact interpolation) across several
 # orders of magnitude relative to the porosity variance (stdev=3 -> var=9).
 SMOOTHING_GRID = np.array([0.0, 1e-4, 1e-3, 1e-2, 1e-1, 1.0, 10.0])
@@ -165,7 +210,9 @@ def main(
 
     # --- Bootstrap replicates ------------------------------------------
     # Note (Claim 1 context): bootstrap resampling here only varies *which*
-    # of the 500 sample locations/values are used to fit each replicate --
+    # of the N_SAMPLES (125 requested / 121 actual, see
+    # base_case_conditioning.py) sample locations/values are used to fit each
+    # replicate --
     # it does not add any independent uncertainty about the field at
     # locations far from all samples, which is exactly the mechanism the
     # paper argues under-estimates true spatial uncertainty.
@@ -178,7 +225,8 @@ def main(
     # draw, empirically, at n=121 -- birthday-paradox-typical), i.e. the
     # SAME (X, Y, d) triple appears >=2 times in X[idx]/d[idx]. When CV
     # selects best_smoothing == 0.0 (exact interpolation -- happened for the
-    # range=50m axis level, unlike the base case's best_smoothing=0.1), that
+    # range=50m axis level; the current base case selects
+    # best_smoothing=1.0), that
     # duplication makes scipy's RBFInterpolator's interpolation matrix
     # exactly rank-deficient (two identical support points), independent of
     # epsilon. This surfaced in TWO forms while developing this fix: most
@@ -197,17 +245,27 @@ def main(
     # above are NEVER changed by this -- only which *rows* are passed into
     # RBFInterpolator for a given already-drawn bootstrap index array.
     #
-    # This is safe/inert for best_smoothing > 0 (the base case's
-    # best_smoothing=0.1): with smoothing > 0, RBFInterpolator solves a
+    # This is safe/inert for best_smoothing > 0 (the current base case selects
+    # best_smoothing=1.0): with smoothing > 0, RBFInterpolator solves a
     # regularized least-squares problem where a duplicated (X, Y) row
     # legitimately does contribute extra weight to that point's fit (it is
     # not merely a redundant constraint the way it is at smoothing=0's exact
     # interpolation) -- deduplicating would be a real behavior change there,
     # not just a numerical-stability fix, so this branch is INTENTIONALLY
-    # gated on best_smoothing == 0.0 and left off otherwise. Confirmed by
-    # the mandatory bit-for-bit regression check against the pinned
-    # base-case run (best_smoothing=0.1 there) that base-case results are
-    # provably unaffected by this fix's existence.
+    # gated on best_smoothing == 0.0 and left off otherwise.
+    #
+    # Evidence that the branch is inert for the base case (updated
+    # 2026-09-17): the earlier justification here cited a bit-for-bit
+    # regression check against the previously pinned base-case run, and also
+    # stated best_smoothing=0.1 for the base case. Both are now wrong -- the
+    # EPSILON_GRID redesign documented above deliberately changed the RBF
+    # results, so that regression check no longer applies to RBF, and the
+    # current base case selects best_smoothing=1.0. The claim is instead
+    # supported directly by the gate itself plus the run record: the pinned
+    # base-case run (results/raw/rbf_bootstrap/20260917T230913430600Z) has
+    # best_smoothing=1.0 and n_bootstrap_deduplicated=0 in its manifest, i.e.
+    # the dedup branch was never entered for any of the N_BOOTSTRAP
+    # replicates, so it cannot have influenced any base-case number.
     rng = np.random.RandomState(BOOTSTRAP_SEED)
     replicate_maps = np.empty((N_BOOTSTRAP, NY, NX))
     n_bootstrap_deduplicated = 0
@@ -326,7 +384,8 @@ def main(
             "therefore deduplicated to unique (X, Y) rows before the "
             "RBFInterpolator fit -- only applied/possible when "
             "best_smoothing==0.0 (see code comment above the bootstrap loop "
-            "in this script). 0 for the base case (best_smoothing=0.1)."
+            "in this script). 0 for the base case, which selects "
+            "best_smoothing=1.0."
         ),
         "cv_seconds": cv_seconds,
         "total_seconds": total_seconds,

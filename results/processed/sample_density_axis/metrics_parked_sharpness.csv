@@ -13,6 +13,16 @@
 # Units: interval_width_* = porosity %, crps = porosity %.
 # Related diagnostics kept in place: crps_convergence.csv,
 # kriging_backtransform_tail_sensitivity.csv.
+# REFRESHED 2026-09-17 (RBF rows only): the RBF+bootstrap runs behind the
+# sample-density axis were re-executed after the EPSILON_GRID redesign in
+# src/experiments/rbf_bootstrap.py, so the 9 rbf_bootstrap rows below were
+# recomputed from the new pinned runs in source_runs.json. The 27 kriging /
+# sgs / gp_mle rows are unchanged (verified identical to the previous file).
+# Procedure used (repeatable): set EMIT_SHARPNESS_METRICS = True in
+# src/experiments/evaluate_sample_density_axis.py, run it, copy the
+# interval_width_* / crps rows out of metrics.csv into this file, then set the
+# flag back to False and re-run so metrics.csv returns to its parked state.
+# The parking decision itself (2026-09-15) is unchanged.
 case,axis,axis_level,method,metric,value
 sample_density_axis,sample_fraction_pct,5,gp_mle,crps,1.0157823972557811
 sample_density_axis,sample_fraction_pct,5,gp_mle,interval_width_mean_nominal,2.420727285611215
@@ -20,9 +30,9 @@ sample_density_axis,sample_fraction_pct,5,gp_mle,interval_width_p95,6.5134175814
 sample_density_axis,sample_fraction_pct,5,kriging,crps,1.000295007169594
 sample_density_axis,sample_fraction_pct,5,kriging,interval_width_mean_nominal,2.3622619637236046
 sample_density_axis,sample_fraction_pct,5,kriging,interval_width_p95,6.665127570599621
-sample_density_axis,sample_fraction_pct,5,rbf_bootstrap,crps,1.28952110298862
-sample_density_axis,sample_fraction_pct,5,rbf_bootstrap,interval_width_mean_nominal,1.105017994667946
-sample_density_axis,sample_fraction_pct,5,rbf_bootstrap,interval_width_p95,2.97325670557708
+sample_density_axis,sample_fraction_pct,5,rbf_bootstrap,crps,1.3275838624014151
+sample_density_axis,sample_fraction_pct,5,rbf_bootstrap,interval_width_mean_nominal,0.7925153489632046
+sample_density_axis,sample_fraction_pct,5,rbf_bootstrap,interval_width_p95,2.13241013897306
 sample_density_axis,sample_fraction_pct,5,sgs,crps,1.051605399274354
 sample_density_axis,sample_fraction_pct,5,sgs,interval_width_mean_nominal,2.33753960066806
 sample_density_axis,sample_fraction_pct,5,sgs,interval_width_p95,6.2895856228357285
@@ -32,9 +42,9 @@ sample_density_axis,sample_fraction_pct,2,gp_mle,interval_width_p95,7.9558742450
 sample_density_axis,sample_fraction_pct,2,kriging,crps,1.2103972015380715
 sample_density_axis,sample_fraction_pct,2,kriging,interval_width_mean_nominal,3.380358475528086
 sample_density_axis,sample_fraction_pct,2,kriging,interval_width_p95,8.731773563931997
-sample_density_axis,sample_fraction_pct,2,rbf_bootstrap,crps,1.4406925853105048
-sample_density_axis,sample_fraction_pct,2,rbf_bootstrap,interval_width_mean_nominal,1.0282531269465895
-sample_density_axis,sample_fraction_pct,2,rbf_bootstrap,interval_width_p95,2.7667065328137403
+sample_density_axis,sample_fraction_pct,2,rbf_bootstrap,crps,1.2467442682409553
+sample_density_axis,sample_fraction_pct,2,rbf_bootstrap,interval_width_mean_nominal,1.225487836748498
+sample_density_axis,sample_fraction_pct,2,rbf_bootstrap,interval_width_p95,3.297403251166545
 sample_density_axis,sample_fraction_pct,2,sgs,crps,1.2264292136659842
 sample_density_axis,sample_fraction_pct,2,sgs,interval_width_mean_nominal,3.2738745082195124
 sample_density_axis,sample_fraction_pct,2,sgs,interval_width_p95,8.808969068152212
@@ -44,9 +54,9 @@ sample_density_axis,sample_fraction_pct,1,gp_mle,interval_width_p95,10.327511594
 sample_density_axis,sample_fraction_pct,1,kriging,crps,1.4297100622783123
 sample_density_axis,sample_fraction_pct,1,kriging,interval_width_mean_nominal,3.5531472578331056
 sample_density_axis,sample_fraction_pct,1,kriging,interval_width_p95,9.83849535627998
-sample_density_axis,sample_fraction_pct,1,rbf_bootstrap,crps,1.8772506332737235
-sample_density_axis,sample_fraction_pct,1,rbf_bootstrap,interval_width_mean_nominal,1.0161566203534085
-sample_density_axis,sample_fraction_pct,1,rbf_bootstrap,interval_width_p95,2.7341586290549063
+sample_density_axis,sample_fraction_pct,1,rbf_bootstrap,crps,1.7537355973711433
+sample_density_axis,sample_fraction_pct,1,rbf_bootstrap,interval_width_mean_nominal,1.3963822425043606
+sample_density_axis,sample_fraction_pct,1,rbf_bootstrap,interval_width_p95,3.757226476047072
 sample_density_axis,sample_fraction_pct,1,sgs,crps,1.5682084061823958
 sample_density_axis,sample_fraction_pct,1,sgs,interval_width_mean_nominal,3.4399221364465
 sample_density_axis,sample_fraction_pct,1,sgs,interval_width_p95,9.255751135460912

@@ -21,9 +21,9 @@ here). Instead, the four input run directories are hardcoded below:
                   realization draw (posterior_sample_map.npy).
 - sgs:            the existing pinned run results/raw/sgs/20260914T141516Z
                   (unchanged by this task).
-- rbf_bootstrap:  the existing pinned run
-                  results/raw/rbf_bootstrap/20260914T135501Z (unchanged by
-                  this task).
+- rbf_bootstrap:  results/raw/rbf_bootstrap/20260917T230913430600Z -- the
+                  post-EPSILON_GRID-redesign base-case run (2026-09-17);
+                  re-pointed from the superseded 20260914T135501Z run.
 
 Color bar unification (project decision 2026-09-14, see task description):
 - All "mean" and "realization" panels (physical porosity units) share ONE
@@ -89,9 +89,17 @@ FIGURES_DIR = _REPO_ROOT / "results" / "figures" / "base_case"
 # now-superseded +/-10 stdev bounds and is stale for this figure.
 KRIGING_RUN_DIR = _REPO_ROOT / "results" / "raw" / "kriging" / "20260914T184654Z"
 GP_MLE_RUN_DIR = _REPO_ROOT / "results" / "raw" / "gp_mle" / "20260914T180412Z"
-# sgs / rbf_bootstrap: existing pinned runs, unchanged by this task.
+# sgs: existing pinned run, unchanged.
 SGS_RUN_DIR = _REPO_ROOT / "results" / "raw" / "sgs" / "20260914T141516Z"
-RBF_BOOTSTRAP_RUN_DIR = _REPO_ROOT / "results" / "raw" / "rbf_bootstrap" / "20260914T135501Z"
+# rbf_bootstrap: re-pointed 2026-09-17 to the run produced after
+# EPSILON_GRID in src/experiments/rbf_bootstrap.py was redesigned (the old
+# 9-point grid had no point between 173.1 m and 576.9 m and pinned every
+# density level to 173.1 m -- see that file's comment for the measured
+# evidence). The prior run (20260914T135501Z) used the superseded grid and
+# is stale for this figure; leaving it would make this figure disagree with
+# results/processed/base_case/metrics.csv. kriging / sgs / gp_mle are
+# untouched (their code did not change).
+RBF_BOOTSTRAP_RUN_DIR = _REPO_ROOT / "results" / "raw" / "rbf_bootstrap" / "20260917T230913430600Z"
 
 EXTENT = [XMIN, XMAX, YMIN, YMAX]
 
