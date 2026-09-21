@@ -71,7 +71,7 @@ the sparser levels (this project's own case-study figure,
 make_length_case_study_figures.py, already frames these swings
 multiplicatively -- "~5x (gp_mle)" and "~11x (rbf_bootstrap)" at the 1%
 level): this script's own re-tabulation from length_scale_by_replicate.csv
-confirms a ~1.5x-2.4x within-panel spread at the 5% level growing to
+confirms a ~1.5x-1.6x within-panel spread at the 5% level growing to
 ~5.1x (gp_mle) / ~11.3x (rbf_bootstrap) at the 1% level. Since length scale is
 a fundamentally multiplicative quantity here (and the y-axis is already log
 for the reason above), a log x-axis keeps the sparsest-level panel's few very
@@ -136,22 +136,23 @@ computed values on every run (verify_documented_values(); the run FAILS with
 an explicit ValueError if they ever drift, telling the maintainer to update
 both the constants and this docstring).
 
-Observed values (both figures, dense -> sparse), as of 2026-09-18:
+Observed values (both figures, dense -> sparse), as of 2026-09-21 (rbf rows re-measured
+after the RBF SMOOTHING_GRID was made 3x denser: 7 -> 17 values, same range; gp_mle rows unchanged):
   gp_mle x: log10-sd 0.051 / 0.170 / 0.227, ratio 1.51x / 3.97x / 5.12x
   gp_mle y: log10-sd 0.096 / 1.348 / 1.854
-  rbf     x: log10-sd 0.113 / 0.208 / 0.340, ratio 2.42x / 4.69x / 11.34x
-  rbf     y: log10-sd 0.316 / 0.738 / 0.675, ratio 10x / 1000x / 100x
+  rbf     x: log10-sd 0.061 / 0.204 / 0.323, ratio 1.56x / 4.69x / 11.34x
+  rbf     y: log10-sd 0.263 / 0.663 / 0.671, ratio 4.64x / 215.44x / 215.44x
 
 TWO CAVEATS THAT MUST NOT BE OVERSTATED
 ------------------------------------------------------------------------------
 1. The spread is NOT monotonically increasing with sparsity for every
    quantity. It is monotone for gp_mle's x AND y and for rbf_bootstrap's x,
-   but NOT for rbf_bootstrap's smoothing parameter, whose spread is widest at
-   the 2% level (log10-sd 0.738) and smaller again at 1% (0.675). Part of the
-   reason is resolution: best_smoothing is chosen from a 7-value discrete
-   SMOOTHING_GRID, so its per-panel spread moves in coarse jumps (ratios of
-   exactly 10x / 1000x / 100x) and should not be read as a fine-grained
-   trend. Do not describe these figures as "all spreads grow monotonically as
+   and, on the 17-value SMOOTHING_GRID measured 2026-09-21, for
+   rbf_bootstrap's smoothing parameter too (log10-sd 0.263 / 0.663 / 0.671).
+   On the previous 7-value grid it was NOT monotone (0.316 / 0.738 / 0.675).
+   best_smoothing is still chosen from a discrete grid, so its per-panel
+   spread moves in jumps (ratios 4.64x / 215.44x / 215.44x) and should not
+   be read as a fine-grained trend. Do not describe these figures as "all spreads grow monotonically as
    density drops". (The captions state monotone vs. non-monotone from the
    computed numbers, not from a literal, so they stay correct if the data
    changes.)
@@ -192,7 +193,7 @@ silently. The observed per-axis value ranges (both x and y, per level and
 overall) plus the per-level log10-SD / max-min-ratio spread statistics are
 printed to stdout every run so they can be sanity-checked against
 already-known numbers (e.g. rbf_bootstrap length scale at the 1% level
-spanning ~141-1604 m, matching make_length_case_study_figures.py's
+spanning ~176-2000 m, matching make_length_case_study_figures.py's
 independently-confirmed MIN/MAX replicates for that method/level).
 
 Additionally, because the shared limits above are computed rather than
@@ -282,10 +283,10 @@ DOCUMENTED_SPREAD = {
         "y_log10_sd": (0.096, 1.348, 1.854),
     },
     "rbf_bootstrap": {
-        "x_log10_sd": (0.113, 0.208, 0.340),
-        "x_ratio": (2.42, 4.69, 11.34),
-        "y_log10_sd": (0.316, 0.738, 0.675),
-        "y_ratio": (10.0, 1000.0, 100.0),
+        "x_log10_sd": (0.061, 0.204, 0.323),
+        "x_ratio": (1.56, 4.69, 11.34),
+        "y_log10_sd": (0.263, 0.663, 0.671),
+        "y_ratio": (4.64, 215.44, 215.44),
     },
 }
 # Rounding used when comparing: the docstring quotes log10-SDs to 3 decimals
@@ -771,7 +772,7 @@ def make_figure(method: str, df: pd.DataFrame, replicate_seeds: dict) -> Path:
             f"Length-scale spread {_trend_phrase(x_sds)} (log10-sd {_fmt_seq(x_sds, '.3f')}; "
             f"{_fmt_seq(x_ratios, '.2f')}x). The smoothing parameter's spread "
             f"{_trend_phrase(y_sds)}: log10-sd {_fmt_seq(y_sds, '.3f')}. Because "
-            f"best_smoothing is picked from a 7-value discrete grid its max/min ratios move "
+            f"best_smoothing is picked from a 17-value discrete grid its max/min ratios move "
             f"in coarse jumps ({_fmt_seq(y_ratios, '.6g')}x) rather than as a fine-grained "
             f"trend."
         )
