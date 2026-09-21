@@ -26,6 +26,8 @@ Independently confirmed by the orchestrator's own recomputation before this
 task was handed off:
   gp_mle:         MIN = rep0 (144.60 m, sample_seed=1001); MAX = rep8 (739.92 m, sample_seed=1009)
   rbf_bootstrap:  MIN = rep1 (141.42 m, sample_seed=1002); MAX = rep5 (1603.81 m, sample_seed=1006)
+                  [as handed off, old 7-value smoothing grid; after the 2026-09-21 17-value re-run the
+                   extremes are recomputed from length_scale_by_replicate.csv: MIN = rep0 (~176.4 m), MAX = rep5 (2000 m)]
 
 Layout
 ------

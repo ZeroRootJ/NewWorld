@@ -131,7 +131,27 @@ _EPSILON_LENGTHS_M = np.geomspace(_EPS_LENGTH_MAX_M, _EPS_LENGTH_MIN_M, N_EPSILO
 EPSILON_GRID = np.sqrt(-np.log(EPSILON_CUTOFF)) / _EPSILON_LENGTHS_M  # ascending
 # Smoothing (lambda) swept from 0 (exact interpolation) across several
 # orders of magnitude relative to the porosity variance (stdev=3 -> var=9).
-SMOOTHING_GRID = np.array([0.0, 1e-4, 1e-3, 1e-2, 1e-1, 1.0, 10.0])
+#
+# WHY THE SMOOTHING GRID WAS REFINED (2026-09-21)
+# ------------------------------------------------
+# Until 2026-09-21 this was the 7-point list [0, 1e-4, 1e-3, 1e-2, 1e-1, 1,
+# 10], i.e. 1 point per decade (10x steps). The 2026-09-17 EPSILON_GRID
+# redesign found (measured, docs/progress.md 2026-09-17) that this spacing
+# could not express the CV optimum: for 9 of 10 levels the true CV-optimal
+# smoothing lay in 0.159-0.631, and the 10x grid snapped it to 0.1 or 1.0
+# (1.6-2.5x off). The grid is now 3 points per decade (steps of 10**(1/3) =
+# 2.154x) over the SAME range: 0.0 plus geomspace(1e-4, 10.0, 16) (16 points
+# = 5 decades x 3 + 1, endpoints included -> 17 values in total). The range
+# (0 and 1e-4..10) is unchanged and 0.0 is kept, so the smoothing==0
+# dedup branch in main() still applies. Only the SMOOTHING_GRID density
+# changed; EPSILON_GRID, CV_FOLDS, CV_SEED, N_BOOTSTRAP, BOOTSTRAP_SEED,
+# RBF_KERNEL and the dedup logic are untouched (one-factor-at-a-time).
+# RBF+bootstrap results produced with this grid therefore DIFFER from every
+# RBF result produced before 2026-09-21.
+N_SMOOTHING_POSITIVE = 16
+SMOOTHING_GRID = np.concatenate(
+    [[0.0], np.geomspace(1e-4, 10.0, N_SMOOTHING_POSITIVE)]
+)  # ascending, 17 values
 
 # --- Bootstrap ------------------------------------------------------------
 N_BOOTSTRAP = 10
@@ -225,8 +245,8 @@ def main(
     # draw, empirically, at n=121 -- birthday-paradox-typical), i.e. the
     # SAME (X, Y, d) triple appears >=2 times in X[idx]/d[idx]. When CV
     # selects best_smoothing == 0.0 (exact interpolation -- happened for the
-    # range=50m axis level; the current base case selects
-    # best_smoothing=1.0), that
+    # range=50m axis level; the base case selects a
+    # best_smoothing > 0), that
     # duplication makes scipy's RBFInterpolator's interpolation matrix
     # exactly rank-deficient (two identical support points), independent of
     # epsilon. This surfaced in TWO forms while developing this fix: most
@@ -245,8 +265,8 @@ def main(
     # above are NEVER changed by this -- only which *rows* are passed into
     # RBFInterpolator for a given already-drawn bootstrap index array.
     #
-    # This is safe/inert for best_smoothing > 0 (the current base case selects
-    # best_smoothing=1.0): with smoothing > 0, RBFInterpolator solves a
+    # This is safe/inert for best_smoothing > 0 (the base case selects a
+    # best_smoothing > 0): with smoothing > 0, RBFInterpolator solves a
     # regularized least-squares problem where a duplicated (X, Y) row
     # legitimately does contribute extra weight to that point's fit (it is
     # not merely a redundant constraint the way it is at smoothing=0's exact
@@ -255,17 +275,17 @@ def main(
     # gated on best_smoothing == 0.0 and left off otherwise.
     #
     # Evidence that the branch is inert for the base case (updated
-    # 2026-09-17): the earlier justification here cited a bit-for-bit
-    # regression check against the previously pinned base-case run, and also
-    # stated best_smoothing=0.1 for the base case. Both are now wrong -- the
-    # EPSILON_GRID redesign documented above deliberately changed the RBF
-    # results, so that regression check no longer applies to RBF, and the
-    # current base case selects best_smoothing=1.0. The claim is instead
-    # supported directly by the gate itself plus the run record: the pinned
-    # base-case run (results/raw/rbf_bootstrap/20260917T230913430600Z) has
-    # best_smoothing=1.0 and n_bootstrap_deduplicated=0 in its manifest, i.e.
-    # the dedup branch was never entered for any of the N_BOOTSTRAP
-    # replicates, so it cannot have influenced any base-case number.
+    # 2026-09-21): the earlier justification here cited a bit-for-bit
+    # regression check against the previously pinned base-case run. That no
+    # longer applies to RBF -- the EPSILON_GRID redesign (2026-09-17) and the
+    # SMOOTHING_GRID refinement (2026-09-21) documented above deliberately
+    # changed the RBF results. The claim is instead supported directly by the
+    # gate itself plus the run record: the pinned base-case run
+    # (results/raw/rbf_bootstrap/20260921T120402711404Z-1) has
+    # best_smoothing=0.4642 (> 0) and n_bootstrap_deduplicated=0 in its
+    # manifest, i.e. the dedup branch was never entered for any of the
+    # N_BOOTSTRAP replicates, so it cannot have influenced any base-case
+    # number.
     rng = np.random.RandomState(BOOTSTRAP_SEED)
     replicate_maps = np.empty((N_BOOTSTRAP, NY, NX))
     n_bootstrap_deduplicated = 0
@@ -385,7 +405,7 @@ def main(
             "RBFInterpolator fit -- only applied/possible when "
             "best_smoothing==0.0 (see code comment above the bootstrap loop "
             "in this script). 0 for the base case, which selects "
-            "best_smoothing=1.0."
+            "best_smoothing>0."
         ),
         "cv_seconds": cv_seconds,
         "total_seconds": total_seconds,

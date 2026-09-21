@@ -21,9 +21,10 @@ here). Instead, the four input run directories are hardcoded below:
                   realization draw (posterior_sample_map.npy).
 - sgs:            the existing pinned run results/raw/sgs/20260914T141516Z
                   (unchanged by this task).
-- rbf_bootstrap:  results/raw/rbf_bootstrap/20260917T230913430600Z -- the
-                  post-EPSILON_GRID-redesign base-case run (2026-09-17);
-                  re-pointed from the superseded 20260914T135501Z run.
+- rbf_bootstrap:  results/raw/rbf_bootstrap/20260921T120402711404Z-1 -- the
+                  post-SMOOTHING_GRID-refinement base-case run (2026-09-21);
+                  re-pointed from the superseded 20260917T230913430600Z run
+                  (which itself replaced 20260914T135501Z on 2026-09-17).
 
 Color bar unification (project decision 2026-09-14, see task description):
 - All "mean" and "realization" panels (physical porosity units) share ONE
@@ -99,7 +100,10 @@ SGS_RUN_DIR = _REPO_ROOT / "results" / "raw" / "sgs" / "20260914T141516Z"
 # is stale for this figure; leaving it would make this figure disagree with
 # results/processed/base_case/metrics.csv. kriging / sgs / gp_mle are
 # untouched (their code did not change).
-RBF_BOOTSTRAP_RUN_DIR = _REPO_ROOT / "results" / "raw" / "rbf_bootstrap" / "20260917T230913430600Z"
+# 2026-09-21: SMOOTHING_GRID was then refined from 7 to 17 values (3 points per
+# decade); the 20260917T230913430600Z run used the coarse grid and is stale,
+# so this constant was re-pointed to the post-refinement base-case run.
+RBF_BOOTSTRAP_RUN_DIR = _REPO_ROOT / "results" / "raw" / "rbf_bootstrap" / "20260921T120402711404Z-1"
 
 EXTENT = [XMIN, XMAX, YMIN, YMAX]
 

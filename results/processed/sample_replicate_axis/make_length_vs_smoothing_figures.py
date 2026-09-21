@@ -53,7 +53,7 @@ AXIS SCALE CHOICES (both log, both panels of both figures)
 Y-AXIS: log, in both figures. Observed ranges (see VERIFICATION output below,
 printed by this script every run) span >=3 orders of magnitude within a
 single figure:
-  - rbf_bootstrap best_smoothing: 0.001 to 1.0 across all 30 (level,
+  - rbf_bootstrap best_smoothing: 0.00215 to 1.0 across all 30 (17-value grid since 2026-09-21; was 0.001 to 1.0 on the old 7-value grid) (level,
     replicate) cells (SMOOTHING_GRID is itself log-like: values selected by
     CV from a small discrete grid, not a continuum).
   - gp_mle noise_variance_real_units: ~5.5e-5 to ~5.37 across all 30 cells --
