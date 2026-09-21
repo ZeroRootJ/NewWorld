@@ -1,20 +1,23 @@
 """Variogram reproduction of the REALIZATIONS of SGS, RBF+bootstrap and GP-MLE
-at the 1% sample-density level, organised by random-sampling REPLICATE
-(sample-replicate axis; ONE fixed ground truth, only the sample locations change
-across rep0..rep9).
+at the three sample-density levels (axis_level '1' = 1%, n_requested 25;
+'2' = 2%, n_requested 50; '5' = 5%, n_requested 125), organised by
+random-sampling REPLICATE (sample-replicate axis; ONE fixed ground truth, only
+the sample locations change across rep0..rep9). Two figures are made PER LEVEL
+(L = 1, 2, 5); every level uses the identical procedure and styling.
 
-WHAT THE FIGURES SHOW
----------------------
+WHAT THE FIGURES SHOW (per level L)
+-----------------------------------
 Figure A  results/figures/sample_replicate_axis/
-          variogram_reproduction_by_replicate_level1.png
+          variogram_reproduction_by_replicate_level<L>.png
     10 rows (rep0..rep9, labelled 'rep k (sample_seed s)') x 3 columns
     (SGS | RBF+bootstrap | GP-MLE). Each panel = that replicate's 10
     realizations of that method plus the truth.
 Figure B  results/figures/sample_replicate_axis/
-          variogram_reproduction_pooled_level1.png
+          variogram_reproduction_pooled_level<L>.png
     ONE row, 3 panels (SGS | RBF+bootstrap | GP-MLE); each panel pools all
     10 replicates x 10 realizations = 100 curves (lower alpha, POOLED_ALPHA).
-    Same axes (x and y limits) as Figure A.
+    Same axes (x and y limits) as Figure A OF THE SAME LEVEL. A figure-level
+    legend sits above the panels in both figures.
 
 Each panel draws
   * the truth's experimental variogram: SOLID thick black line with markers
@@ -27,8 +30,13 @@ Each panel draws
   * REFERENCE LINES ONLY (no estimation involved): the truth's theoretical
     spherical model (dashed; nugget 0.45, structured sill 8.55, range 300 m) and
     the total sill (dotted, 9.0).
-x = 0-750 m (25 m bins); y-limits SHARED by every panel of both figures
-(computed from everything plotted, then padded; nothing is clipped).
+x = 0-750 m (25 m bins). The y-axis is FIXED at 0 to Y_MAX_SILL_FACTOR x the
+total sill = 1.3 x 9 = 11.7 (computed from the imported POR_STDEV**2) in EVERY
+panel of EVERY figure (all three levels, by-replicate and pooled figures). Curves
+exceeding it are simply cut off by the axis (the data are not clipped or
+altered); the share of curve points above the limit is printed and recorded per
+(level, method) in the seeds JSON. Each level's max plotted value is kept in the
+JSON for reference.
 Simple kriging is deliberately not shown (a smooth estimate, not a set of
 realizations).
 
@@ -37,7 +45,9 @@ WHAT "REALIZATION" MEANS PER METHOD
   SGS            the 10 conditional simulations in sgs_realizations.npy
                  (shape (10, 50, 50)) of the run referenced by
                  results/processed/sample_replicate_axis/source_runs.json
-                 (level '1', that replicate).
+                 (that level, that replicate; the live file is used for every
+                 level, incl. the 2026-09-21 RBF runs at level '5', never the
+                 frozen source_runs_level5_n125.json).
   RBF+bootstrap  the 10 bootstrap replicate maps in bootstrap_replicate_maps.npy
                  of the referenced run: RESAMPLED INTERPOLATIONS (the RBF refit
                  on a bootstrap resample of the conditioning samples), NOT
@@ -63,7 +73,7 @@ WHAT "REALIZATION" MEANS PER METHOD
                  each draw (like the stored one) carries that white-noise
                  component.
 
-GP RECONSTRUCTION VALIDATION (for ALL 10 replicates; raises on failure)
+GP RECONSTRUCTION VALIDATION (every replicate of every level; raises on failure)
 -----------------------------------------------------------------------
   (i)   reconstructed posterior mean / variance maps vs. the run's stored
         posterior_mean_map.npy / posterior_var_map.npy
@@ -72,12 +82,13 @@ GP RECONSTRUCTION VALIDATION (for ALL 10 replicates; raises on failure)
         same code path vs. the stored posterior_sample_map.npy: the max abs
         difference and correlation are PRINTED AND RECORDED. Exact equality is
         NOT required. Observed: the seed-55 draw reproduces the stored draw
-        closely ONLY for rep0 and rep5 (corr ~1.0, max|diff| ~0.03); for the
-        other 8 replicates it does not (corr 0.16-0.91, max|diff| 4.7-19.4).
+        closely ONLY for some replicates (e.g. at level 1 rep0 and rep5, corr
+        ~1.0, max|diff| ~0.03; the other 8 do not: corr 0.16-0.91, max|diff|
+        4.7-19.4; per-level numbers for all levels are in the JSON).
         Cause, established empirically: the posterior covariance contains the
         white-noise floor, i.e. a numerically (near-)degenerate eigenvalue
         cluster whose size varies by replicate (n_eig_within_1e-6_rel_of_min in
-        the JSON: 948 for rep0 up to 2415 for rep8, out of 2500), so the singular vectors numpy's SVD (inside sample_y) returns for that
+        the JSON; e.g. level 1: 948 for rep0 up to 2415 for rep8, out of 2500), so the singular vectors numpy's SVD (inside sample_y) returns for that
         subspace are arbitrary rotations that change completely under
         perturbations of the covariance at the 1e-12 level (a 1e-12 random
         perturbation of the covariance changes the draw by the same O(10)
@@ -99,8 +110,8 @@ GP RECONSTRUCTION VALIDATION (for ALL 10 replicates; raises on failure)
         machine (same code, same inputs -> same SVD); this is asserted for
         rep0 by drawing the seed-55 sample twice.
 The eigenvalue-cluster diagnostic (count of eigenvalues within 1e-6 relative of
-the smallest; observed 948-2415 of 2500 depending on the replicate) is recorded
-in the JSON.
+the smallest; level 1: 948-2415 of 2500 depending on the replicate) is recorded
+in the JSON for every (level, replicate).
 
 SEEDS (all recorded; every one is deterministic; no other randomness)
 ---------------------------------------------------------------------
@@ -110,9 +121,12 @@ SEEDS (all recorded; every one is deterministic; no other randomness)
                                   every curve, truth included, is evaluated on
                                   the IDENTICAL pair set and 25 m bins)
   GP_SAMPLE_SEED        = 55    (validation draw only, same as the stored runs)
-  GP_DRAW_SEED_BASE     = 9000  (NEW; the GP draws of rep k use seed
-                                  GP_DRAW_SEED_BASE + k, i.e. 9000..9009; one
-                                  sample_y(n_samples=10) call per replicate)
+  GP_DRAW_SEED_BASE_BY_LEVEL = {'1': 9000, '2': 9100, '5': 9200}  (NEW; the GP
+                                  draws of rep k at level L use seed
+                                  base[L] + k, i.e. 9000..9009 / 9100..9109 /
+                                  9200..9209, never colliding; one
+                                  sample_y(n_samples=10) call per (level,
+                                  replicate))
 The seeds are also written to variogram_reproduction_seeds.json next to the
 summary CSV.
 
@@ -126,18 +140,22 @@ bin is summarised as raw value and as % of the truth's theoretical model value.
 
 OUTPUTS
 -------
-  results/figures/sample_replicate_axis/variogram_reproduction_by_replicate_level1.png
-  results/figures/sample_replicate_axis/variogram_reproduction_pooled_level1.png
+  results/figures/sample_replicate_axis/variogram_reproduction_by_replicate_level{1,2,5}.png
+  results/figures/sample_replicate_axis/variogram_reproduction_pooled_level{1,2,5}.png
   results/processed/sample_replicate_axis/variogram_reproduction_summary.csv
-      tidy long: axis_level, replicate, method, n_realizations, lag_m, stat,
-      value_semivariance, value_pct_of_model; stat in {min, median, max};
-      replicate = 'rep0'..'rep9' and 'pooled' (all 100 realizations of a
-      method); the truth is one row with method='truth', replicate='all',
-      stat='value', n_realizations empty.
+      tidy long: axis_level ('1','2','5'), replicate, method, n_realizations,
+      lag_m, stat, value_semivariance, value_pct_of_model; stat in {min,
+      median, max}; replicate = 'rep0'..'rep9' and 'pooled' (all 100
+      realizations of a method); the truth is one row per level with
+      method='truth', replicate='all', stat='value', n_realizations empty.
+      Re-running a subset of levels replaces only those levels' rows.
   results/processed/sample_replicate_axis/variogram_reproduction_seeds.json
+      (per-level block under "levels": seeds, source runs, GP validation,
+      timings, exceed-y-limit statistics; fixed y-limit rule at top level; re-running a subset of levels replaces only those)
 
-Run with:
+Run with (default: all three levels, ~5 min per level, dominated by the GP draws):
 .venv/Scripts/python.exe -m results.processed.sample_replicate_axis.make_variogram_reproduction_figure
+Optional: --levels 2 5
 """
 
 import contextlib
@@ -196,13 +214,21 @@ from results.processed.sample_replicate_axis.make_length_case_study_figures impo
 )
 
 FIGURES_DIR = _REPO_ROOT / "results" / "figures" / "sample_replicate_axis"
-FIGURE_A_NAME = "variogram_reproduction_by_replicate_level1.png"
-FIGURE_B_NAME = "variogram_reproduction_pooled_level1.png"
+FIGURE_A_NAME_TEMPLATE = "variogram_reproduction_by_replicate_level{level}.png"
+FIGURE_B_NAME_TEMPLATE = "variogram_reproduction_pooled_level{level}.png"
 SUMMARY_CSV_NAME = "variogram_reproduction_summary.csv"
 SEEDS_JSON_NAME = "variogram_reproduction_seeds.json"
 
 # --- design constants (all named; change here only) -------------------------
-AXIS_LEVEL = "1"                         # 1% level, n_samples_requested = 25
+LEVELS = ("1", "2", "5")                 # axis levels, run in this order (1%, 2%, 5%)
+# Text used in the figure titles: level 1 keeps its ORIGINAL wording so the
+# level-1 PNGs stay byte-identical to the first version of this script.
+LEVEL_TITLE = {
+    "1": "1% level, n=25",
+    "2": "2% level, n=50",
+    "5": "5% level, n requested 125",
+}
+LEVEL_PERCENT = {"1": "1%", "2": "2%", "5": "5%"}
 REPLICATES = tuple(REPLICATE_IDS)        # rep0 .. rep9
 METHODS = ("sgs", "rbf_bootstrap", "gp_mle")   # figure columns, left to right
 METHOD_LABELS = {"sgs": "SGS", "rbf_bootstrap": "RBF+bootstrap", "gp_mle": "GP-MLE"}
@@ -218,11 +244,18 @@ REALIZATION_LINEWIDTH = 1.0
 POOLED_LINEWIDTH = 0.9
 TRUTH_LINEWIDTH = 2.4
 TRUTH_MARKERSIZE = 3.5
-Y_PAD_FRACTION = 0.08        # headroom above the largest plotted value
+# The y-axis of ALL variogram-reproduction figures is 0 .. Y_MAX_SILL_FACTOR x the
+# total sill (= POR_STDEV**2 = 9), i.e. 11.7; curves above it are cut off.
+Y_MAX_SILL_FACTOR = 1.3
+Y_MAX = Y_MAX_SILL_FACTOR * POR_STDEV ** 2
+YLIM = (0.0, Y_MAX)
 
 N_REALIZATIONS_EXPECTED = 10
 N_GP_DRAWS = N_REALIZATIONS_EXPECTED
-GP_DRAW_SEED_BASE = 9000     # NEW seed family; GP draw seed of rep k = base + k
+# NEW seed families, one per level (never colliding with each other or with
+# TRUTH/sample/pair/GP_SAMPLE seeds); GP draw seed of rep k at level L =
+# GP_DRAW_SEED_BASE_BY_LEVEL[L] + k  (1%: 9000..9009, 2%: 9100..9109, 5%: 9200..9209).
+GP_DRAW_SEED_BASE_BY_LEVEL = {"1": 9000, "2": 9100, "5": 9200}
 
 REPORT_LAG_M = 287.5         # lag bin reported in the summary (a 25 m bin centre)
 REPORT_STATS = ("min", "median", "max")
@@ -402,11 +435,11 @@ def semivariance_at(vario: pd.DataFrame, lag_m: float) -> float:
 # ---------------------------------------------------------------------------
 # Data loading (one replicate)
 # ---------------------------------------------------------------------------
-def load_replicate(replicate_id: str, source_runs: dict, truth: np.ndarray, grid_coords,
-                   check_determinism: bool):
-    runs = {m: _REPO_ROOT / source_runs[AXIS_LEVEL][replicate_id][m] for m in METHODS}
+def load_replicate(level: str, replicate_id: str, source_runs: dict, truth: np.ndarray,
+                   grid_coords, check_determinism: bool):
+    runs = {m: _REPO_ROOT / source_runs[level][replicate_id][m] for m in METHODS}
     sample_seed = int(REPLICATE_SEED[replicate_id])
-    n_requested = N_SAMPLES_REQUESTED_BY_LEVEL[AXIS_LEVEL]
+    n_requested = N_SAMPLES_REQUESTED_BY_LEVEL[level]
 
     # Same conditioning samples in all three runs and equal to the regenerated ones.
     ref = get_conditioning_samples(truth, sample_seed=sample_seed, n_samples=n_requested)
@@ -417,24 +450,25 @@ def load_replicate(replicate_id: str, source_runs: dict, truth: np.ndarray, grid
             atol=SAMPLES_MATCH_ATOL,
         ):
             raise ValueError(
-                f"{replicate_id} {m}: samples.csv does not match sample_seed={sample_seed}."
+                f"level {level} {replicate_id} {m}: samples.csv does not match "
+                f"sample_seed={sample_seed}, n_requested={n_requested}."
             )
 
     sgs = np.load(runs["sgs"] / "sgs_realizations.npy")
     rbf = np.load(runs["rbf_bootstrap"] / "bootstrap_replicate_maps.npy")
     for name, arr in (("sgs_realizations", sgs), ("bootstrap_replicate_maps", rbf)):
         if arr.shape != (N_REALIZATIONS_EXPECTED, NY, NX):
-            raise ValueError(f"{replicate_id}: {name} has shape {arr.shape}, expected "
+            raise ValueError(f"level {level} {replicate_id}: {name} has shape {arr.shape}, expected "
                              f"({N_REALIZATIONS_EXPECTED}, {NY}, {NX}) (full grid).")
 
     gpr, _ = rebuild_fitted_gpr(runs["gp_mle"])
-    validation = validate_gp_reconstruction(gpr, runs["gp_mle"], grid_coords, replicate_id,
-                                            check_determinism)
-    seed = GP_DRAW_SEED_BASE + REPLICATES.index(replicate_id)
+    validation = validate_gp_reconstruction(gpr, runs["gp_mle"], grid_coords,
+                                            f"L{level} {replicate_id}", check_determinism)
+    seed = GP_DRAW_SEED_BASE_BY_LEVEL[level] + REPLICATES.index(replicate_id)
     t0 = time.time()
     gp_draws, method = draw_gp_posterior(gpr, grid_coords, N_GP_DRAWS, seed)
     seconds = time.time() - t0
-    print(f"  [GP {replicate_id}] drew {N_GP_DRAWS} posterior draws, seed={seed}, "
+    print(f"  [GP L{level} {replicate_id}] drew {N_GP_DRAWS} posterior draws, seed={seed}, "
           f"method={method}, {seconds:.1f} s")
 
     return {
@@ -442,7 +476,7 @@ def load_replicate(replicate_id: str, source_runs: dict, truth: np.ndarray, grid
         "n_requested": n_requested,
         "n_actual": len(ref),
         "maps": {"sgs": sgs, "rbf_bootstrap": rbf, "gp_mle": gp_draws},
-        "runs": {m: str(source_runs[AXIS_LEVEL][replicate_id][m]) for m in METHODS},
+        "runs": {m: str(source_runs[level][replicate_id][m]) for m in METHODS},
         "gp_validation": validation,
         "gp_draw_seed": seed,
         "gp_draw_method": method,
@@ -503,11 +537,16 @@ def _plot_curves(ax, curves, color, alpha, linewidth):
                 linewidth=linewidth, alpha=alpha, zorder=2)
 
 
-def _common_footnote_text(data):
+def _common_footnote_text(level, data):
     total_sill = POR_STDEV ** 2
     n_actual = ", ".join(f"{r}: {data[r]['n_actual']}" for r in REPLICATES)
+    ylim_sentence = (
+        f"Y-axis fixed at 0-{Y_MAX:g} ({Y_MAX_SILL_FACTOR:g} x total sill {total_sill:g}) for "
+        "every level and both figure types; curves exceeding it are cut off at the axis."
+    )
     return (
-        f"1% sample-density level (n_samples_requested={N_SAMPLES_REQUESTED_BY_LEVEL[AXIS_LEVEL]}; "
+        f"{LEVEL_PERCENT[level]} sample-density level "
+        f"(n_samples_requested={N_SAMPLES_REQUESTED_BY_LEVEL[level]}; "
         f"actual conditioning samples after grid snapping per replicate: {n_actual}); ONE fixed "
         f"ground truth (TRUTH_SEED={TRUTH_SEED}, range={AXIS_HMAJ1:g} m), only the sample "
         f"locations change across rep0-rep9 (sample_seed {REPLICATE_SEED[REPLICATES[0]]}-"
@@ -525,14 +564,13 @@ def _common_footnote_text(data):
         "replicate from the fitted GP posterior over the full grid (sklearn sample_y, includes "
         "the fitted white-noise term), re-drawn here from each run's fitted hyperparameters (not "
         "re-optimised; reconstruction checked against each run's stored posterior mean/variance), "
-        f"draw seeds {GP_DRAW_SEED_BASE}+k for rep k. Legend swatches are drawn more opaque than "
-        "the plotted lines for legibility. Simple kriging is not shown (a smooth estimate, not a "
-        "set of realizations). Y-limits are shared by all panels of both level-1 variogram "
-        "figures."
+        f"draw seeds {GP_DRAW_SEED_BASE_BY_LEVEL[level]}+k for rep k. Legend swatches are drawn "
+        "more opaque than the plotted lines for legibility. Simple kriging is not shown (a smooth "
+        f"estimate, not a set of realizations). {ylim_sentence}"
     )
 
 
-def make_figure_a(data, varios, truth_vario, ylim):
+def make_figure_a(level, data, varios, truth_vario, ylim):
     h_smooth = np.linspace(0.0, LAG_MAX_M, 300)
     model_smooth = spherical_semivariance(h_smooth)
     total_sill = POR_STDEV ** 2
@@ -555,23 +593,23 @@ def make_figure_a(data, varios, truth_vario, ylim):
                     f"{rep} (sample_seed {data[rep]['sample_seed']})\n"
                     "Semivariance (Porosity %$^2$)", fontsize=LABEL_FONTSIZE - 1,
                 )
-    footnote = _common_footnote_text(data)
+    footnote = _common_footnote_text(level, data)
     fig.suptitle(
         "Variogram of the individual realizations vs. the truth, by sampling replicate "
-        "(1% level, n=25)", fontsize=15, y=0.9975,
+        f"({LEVEL_TITLE[level]})", fontsize=15, y=0.9975,
     )
     fig.tight_layout(rect=(0.0, 0.065, 1.0, FIG_A_PANELS_TOP))
     _figure_legend(fig, N_REALIZATIONS_EXPECTED, ALPHA, REALIZATION_LINEWIDTH, FIG_A_LEGEND_Y)
     fig.text(0.5, 0.004, textwrap.fill(footnote, 170), ha="center", va="bottom",
              fontsize=8, color="dimgray")
     FIGURES_DIR.mkdir(parents=True, exist_ok=True)
-    out = FIGURES_DIR / FIGURE_A_NAME
+    out = FIGURES_DIR / FIGURE_A_NAME_TEMPLATE.format(level=level)
     fig.savefig(out, dpi=FIG_DPI, bbox_inches="tight")
     plt.close(fig)
     return out
 
 
-def make_figure_b(data, varios, truth_vario, ylim):
+def make_figure_b(level, data, varios, truth_vario, ylim):
     h_smooth = np.linspace(0.0, LAG_MAX_M, 300)
     model_smooth = spherical_semivariance(h_smooth)
     total_sill = POR_STDEV ** 2
@@ -590,64 +628,61 @@ def make_figure_b(data, varios, truth_vario, ylim):
             ax.set_ylabel("Semivariance (Porosity %$^2$)", fontsize=LABEL_FONTSIZE)
     footnote = (
         "Pooled over all 10 sampling replicates (rep0-rep9) x 10 realizations per method = 100 "
-        "curves per panel, drawn at alpha=" + f"{POOLED_ALPHA:g}. " + _common_footnote_text(data)
+        "curves per panel, drawn at alpha=" + f"{POOLED_ALPHA:g}. "
+        + _common_footnote_text(level, data)
     )
     fig.suptitle(
         "Variogram of the individual realizations vs. the truth, pooled over the 10 sampling "
-        "replicates (1% level, n=25)", fontsize=14, y=0.995,
+        f"replicates ({LEVEL_TITLE[level]})", fontsize=14, y=0.995,
     )
     fig.tight_layout(rect=(0.0, 0.25, 1.0, FIG_B_PANELS_TOP))
     _figure_legend(fig, len(REPLICATES) * N_REALIZATIONS_EXPECTED, POOLED_ALPHA,
                    POOLED_LINEWIDTH, FIG_B_LEGEND_Y)
     fig.text(0.5, 0.005, textwrap.fill(footnote, 175), ha="center", va="bottom",
              fontsize=8, color="dimgray")
-    out = FIGURES_DIR / FIGURE_B_NAME
+    out = FIGURES_DIR / FIGURE_B_NAME_TEMPLATE.format(level=level)
     fig.savefig(out, dpi=FIG_DPI, bbox_inches="tight")
     plt.close(fig)
     return out
 
 
 # ---------------------------------------------------------------------------
-def _summary_rows(rep_label, method, vals, model_at_report, n_real):
+def _summary_rows(level, rep_label, method, vals, model_at_report, n_real):
     stats = {"min": float(np.min(vals)), "median": float(np.median(vals)),
              "max": float(np.max(vals))}
     return [{
-        "axis_level": AXIS_LEVEL, "replicate": rep_label, "method": method,
+        "axis_level": level, "replicate": rep_label, "method": method,
         "n_realizations": n_real, "lag_m": REPORT_LAG_M, "stat": stat,
         "value_semivariance": stats[stat],
         "value_pct_of_model": 100.0 * stats[stat] / model_at_report,
     } for stat in REPORT_STATS]
 
 
-def main():
-    t_start = time.time()
-    with open(PROCESSED_DIR / "source_runs.json", "r", encoding="utf-8") as f:
-        source_runs = json.load(f)
-    truth = get_base_case_truth(truth_seed=TRUTH_SEED, hmaj1=AXIS_HMAJ1, hmin1=base.AXIS_HMIN1)
-    grid_coords = full_grid_coordinates(NX, NY, XMN, YMN, XSIZ, YSIZ)
-
-    print(
-        f"axis_level={AXIS_LEVEL}, replicates={REPLICATES[0]}..{REPLICATES[-1]} "
-        f"(sample_seed {REPLICATE_SEED[REPLICATES[0]]}..{REPLICATE_SEED[REPLICATES[-1]]}), "
-        f"truth_seed={TRUTH_SEED}, VARIOGRAM_PAIR_SEED={VARIOGRAM_PAIR_SEED}, "
-        f"GP_SAMPLE_SEED={GP_SAMPLE_SEED}, GP_DRAW_SEED_BASE={GP_DRAW_SEED_BASE}"
-    )
-    truth_vario = quiet_variogram(truth)
+def run_level(level, source_runs, truth, grid_coords, truth_vario):
+    """Everything for ONE axis level: load + validate + draw, variograms, per-level
+    y-limits, both figures, summary rows and the level's JSON block."""
+    t_level = time.time()
     model_at_report = float(spherical_semivariance(REPORT_LAG_M))
     truth_report = semivariance_at(truth_vario, REPORT_LAG_M)
-
+    print(
+        f"\n======== axis_level={level} ({LEVEL_PERCENT[level]}, n_samples_requested="
+        f"{N_SAMPLES_REQUESTED_BY_LEVEL[level]}), replicates={REPLICATES[0]}..{REPLICATES[-1]} "
+        f"(sample_seed {REPLICATE_SEED[REPLICATES[0]]}..{REPLICATE_SEED[REPLICATES[-1]]}), "
+        f"GP_DRAW_SEED_BASE={GP_DRAW_SEED_BASE_BY_LEVEL[level]} ========"
+    )
     data, varios = {}, {}
     for k, rep in enumerate(REPLICATES):
-        print(f"\n{rep}:")
-        data[rep] = load_replicate(rep, source_runs, truth, grid_coords,
+        print(f"\nL{level} {rep}:")
+        data[rep] = load_replicate(level, rep, source_runs, truth, grid_coords,
                                    check_determinism=(k == 0))
         for method in METHODS:
             varios[(rep, method)] = realization_variograms(
-                data[rep]["maps"][method], truth_vario, f"{rep} {method}"
+                data[rep]["maps"][method], truth_vario, f"L{level} {rep} {method}"
             )
         del data[rep]["maps"]  # free memory; only variograms are needed from here on
 
-    # y-limits shared by ALL panels of both figures.
+    # Fixed y-limits (YLIM) for every panel of every figure; max plotted value is only
+    # recorded for reference.
     h_smooth = np.linspace(0.0, LAG_MAX_M, 300)
     all_max = max(
         float(np.max(truth_vario["semivariance_empirical"].values)),
@@ -655,27 +690,44 @@ def main():
         POR_STDEV ** 2,
         max(float(np.max(v["semivariance_empirical"].values)) for vs in varios.values() for v in vs),
     )
-    all_min = min(
-        0.0,
-        min(float(np.min(v["semivariance_empirical"].values)) for vs in varios.values() for v in vs),
-    )
-    ylim = (all_min, all_max * (1.0 + Y_PAD_FRACTION))
-    print(f"\nshared y-limits: {ylim} (max plotted value {all_max:.4f}, min {all_min:.4f})")
+    ylim = YLIM
+    print(f"\nL{level} fixed y-limits: {ylim} (level's max plotted value {all_max:.4f}, "
+          "for reference)")
+    # Share of plotted curve points (bins x realizations, well-populated bins only, as
+    # drawn) above the y-limit, and number of realizations with >= 1 bin above it.
+    exceed = {}
+    for method in METHODS:
+        n_pts = n_above = n_real = n_real_above = 0
+        for rep_id in REPLICATES:
+            for v in varios[(rep_id, method)]:
+                y = v.loc[v["n_pairs"] >= MIN_PAIRS_PER_BIN, "semivariance_empirical"].values
+                n_pts += y.size
+                n_above += int(np.sum(y > ylim[1]))
+                n_real += 1
+                n_real_above += int(np.any(y > ylim[1]))
+        exceed[method] = {
+            "n_curve_points": n_pts, "n_points_above_ylim": n_above,
+            "pct_points_above_ylim": 100.0 * n_above / n_pts,
+            "n_realizations": n_real, "n_realizations_with_any_bin_above_ylim": n_real_above,
+        }
+        print(f"  L{level} {method:<14}: {exceed[method]['pct_points_above_ylim']:.2f}% of "
+              f"{n_pts} curve points above {ylim[1]:g}; {n_real_above}/{n_real} realizations "
+              "have >=1 bin above")
 
-    out_a = make_figure_a(data, varios, truth_vario, ylim)
+    out_a = make_figure_a(level, data, varios, truth_vario, ylim)
     print(f"figure A: {out_a} ({out_a.stat().st_size} bytes)")
-    out_b = make_figure_b(data, varios, truth_vario, ylim)
+    out_b = make_figure_b(level, data, varios, truth_vario, ylim)
     print(f"figure B: {out_b} ({out_b.stat().st_size} bytes)")
 
     # --- summary numbers -----------------------------------------------------
     rows = [{
-        "axis_level": AXIS_LEVEL, "replicate": "all", "method": "truth",
+        "axis_level": level, "replicate": "all", "method": "truth",
         "n_realizations": np.nan, "lag_m": REPORT_LAG_M, "stat": "value",
         "value_semivariance": truth_report,
         "value_pct_of_model": 100.0 * truth_report / model_at_report,
     }]
-    print(f"\nSemivariance at the {REPORT_LAG_M:g} m bin as % of the truth's theoretical model "
-          f"({model_at_report:.3f}); truth experimental = {truth_report:.3f} "
+    print(f"\nL{level}: semivariance at the {REPORT_LAG_M:g} m bin as % of the truth's theoretical "
+          f"model ({model_at_report:.3f}); truth experimental = {truth_report:.3f} "
           f"({100 * truth_report / model_at_report:.1f}%)")
     print(f"{'rep':>7} {'method':<14} {'n_real':>6} {'min%':>7} {'median%':>8} {'max%':>7}")
     for method in METHODS:
@@ -683,67 +735,144 @@ def main():
         for rep in REPLICATES:
             vals = np.array([semivariance_at(v, REPORT_LAG_M) for v in varios[(rep, method)]])
             pooled_vals.append(vals)
-            rows += _summary_rows(rep, method, vals, model_at_report, len(vals))
+            rows += _summary_rows(level, rep, method, vals, model_at_report, len(vals))
             print(f"{rep:>7} {method:<14} {len(vals):>6d} "
                   f"{100 * vals.min() / model_at_report:7.1f} "
                   f"{100 * np.median(vals) / model_at_report:8.1f} "
                   f"{100 * vals.max() / model_at_report:7.1f}")
         allv = np.concatenate(pooled_vals)
-        rows += _summary_rows("pooled", method, allv, model_at_report, len(allv))
+        rows += _summary_rows(level, "pooled", method, allv, model_at_report, len(allv))
         print(f"{'pooled':>7} {method:<14} {len(allv):>6d} "
               f"{100 * allv.min() / model_at_report:7.1f} "
               f"{100 * np.median(allv) / model_at_report:8.1f} "
               f"{100 * allv.max() / model_at_report:7.1f}   (truth "
               f"{100 * truth_report / model_at_report:.1f}%)")
-    summary = pd.DataFrame(rows)
-    summary_path = PROCESSED_DIR / SUMMARY_CSV_NAME
-    summary.to_csv(summary_path, index=False)
-    print(f"summary: {summary_path} ({len(summary)} rows)")
+
+    val = {r: data[r]["gp_validation"] for r in REPLICATES}
+    n_eig = [val[r]["n_eig_within_1e-6_rel_of_min"] for r in REPLICATES]
+    corr = {r: val[r]["corr_seed55_draw_vs_stored"] for r in REPLICATES}
+    level_seconds = time.time() - t_level
+    block = {
+        "n_samples_requested": N_SAMPLES_REQUESTED_BY_LEVEL[level],
+        "n_samples_actual_by_replicate": {r: data[r]["n_actual"] for r in REPLICATES},
+        "sample_seed_by_replicate": {r: int(REPLICATE_SEED[r]) for r in REPLICATES},
+        "gp_draw_seed_base": GP_DRAW_SEED_BASE_BY_LEVEL[level],
+        "gp_draw_seed_by_replicate": {r: data[r]["gp_draw_seed"] for r in REPLICATES},
+        "gp_draw_method_by_replicate": {r: data[r]["gp_draw_method"] for r in REPLICATES},
+        "gp_draw_seconds_by_replicate": {r: round(data[r]["gp_draw_seconds"], 2) for r in REPLICATES},
+        "level_runtime_seconds": round(level_seconds, 1),
+        "source_runs": {r: data[r]["runs"] for r in REPLICATES},
+        "gp_reconstruction_validation": val,
+        "n_eig_within_1e-6_rel_of_min_range": [int(min(n_eig)), int(max(n_eig))],
+        "replicates_seed55_draw_close_to_stored_corr_gt_0.99": [r for r in REPLICATES
+                                                                if corr[r] > 0.99],
+        "corr_seed55_draw_vs_stored_range": [float(min(corr.values())), float(max(corr.values()))],
+        "ylim": list(ylim),
+        "max_plotted_value": float(all_max),
+        "exceed_ylim_by_method": exceed,
+        "figure_a": out_a.relative_to(_REPO_ROOT).as_posix(),
+        "figure_b": out_b.relative_to(_REPO_ROOT).as_posix(),
+    }
+    return rows, block
+
+
+def _merge_csv(new_rows, levels_run):
+    """Replace the run levels' rows of the existing summary CSV, keep the other
+    levels' rows untouched, order by LEVELS."""
+    path = PROCESSED_DIR / SUMMARY_CSV_NAME
+    new = pd.DataFrame(new_rows)
+    if path.exists():
+        old = pd.read_csv(path, dtype={"axis_level": str})
+        old = old[~old["axis_level"].isin(levels_run)]
+        combined = pd.concat([old, new], ignore_index=True)
+    else:
+        combined = new
+    combined["_o"] = combined["axis_level"].map({lv: i for i, lv in enumerate(LEVELS)})
+    combined = combined.sort_values("_o", kind="stable").drop(columns="_o")
+    combined.to_csv(path, index=False)
+    return path, len(combined)
+
+
+def main(levels=LEVELS):
+    t_start = time.time()
+    with open(PROCESSED_DIR / "source_runs.json", "r", encoding="utf-8") as f:
+        source_runs = json.load(f)
+    truth = get_base_case_truth(truth_seed=TRUTH_SEED, hmaj1=AXIS_HMAJ1, hmin1=base.AXIS_HMIN1)
+    grid_coords = full_grid_coordinates(NX, NY, XMN, YMN, XSIZ, YSIZ)
+    print(
+        f"levels={list(levels)}, truth_seed={TRUTH_SEED}, "
+        f"VARIOGRAM_PAIR_SEED={VARIOGRAM_PAIR_SEED}, GP_SAMPLE_SEED={GP_SAMPLE_SEED}, "
+        f"GP_DRAW_SEED_BASE_BY_LEVEL={GP_DRAW_SEED_BASE_BY_LEVEL}"
+    )
+    truth_vario = quiet_variogram(truth)
+
+    all_rows, blocks = [], {}
+    for level in levels:
+        rows, block = run_level(level, source_runs, truth, grid_coords, truth_vario)
+        all_rows += rows
+        blocks[level] = block
+
+    summary_path, n_rows = _merge_csv(all_rows, set(levels))
+    print(f"\nsummary: {summary_path} ({n_rows} rows total)")
 
     total_seconds = time.time() - t_start
+    json_path = PROCESSED_DIR / SEEDS_JSON_NAME
+    existing_levels = {}
+    if json_path.exists():
+        with open(json_path, "r", encoding="utf-8") as f:
+            existing_levels = json.load(f).get("levels", {})
+    existing_levels.update(blocks)
     seeds = {
         "note": (
             "Seeds used by make_variogram_reproduction_figure.py. GP draws are re-generated on "
-            "the fly (not stored under results/raw): seed of replicate rep k = GP_DRAW_SEED_BASE "
-            "+ k; one sample_y(n_samples=10) call per replicate. GP_SAMPLE_SEED is used only for "
-            "the reconstruction validation draw (the stored draw's own seed). The seed fixes a "
-            "draw only for a bit-identical posterior covariance (see the script docstring: the "
-            "covariance has a near-degenerate white-noise eigenvalue cluster whose size varies "
-            "by replicate, 948-2415 of 2500 eigenvalues within 1e-6 relative of the minimum, "
-            "see n_eig_within_1e-6_rel_of_min in gp_reconstruction_validation). The seed-55 "
-            "n_samples=1 draw reproduces the stored draw closely only for rep0 and rep5 "
-            "(corr ~1.0, max|diff| ~0.03) and not for the other 8 replicates (corr 0.16-0.91)."
+            "the fly (not stored under results/raw): seed of replicate rep k at level L = "
+            "gp_draw_seed_base_by_level[L] + k; one sample_y(n_samples=10) call per (level, "
+            "replicate). GP_SAMPLE_SEED is used only for the reconstruction validation draw (the "
+            "stored draw's own seed). The seed fixes a draw only for a bit-identical posterior "
+            "covariance: the covariance has a near-degenerate white-noise eigenvalue cluster whose "
+            "size varies by replicate (see n_eig_within_1e-6_rel_of_min in "
+            "gp_reconstruction_validation and its range per level), so the seed-55 n_samples=1 "
+            "draw reproduces the stored draw closely only for some replicates (see "
+            "replicates_seed55_draw_close_to_stored_corr_gt_0.99 and "
+            "corr_seed55_draw_vs_stored_range per level). The y-axis is FIXED for all figures (see "
+            "ylim / ylim_rule); per-level max_plotted_value and exceed_ylim_by_method are kept for "
+            "reference."
         ),
-        "axis_level": AXIS_LEVEL,
+        "levels_run_last": list(levels),
+        "ylim": list(YLIM),
+        "ylim_rule": (
+            f"y-axis fixed at 0 to Y_MAX_SILL_FACTOR ({Y_MAX_SILL_FACTOR:g}) x total sill "
+            f"(POR_STDEV**2 = {POR_STDEV ** 2:g}) = {Y_MAX:g} for every panel of all six "
+            "figures; curves above it are cut off by the axis (data not clipped)."
+        ),
         "truth_seed": TRUTH_SEED,
-        "sample_seed_by_replicate": {r: int(REPLICATE_SEED[r]) for r in REPLICATES},
         "variogram_pair_seed": VARIOGRAM_PAIR_SEED,
         "n_pairs_drawn": N_PAIRS_DRAWN,
         "gp_sample_seed_validation": GP_SAMPLE_SEED,
-        "gp_draw_seed_base": GP_DRAW_SEED_BASE,
-        "gp_draw_seed_by_replicate": {r: data[r]["gp_draw_seed"] for r in REPLICATES},
-        "gp_draw_method_by_replicate": {r: data[r]["gp_draw_method"] for r in REPLICATES},
+        "gp_draw_seed_base_by_level": GP_DRAW_SEED_BASE_BY_LEVEL,
         "n_gp_draws_per_replicate": N_GP_DRAWS,
-        "gp_draw_seconds_by_replicate": {r: round(data[r]["gp_draw_seconds"], 2) for r in REPLICATES},
-        "total_runtime_seconds": round(total_seconds, 1),
-        "source_runs": {r: data[r]["runs"] for r in REPLICATES},
-        "gp_reconstruction_validation": {r: data[r]["gp_validation"] for r in REPLICATES},
         "gp_reconstruction_tolerances": {
             "mean_var_rtol": GP_MAP_RTOL, "mean_var_atol": GP_MAP_ATOL,
             "chi2_max_abs_z": GP_CHI2_MAX_ABS_Z,
         },
         "alpha": ALPHA,
         "pooled_alpha": POOLED_ALPHA,
-        "shared_ylim": list(ylim),
+        "total_runtime_seconds_last_run": round(total_seconds, 1),
+        "levels": {lv: existing_levels[lv] for lv in LEVELS if lv in existing_levels},
     }
-    with open(PROCESSED_DIR / SEEDS_JSON_NAME, "w", encoding="utf-8") as f:
+    with open(json_path, "w", encoding="utf-8") as f:
         json.dump(seeds, f, indent=2)
-    print(f"seeds: {PROCESSED_DIR / SEEDS_JSON_NAME}")
-    print(f"GP draw seconds by replicate: "
-          f"{ {r: round(data[r]['gp_draw_seconds'], 1) for r in REPLICATES} }; "
-          f"total runtime {total_seconds:.1f} s")
-    return out_a, out_b
+    print(f"seeds: {json_path}")
+    for lv in levels:
+        print(f"L{lv} GP draw seconds by replicate: {blocks[lv]['gp_draw_seconds_by_replicate']}; "
+              f"level runtime {blocks[lv]['level_runtime_seconds']} s")
+    print(f"total runtime {total_seconds:.1f} s")
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    parser.add_argument("--levels", nargs="+", default=list(LEVELS), choices=list(LEVELS),
+                        help="axis levels to (re)generate; default: all three")
+    main(tuple(parser.parse_args().levels))
