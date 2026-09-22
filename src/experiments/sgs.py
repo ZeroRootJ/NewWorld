@@ -71,6 +71,7 @@ from src.experiments.base_case import (
 from src.experiments.base_case_conditioning import (
     HMAJ1 as _COND_HMAJ1,
     HMIN1 as _COND_HMIN1,
+    NUG as _COND_NUG,
     N_SAMPLES,
     SAMPLE_SEED,
     TRUTH_SEED,
@@ -229,14 +230,17 @@ def main(
     hmaj1: float = _COND_HMAJ1,
     hmin1: float = _COND_HMIN1,
     n_samples: int = N_SAMPLES,
+    nug: float = _COND_NUG,
 ):
     """Run the SGS base-case pipeline.
 
     Defaults reproduce the exact base case (see kriging.main's docstring for
     the shared convention, including the ``n_samples`` sample-density-axis
-    argument). Search/jitter/back-transform constants below (NDMAX, NODMAX,
-    SGS_JITTER_MAGNITUDE, SGSIM_ZMIN/ZMAX, etc.) are held fixed at their
-    base-case values regardless of ``hmaj1``/``hmin1``/``n_samples``
+    and ``nug`` nugget-axis arguments -- and, for ``nug``, the note on why
+    this "correct answer" baseline is handed the TRUE nugget). Search/jitter/
+    back-transform constants below (NDMAX, NODMAX, SGS_JITTER_MAGNITUDE,
+    SGSIM_ZMIN/ZMAX, etc.) are held fixed at their base-case values
+    regardless of ``hmaj1``/``hmin1``/``n_samples``/``nug``
     (one-factor-at-a-time -- do not vary those here).
     """
     t_start = time.time()
@@ -247,9 +251,10 @@ def main(
         hmaj1=hmaj1,
         hmin1=hmin1,
         n_samples=n_samples,
+        nug=nug,
     )
     n_actual_samples = len(samples_df)
-    vario = build_vario(hmaj1=hmaj1, hmin1=hmin1)
+    vario = build_vario(hmaj1=hmaj1, hmin1=hmin1, nug=nug)
 
     # --- Local jitter, sgsim-call copy only (see SGS_JITTER_* comment above)
     # samples_df itself (saved to samples.csv / used by every other method)
@@ -455,10 +460,13 @@ def main(
         "grid": {"nx": NX, "ny": NY, "xsiz": XSIZ, "ysiz": YSIZ, "xmn": XMN, "ymn": YMN},
         "truth_seed": truth_seed,
         "sample_seed": sample_seed,
-        # hmaj1/hmin1 duplicated top-level (also present inside "variogram"
-        # below) for range-axis lookup convenience (task instruction).
+        # hmaj1/hmin1/nug/cc1 duplicated top-level (also present inside
+        # "variogram" below) for range-/nugget-axis lookup convenience.
+        # cc1 is the DERIVED value (1.0 - nug, build_vario's invariant).
         "hmaj1": hmaj1,
         "hmin1": hmin1,
+        "nug": nug,
+        "cc1": 1.0 - nug,
         "n_samples_requested": n_samples,
         "n_samples_actual": n_actual_samples,
         "variogram": vario,

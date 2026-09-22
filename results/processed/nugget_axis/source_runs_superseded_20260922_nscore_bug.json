@@ -1,0 +1,38 @@
+{
+  "0.0": {
+    "kriging": "results/raw/kriging/20260922T155119817557Z",
+    "sgs": "results/raw/sgs/20260922T155225878468Z",
+    "rbf_bootstrap": "results/raw/rbf_bootstrap/20260922T155111560802Z",
+    "gp_mle": "results/raw/gp_mle/20260922T155114660619Z"
+  },
+  "0.1": {
+    "kriging": "results/raw/kriging/20260922T155120376628Z",
+    "sgs": "results/raw/sgs/20260922T155226677828Z",
+    "rbf_bootstrap": "results/raw/rbf_bootstrap/20260922T155111609878Z",
+    "gp_mle": "results/raw/gp_mle/20260922T155114954995Z"
+  },
+  "0.2": {
+    "kriging": "results/raw/kriging/20260922T155119542684Z",
+    "sgs": "results/raw/sgs/20260922T155227327727Z",
+    "rbf_bootstrap": "results/raw/rbf_bootstrap/20260922T155111593530Z",
+    "gp_mle": "results/raw/gp_mle/20260922T155114742768Z"
+  },
+  "0.3": {
+    "kriging": "results/raw/kriging/20260922T155131942671Z",
+    "sgs": "results/raw/sgs/20260922T155241493030Z",
+    "rbf_bootstrap": "results/raw/rbf_bootstrap/20260922T155124508512Z",
+    "gp_mle": "results/raw/gp_mle/20260922T155129326703Z"
+  },
+  "0.4": {
+    "kriging": "results/raw/kriging/20260922T155135376134Z",
+    "sgs": "results/raw/sgs/20260922T155243811156Z",
+    "rbf_bootstrap": "results/raw/rbf_bootstrap/20260922T155132576942Z",
+    "gp_mle": "results/raw/gp_mle/20260922T155134478153Z"
+  },
+  "0.5": {
+    "kriging": "results/raw/kriging/20260922T155139770350Z",
+    "sgs": "results/raw/sgs/20260922T155251296301Z",
+    "rbf_bootstrap": "results/raw/rbf_bootstrap/20260922T155142243644Z",
+    "gp_mle": "results/raw/gp_mle/20260922T155145828487Z"
+  }
+}

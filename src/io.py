@@ -170,6 +170,16 @@ def save_result(
 
     manifest = {
         "experiment": experiment,
+        # NOTE (recorded 2026-09-22, not a defect to fix): this field is a
+        # FRESH clock read taken when the manifest is written, so it is not
+        # the same instant as -- and can differ from -- the run directory's
+        # name. Two runs launched in parallel can carry manifest timestamps
+        # that agree to the microsecond; observed in the nugget axis, where
+        # results/raw/kriging/20260922T162946798837Z and
+        # .../20260922T162946798837Z-1 are two distinct levels. Run identity
+        # therefore comes from the DIRECTORY name (unique by construction via
+        # make_run_dir's "-N" collision suffix), never from this field. Do
+        # not use manifest["timestamp"] as a key or a sort order.
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "git_commit": get_git_commit(),
         # git_dirty / git_dirty_files: added fields, additive-only relative

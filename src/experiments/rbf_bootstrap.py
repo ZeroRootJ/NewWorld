@@ -46,6 +46,7 @@ from src.experiments.base_case import NX, NY, XMN, XMAX, XMIN, YMN, YMAX, YMIN, 
 from src.experiments.base_case_conditioning import (
     HMAJ1 as _COND_HMAJ1,
     HMIN1 as _COND_HMIN1,
+    NUG as _COND_NUG,
     N_SAMPLES,
     SAMPLE_SEED,
     TRUTH_SEED,
@@ -249,18 +250,25 @@ def main(
     hmaj1: float = _COND_HMAJ1,
     hmin1: float = _COND_HMIN1,
     n_samples: int = N_SAMPLES,
+    nug: float = _COND_NUG,
 ):
     """Run the RBF+bootstrap base-case pipeline.
 
     Defaults reproduce the exact base case (see kriging.main's docstring for
     the shared convention, including the ``n_samples`` sample-density-axis
-    argument). RBF+bootstrap does not consume a variogram directly --
-    ``hmaj1``/``hmin1`` only affect the regenerated ground-truth field (via
+    and ``nug`` nugget-axis arguments). RBF+bootstrap does not consume a
+    variogram directly -- ``hmaj1``/``hmin1``/``nug`` only affect the
+    regenerated ground-truth field (via
     ``get_base_case_conditioning_data``), and ``n_samples`` only affects how
-    many conditioning samples are drawn from it; neither changes this
+    many conditioning samples are drawn from it; none of them changes this
     method's own CV grid / bootstrap constants below (EPSILON_GRID,
     SMOOTHING_GRID, CV_FOLDS, N_BOOTSTRAP, etc.), which are held fixed
     (one-factor-at-a-time -- do not vary those here).
+
+    RBF+bootstrap has NO nugget parameter at all; on the nugget axis its
+    CV-tuned ``best_smoothing`` (lambda) is the only knob that can absorb
+    nugget-scale variance, which is exactly the behavior deliverable 3 is
+    designed to probe (docs/experiment_context.md section 3, axis 2).
     """
     t_start = time.time()
 
@@ -270,6 +278,7 @@ def main(
         hmaj1=hmaj1,
         hmin1=hmin1,
         n_samples=n_samples,
+        nug=nug,
     )
     n_actual_samples = len(samples_df)
 
@@ -439,11 +448,14 @@ def main(
         "grid": {"nx": NX, "ny": NY, "xsiz": XSIZ, "ysiz": YSIZ, "xmn": XMN, "ymn": YMN},
         "truth_seed": truth_seed,
         "sample_seed": sample_seed,
-        # hmaj1/hmin1: only affect the regenerated ground-truth field (RBF+
-        # bootstrap has no variogram of its own) -- recorded here for
-        # range-axis lookup convenience (task instruction).
+        # hmaj1/hmin1/nug/cc1: only affect the regenerated ground-truth field
+        # (RBF+bootstrap has no variogram of its own) -- recorded here for
+        # range-/nugget-axis lookup convenience. cc1 is the DERIVED value
+        # (1.0 - nug, build_vario's invariant).
         "hmaj1": hmaj1,
         "hmin1": hmin1,
+        "nug": nug,
+        "cc1": 1.0 - nug,
         "n_samples_requested": n_samples,
         "n_samples_actual": n_actual_samples,
         "rbf_kernel": RBF_KERNEL,

@@ -20,6 +20,9 @@ import matplotlib.pyplot as plt
 `locpix_st`, `make_variogram`, `nscore`, `affine`), `geostats.*` = 핵심 수치 루틴
 (`gamv`, `kb2d`, `sgsim`, `nscore`, `vmodel`).
 
+> **예외 1건**: `geostats.nscore`는 이 프로젝트에서 **직접 호출하지 않는다.** 0.0.79에 off-by-one
+> 버그가 있어 `src/nscore.py` 래퍼를 통해서만 쓴다 — 3.1절 참고.
+
 ## 2. 재현성: 시드
 - 책 전체에서 `random_state`/`seed`로 고정된 시드 상수를 재사용한다 (책의 예시는 `73073`).
 - 이 프로젝트에서는 **[coder.md](../.claude/agents/coder.md)의 저장 컨벤션에 따라 시드를 하드코딩하지 말고
@@ -28,12 +31,50 @@ import matplotlib.pyplot as plt
   (예: `SEED = 42` 하나를 정의해 pandas sampling과 `sgsim(seed=...)`에 동일하게 전달).
 
 ## 3. Variogram 컨벤션
-- Gaussian simulation에 쓸 데이터는 variography 전에 **normal-score 변환**을 명시적으로 먼저 한다:
+- Gaussian simulation에 쓸 데이터는 variography 전에 **normal-score 변환**을 명시적으로 먼저 한다.
+  책의 원문 패턴은 `geostats.nscore`를 직접 부르지만, **이 프로젝트에서는 그 호출을 금지하고
+  로컬 래퍼 `src/nscore.py`를 쓴다** (아래 3.1 참고):
   ```python
-  df['NVar'], tv, tns = geostats.nscore(df, 'Var')
+  # 책 원문(사용 금지):  df['NVar'], tv, tns = geostats.nscore(df, 'Var')
+  from src.nscore import nscore as nscore_corrected
+
+  ns, vr, vrg, nscore_corrections = nscore_corrected(df, 'Var')
+  df['NVar'] = ns
   ```
+  반환값 4번째(`nscore_corrections`)는 JSON 직렬화 가능한 감사 기록이므로 그대로
+  `manifest.json`의 `params`에 넣는다 (`kriging.py`가 그렇게 한다).
   (단, `sgsim`은 `itrans=1`이면 내부적으로 자체 변환을 수행하므로 **`sgsim` 호출 전에 수동으로
   다시 변환하지 않는다** — 중복 변환 금지, 6절 gotcha 참고)
+
+### 3.1 `geostats.nscore` 직접 호출 금지 — 이 프로젝트의 로컬 수정
+**이 항목은 Demos Book 원문 규약과 의도적으로 다르다.** 책은 `geostats.nscore(df, 'Var')`를
+그대로 쓰지만, 설치본 **geostatspy 0.0.79**의 `nscore`에는 1-based → 0-based 포팅 off-by-one이
+있어 **모든 데이터셋의 최솟값 데이텀 하나**에 잘못된 정규점수를 준다.
+
+- 메커니즘: 변환 루프가 `j = dlocate(...)` 뒤에 `j = min(max(1, j), nd-1)`로 clamp한다. 원본
+  GSLIB Fortran은 1-based라 이 식이 "첫 번째 구간으로 clamp"를 뜻하지만, Python 포팅은 0-based
+  numpy 배열을 인덱싱하므로 **두 번째 구간으로** clamp된다. 최솟값 데이텀은 `dlocate`가
+  `j=0`을 옳게 돌려주는데도 `j=1`로 밀려, 자기가 속한 `vr[0]→vr[1]` 구간 대신
+  `vr[1]→vr[2]` 구간을 따라 **역방향 외삽**된다. 2·3번째로 작은 값이 가까울수록 그 구간의
+  기울기가 폭발해 정규점수가 변환표 범위 밖으로 튄다.
+- 발견 시점/근거: 2026-09-22, nugget axis(nug=0.3, 조건화 샘플 121개) run에서 `NPor`의 최솟값이
+  **-52.145**로 나왔는데 같은 run의 변환표 최솟값 `vrg[0]`은 **-2.6411**이었다. 같은 레벨에서
+  simple kriging MSE 9.4425 → 5.4079로 바뀌었다 (정량화: `results/processed/nscore_bug_impact.csv`).
+- 수정 방식: `src/nscore.py`가 변환 루프를 **같은 라이브러리의 `sgsim`이 자기 내부 변환에서 쓰는
+  올바른 0-based clamp**(`j = min(max(0, j), nd-2)`, `geostats.py` L3807)로 다시 돌린다. 즉 이
+  프로젝트가 임의 규약을 만든 게 아니라, `nscore`를 같은 라이브러리의 `sgsim`과 일치시킨 것이다.
+  변환표(`vr`/`vrg`) 자체는 다른 코드 경로에서 나오며 정상이므로 손대지 않는다.
+- 래퍼는 결과를 검증한다: 비유한값(NaN/inf), 변환표 범위 `[vrg[0], vrg[-1]]` 이탈, 순서 비보존이
+  있으면 `RuntimeError`로 중단한다 (알려지지 않은 실패 모드를 조용히 통과시키지 않기 위함).
+  `ismooth=True`(참조분포로 변환표를 만드는 모드)는 표 바깥 값 처리 정책이 미정이라
+  `NotImplementedError`를 던진다.
+- 라이브러리는 **직접 패치하지 않는다** — `.venv` 안의 수정은 git에 남지 않아 `manifest.json`의
+  `git_commit`이 실제 실행 코드와 어긋나고, 환경 재구축 시 조용히 사라진다.
+- 회귀 테스트: `tests/test_nscore_offbyone.py`. 그 중 하나는 **라이브러리 원본을 직접 호출해
+  버그가 여전히 존재함**을 확인하므로, upstream이 고쳐지면 이 테스트가 실패해서 알려준다.
+  `requirements.txt`에 버전이 고정돼 있고, 설치 버전이 달라지면 `src/nscore.py`가
+  `UserWarning`을 낸다.
+- 워크스루: `notebooks/method_walkthrough.ipynb` §1.1이 래퍼 호출과 버그의 차이를 셀 출력으로 보여준다.
 - 실험적 variogram은 `geostats.gamv`로 계산:
   ```python
   lag, gamma, npair = geostats.gamv(df, "X", "Y", "NVar", tmin, tmax,

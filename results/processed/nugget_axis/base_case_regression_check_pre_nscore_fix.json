@@ -1,0 +1,52 @@
+{
+  "kriging": {
+    "new_run_dir": "results/raw/kriging/20260922T154528176254Z",
+    "pinned_run_dir": "results/raw/kriging/20260914T184654Z",
+    "max_abs_diff": {
+      "kriging_mean_map_physical.npy": 0.0,
+      "kriging_var_map_ns.npy": 0.0,
+      "kmap_ns.npy": 0.0,
+      "kriging_var_map_physical_mc.npy": 0.0
+    }
+  },
+  "sgs": {
+    "new_run_dir": "results/raw/sgs/20260922T154645226409Z",
+    "pinned_run_dir": "results/raw/sgs/20260914T141516Z",
+    "max_abs_diff": {
+      "sgs_realizations.npy": 0.0,
+      "sgs_mean_map.npy": 0.0,
+      "sgs_var_map.npy": 0.0
+    }
+  },
+  "rbf_bootstrap": {
+    "new_run_dir": "results/raw/rbf_bootstrap/20260922T154852867763Z",
+    "pinned_run_dir": "results/raw/rbf_bootstrap/20260922T142648066028Z-1",
+    "max_abs_diff": {
+      "point_estimate_map.npy": 7.105427357601002e-15,
+      "bootstrap_replicate_maps.npy": 1.0658141036401503e-14,
+      "bootstrap_mean_map.npy": 1.0658141036401503e-14,
+      "bootstrap_var_map.npy": 6.661338147750939e-15
+    },
+    "blas_thread_followup": {
+      "note": "The residual above (~1.07e-14) was produced by running rbf_bootstrap.main() in a plain interpreter, while the pinned run was produced inside _axis_parallel.run_levels_parallel (spawned worker, BLAS threads capped to 1). Re-running through that SAME path gives max abs diff 0.0 on all four arrays, confirming the residual is the documented OpenBLAS thread-count effect (_axis_parallel.py, 2026-09-16), not the nugget parameterization.",
+      "rerun_through_axis_parallel_run_dir": "results/raw/rbf_bootstrap/20260922T154936077468Z",
+      "max_abs_diff": {
+        "point_estimate_map.npy": 0.0,
+        "bootstrap_replicate_maps.npy": 0.0,
+        "bootstrap_mean_map.npy": 0.0,
+        "bootstrap_var_map.npy": 0.0
+      }
+    }
+  },
+  "gp_mle": {
+    "new_run_dir": "results/raw/gp_mle/20260922T154909492618Z",
+    "pinned_run_dir": "results/raw/gp_mle/20260914T180412Z",
+    "max_abs_diff": {
+      "posterior_mean_map.npy": 0.0,
+      "posterior_var_map.npy": 0.0,
+      "posterior_sample_map.npy": 0.0
+    },
+    "posterior_sample_method_pinned": "manual_cholesky_fallback",
+    "posterior_sample_method_new": "manual_cholesky_fallback"
+  }
+}

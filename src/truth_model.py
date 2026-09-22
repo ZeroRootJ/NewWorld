@@ -55,6 +55,47 @@ ZMIN_NS = -3.0
 ZMAX_NS = 3.0
 
 
+def make_porosity_truth_with_sim_ns(
+    nx: int,
+    ny: int,
+    xsiz: float,
+    ysiz: float,
+    xmn: float,
+    ymn: float,
+    vario: Dict[str, Any],
+    mean: float,
+    stdev: float,
+    seed: int,
+):
+    """Same as :func:`make_porosity_truth`, but also returns the RAW
+    standard-normal simulation ``sim_ns`` that the affine correction was
+    applied to.
+
+    WHY THIS EXISTS: ``GSLIB.affine(sim_ns, mean, stdev)`` multiplies the
+    field by ``a = stdev / np.std(sim_ns)``. Because a single realization's
+    sample standard deviation is not exactly 1.0 (ergodic fluctuation), the
+    variogram sill that the truth field actually realizes in physical units
+    is ``a**2``, not ``stdev**2``. Any analysis that wants to express a
+    normalized (unit-sill) variogram parameter in physical units under that
+    REALIZED scaling -- e.g. the alternative ``nug * a**2`` reading of the
+    nugget axis's truth nugget, recorded alongside the headline
+    ``nug * POR_STDEV**2`` in
+    results/processed/nugget_axis/gp_fitted_nugget_vs_truth.csv -- needs
+    ``np.std(sim_ns)``, which is otherwise discarded.
+
+    ``make_porosity_truth`` delegates to this function, so there is exactly
+    ONE sgsim call site and the truth field returned by either entry point is
+    bit-for-bit the same for the same arguments.
+
+    Returns
+    -------
+    (truth, sim_ns) : both np.ndarray of shape (ny, nx).
+    """
+    return _make_porosity_truth_impl(
+        nx, ny, xsiz, ysiz, xmn, ymn, vario, mean, stdev, seed
+    )
+
+
 def make_porosity_truth(
     nx: int,
     ny: int,
@@ -87,7 +128,31 @@ def make_porosity_truth(
     np.ndarray of shape (ny, nx): the porosity truth field. Row 0
     corresponds to the maximum-y row (top row), matching geostatspy's
     sgsim/imshow convention.
+
+    See :func:`make_porosity_truth_with_sim_ns` if the raw pre-affine
+    standard-normal simulation is also needed (it shares this function's
+    single sgsim call site, so both entry points are bit-identical).
     """
+    truth, _ = _make_porosity_truth_impl(
+        nx, ny, xsiz, ysiz, xmn, ymn, vario, mean, stdev, seed
+    )
+    return truth
+
+
+def _make_porosity_truth_impl(
+    nx: int,
+    ny: int,
+    xsiz: float,
+    ysiz: float,
+    xmn: float,
+    ymn: float,
+    vario: Dict[str, Any],
+    mean: float,
+    stdev: float,
+    seed: int,
+):
+    """The single sgsim + affine call site shared by both public entry
+    points above. Returns ``(truth, sim_ns)``."""
     rng = np.random.RandomState(seed)
     df_dummy = pd.DataFrame(
         {
@@ -142,4 +207,4 @@ def make_porosity_truth(
     )[0]
 
     truth = GSLIB.affine(sim_ns, mean, stdev)
-    return truth
+    return truth, sim_ns

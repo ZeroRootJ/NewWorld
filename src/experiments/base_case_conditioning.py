@@ -98,44 +98,85 @@ VCOL = "Por"
 # agree, not by construction.
 SAMPLE_SEED = 20
 
+# --- Nugget axis (deliverable 3, docs/experiment_context.md) --------------
+# The base-case sill on standard-normal space is 1.0 and is held at 1.0 for
+# EVERY level of the nugget axis, so the only free variogram parameter there
+# is the normalized nugget and ``cc1`` is its complement. This invariant is
+# asserted here (not merely assumed) so that a future edit to base_case.NUG /
+# base_case.CC1 that breaks it fails loudly at import time rather than
+# silently changing the total sill of every run in the project.
+if abs((NUG + CC1) - 1.0) > 1e-12:
+    raise ValueError(
+        f"base_case.NUG ({NUG}) + base_case.CC1 ({CC1}) = {NUG + CC1} != 1.0. "
+        "This project's variogram convention is a unit sill on standard-normal "
+        "space (see base_case.py); build_vario() below derives cc1 = 1.0 - nug "
+        "from that invariant, so it must hold."
+    )
 
-def build_vario(hmaj1: float = HMAJ1, hmin1: float = HMIN1) -> Dict[str, Any]:
+
+def build_vario(
+    hmaj1: float = HMAJ1, hmin1: float = HMIN1, nug: float = NUG
+) -> Dict[str, Any]:
     """Build the (single, reused) base-case variogram dict.
 
-    ``hmaj1``/``hmin1`` default to the base-case constants (300 m,
-    isotropic) so calling this with no arguments reproduces the base case
-    exactly. Passing different values is how the range axis (deliverable 2,
-    docs/experiment_context.md) varies the variogram range while holding
-    every other parameter (nugget, sill split, azimuth) fixed --
-    one-factor-at-a-time.
+    ``hmaj1``/``hmin1``/``nug`` default to the base-case constants (300 m,
+    isotropic, nugget=0.05) so calling this with no arguments reproduces the
+    base case exactly. Passing different ``hmaj1``/``hmin1`` is how the range
+    axis (deliverable 2, docs/experiment_context.md) varies the variogram
+    range; passing a different ``nug`` is how the nugget axis (deliverable 3)
+    varies the nugget -- in both cases one-factor-at-a-time, with every other
+    parameter fixed.
 
-    Reused as-is by every method that needs it (kriging/SGS baselines,
-    later); RBF+bootstrap and GP-MLE do not consume this dict directly but
-    it is built here for a single source of truth on variogram parameters.
+    WHY THERE IS NO ``cc1`` ARGUMENT (deliberate, do not "fix" this by adding
+    one): the sill on standard-normal space is 1.0 by this project's
+    convention (base_case.py: ``nug + cc1 = 1.0``), and the nugget axis is
+    DEFINED as moving the nugget/structured split at a CONSTANT unit sill. If
+    this function took ``nug`` and ``cc1`` as two independent arguments, a
+    caller could silently produce a variogram whose total sill is not 1.0,
+    which would confound "more nugget" with "more total variance" and destroy
+    the one-factor-at-a-time interpretation of the axis. ``cc1`` is therefore
+    always derived as ``1.0 - nug``; the module-level check above guarantees
+    the default call reproduces base_case.CC1 exactly.
+
+    Reused as-is by every method that needs it (kriging/SGS baselines);
+    RBF+bootstrap and GP-MLE do not consume this dict directly but it is
+    built here for a single source of truth on variogram parameters.
     """
+    if not 0.0 <= nug <= 1.0:
+        raise ValueError(
+            f"nug={nug} is outside [0, 1]; with a unit sill the nugget is a "
+            "fraction of the sill and cc1 = 1.0 - nug must stay non-negative."
+        )
+    cc1 = 1.0 - nug
     return GSLIB.make_variogram(
-        nug=NUG, nst=1, it1=IT1, cc1=CC1, azi1=AZI1, hmaj1=hmaj1, hmin1=hmin1
+        nug=nug, nst=1, it1=IT1, cc1=cc1, azi1=AZI1, hmaj1=hmaj1, hmin1=hmin1
     )
 
 
 def get_base_case_truth(
-    truth_seed: int = TRUTH_SEED, hmaj1: float = HMAJ1, hmin1: float = HMIN1
+    truth_seed: int = TRUTH_SEED,
+    hmaj1: float = HMAJ1,
+    hmin1: float = HMIN1,
+    nug: float = NUG,
 ) -> "pd.DataFrame":
     """Regenerate a base-case-style ground-truth field.
 
-    Defaults (``truth_seed=TRUTH_SEED``, ``hmaj1=HMAJ1``, ``hmin1=HMIN1``)
-    reproduce the exact base-case truth field (seed=101, range=300m). Passing
-    a different ``hmaj1``/``hmin1`` (equal, for the isotropic range axis)
-    regenerates the truth under a different variogram range while keeping
-    every other parameter (grid, distribution, nugget, seed) identical --
-    the range-axis experiment (docs/experiment_context.md deliverable 2).
+    Defaults (``truth_seed=TRUTH_SEED``, ``hmaj1=HMAJ1``, ``hmin1=HMIN1``,
+    ``nug=NUG``) reproduce the exact base-case truth field (seed=101,
+    range=300m, nugget=0.05). Passing a different ``hmaj1``/``hmin1`` (equal,
+    for the isotropic range axis) regenerates the truth under a different
+    variogram range; passing a different ``nug`` regenerates it under a
+    different nugget at the SAME unit sill (``cc1 = 1.0 - nug``, see
+    ``build_vario``) -- the nugget-axis experiment
+    (docs/experiment_context.md deliverable 3). Every other parameter (grid,
+    distribution, seed) is identical in both cases.
 
     Returns
     -------
     np.ndarray of shape (NY, NX), same convention as
     src.truth_model.make_porosity_truth (row 0 = max-y row).
     """
-    vario = build_vario(hmaj1=hmaj1, hmin1=hmin1)
+    vario = build_vario(hmaj1=hmaj1, hmin1=hmin1, nug=nug)
     truth = make_porosity_truth(
         nx=NX,
         ny=NY,
@@ -201,24 +242,36 @@ def get_base_case_conditioning_data(
     hmaj1: float = HMAJ1,
     hmin1: float = HMIN1,
     n_samples: int = N_SAMPLES,
+    nug: float = NUG,
 ) -> Tuple[Any, pd.DataFrame]:
     """Convenience wrapper: regenerate the base-case truth and draw samples
     from it in one call. Every method-comparison script (kriging.py, sgs.py,
     rbf_bootstrap.py, gp_mle.py) should call this rather than calling
     get_base_case_truth / get_conditioning_samples separately, so there is
     exactly one code path that ties truth generation to sampling.
-    ``sample_seed``/``truth_seed``/``hmaj1``/``hmin1``/``n_samples`` all
-    default to the base-case constants -- calling with no arguments
+    ``sample_seed``/``truth_seed``/``hmaj1``/``hmin1``/``n_samples``/``nug``
+    all default to the base-case constants -- calling with no arguments
     reproduces the base case exactly; passing ``truth_seed``/``hmaj1``/
     ``hmin1`` is how the range axis (docs/experiment_context.md deliverable
     2) varies the variogram range one-factor-at-a-time while keeping the
     sample locations (drawn with the same ``sample_seed``, from a truth field
-    of identical shape/distribution) directly comparable across axis levels,
-    and passing ``n_samples`` is how the sample-density axis varies the
+    of identical shape/distribution) directly comparable across axis levels;
+    passing ``n_samples`` is how the sample-density axis varies the
     conditioning sample count one-factor-at-a-time (independent draws per
-    level, NOT nested subsets -- see ``get_conditioning_samples``).
+    level, NOT nested subsets -- see ``get_conditioning_samples``); and
+    passing ``nug`` is how the nugget axis (deliverable 3) varies the
+    ground-truth nugget at a constant unit sill (``cc1 = 1.0 - nug``).
+
+    Note on the nugget axis specifically: the sample LOCATIONS are identical
+    across nugget levels (same ``sample_seed``, same grid/margin), but the
+    sample VALUES differ, because they are read off a truth field that was
+    regenerated under a different variogram. That is exactly what makes the
+    per-level samples.csv a decisive fingerprint of which level a run belongs
+    to (used by src/experiments/nugget_axis.py's verification).
     """
-    truth = get_base_case_truth(truth_seed=truth_seed, hmaj1=hmaj1, hmin1=hmin1)
+    truth = get_base_case_truth(
+        truth_seed=truth_seed, hmaj1=hmaj1, hmin1=hmin1, nug=nug
+    )
     samples = get_conditioning_samples(
         truth, sample_seed=sample_seed, n_samples=n_samples
     )

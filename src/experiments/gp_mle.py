@@ -40,6 +40,7 @@ from src.experiments.base_case import NX, NY, XMN, XMAX, XMIN, YMN, YMAX, YMIN, 
 from src.experiments.base_case_conditioning import (
     HMAJ1 as _COND_HMAJ1,
     HMIN1 as _COND_HMIN1,
+    NUG as _COND_NUG,
     N_SAMPLES,
     SAMPLE_SEED,
     TRUTH_SEED,
@@ -102,17 +103,26 @@ def main(
     hmaj1: float = _COND_HMAJ1,
     hmin1: float = _COND_HMIN1,
     n_samples: int = N_SAMPLES,
+    nug: float = _COND_NUG,
 ):
     """Run the GP-MLE base-case pipeline.
 
     Defaults reproduce the exact base case (see kriging.main's docstring for
     the shared convention, including the ``n_samples`` sample-density-axis
-    argument). GP-MLE does not consume a variogram directly -- ``hmaj1``/
-    ``hmin1`` only affect the regenerated ground-truth field (via
-    ``get_base_case_conditioning_data``), and ``n_samples`` only affects how
-    many conditioning samples are drawn from it; neither changes this
-    method's own kernel initial values/bounds/n_restarts below, which are
-    held fixed (one-factor-at-a-time -- do not vary those here).
+    and ``nug`` nugget-axis arguments). GP-MLE does not consume a variogram
+    directly -- ``hmaj1``/``hmin1``/``nug`` only affect the regenerated
+    ground-truth field (via ``get_base_case_conditioning_data``), and
+    ``n_samples`` only affects how many conditioning samples are drawn from
+    it; none of them changes this method's own kernel initial values/bounds/
+    n_restarts below, which are held fixed (one-factor-at-a-time -- do not
+    vary those here).
+
+    ``nug`` is NOT handed to the GP in any form: the WhiteKernel noise level
+    is learned by marginal-likelihood maximization from the conditioning data
+    alone. Whether that learned noise matches the ground truth's actual
+    nugget is precisely the question the nugget axis exists to answer
+    (Claim 2, docs/experiment_context.md section 1), so passing the truth in
+    here would destroy the experiment.
     """
     t_start = time.time()
 
@@ -122,6 +132,7 @@ def main(
         hmaj1=hmaj1,
         hmin1=hmin1,
         n_samples=n_samples,
+        nug=nug,
     )
     n_actual_samples = len(samples_df)
 
@@ -284,12 +295,16 @@ def main(
         "grid": {"nx": NX, "ny": NY, "xsiz": XSIZ, "ysiz": YSIZ, "xmn": XMN, "ymn": YMN},
         "truth_seed": truth_seed,
         "sample_seed": sample_seed,
-        # hmaj1/hmin1: only affect the regenerated ground-truth field
+        # hmaj1/hmin1/nug/cc1: only affect the regenerated ground-truth field
         # (GP-MLE has no variogram of its own -- its kernel hyperparameters
-        # are fit by marginal likelihood) -- recorded here for range-axis
-        # lookup convenience (task instruction).
+        # are fit by marginal likelihood) -- recorded here for range-/
+        # nugget-axis lookup convenience. cc1 is the DERIVED value
+        # (1.0 - nug, build_vario's invariant). These are the GROUND TRUTH's
+        # parameters, NOT inputs to the GP fit.
         "hmaj1": hmaj1,
         "hmin1": hmin1,
+        "nug": nug,
+        "cc1": 1.0 - nug,
         "n_samples_requested": n_samples,
         "n_samples_actual": n_actual_samples,
         "kernel_init": {

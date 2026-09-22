@@ -14,10 +14,24 @@ Pipeline
    and share the identical variogram model structurally (CLAUDE.md
    requirement).
 2. Normal-score transform the sample porosity values
-   (``ns, vr, vrg = geostats.nscore(df, VCOL)``) -- kb2d/the shared variogram
-   dict is built on a standard-normal sill of 1.0 (nug + cc1 = 1.0), so
-   kriging must be performed in normal-score space, not on the raw physical
-   values.
+   (``ns, vr, vrg, corrections = src.nscore.nscore(df, VCOL)``) -- kb2d/the
+   shared variogram dict is built on a standard-normal sill of 1.0
+   (nug + cc1 = 1.0), so kriging must be performed in normal-score space, not
+   on the raw physical values.
+
+   IMPORTANT: this goes through ``src/nscore.py``, NOT ``geostats.nscore``
+   directly. geostatspy 0.0.79's ``nscore`` has a 1-based -> 0-based porting
+   off-by-one that assigns a back-extrapolated (sometimes wildly
+   out-of-range) normal score to the SMALLEST datum of every data set; the
+   wrapper re-runs the transform loop with the correct 0-based clamp that
+   the same library's ``sgsim`` already uses (``min(max(0, j), nd - 2)``),
+   verifies the result, and returns
+   an audit record that is written into this run's manifest under
+   ``nscore_corrections``. See src/nscore.py's docstring for the reproduced
+   arithmetic and for why the installed library is not patched in place.
+   Runs produced BEFORE 2026-09-22 went through the raw library call and
+   therefore carry the bad minimum-datum normal score -- see
+   results/processed/nscore_bug_impact.csv for the per-run quantification.
 3. ``geostats.kb2d`` with ``ktype=0`` (simple kriging, this project's
    baseline per docs/geostatspy_conventions.md section 4) and ``skmean=0.0``
    (the simple-kriging mean in normal-score space is 0 by construction --
@@ -64,6 +78,7 @@ from src.experiments.base_case import (
 from src.experiments.base_case_conditioning import (
     HMAJ1 as _COND_HMAJ1,
     HMIN1 as _COND_HMIN1,
+    NUG as _COND_NUG,
     N_SAMPLES,
     SAMPLE_SEED,
     TRUTH_SEED,
@@ -72,6 +87,7 @@ from src.experiments.base_case_conditioning import (
     get_base_case_conditioning_data,
 )
 from src.io import make_run_dir, save_result
+from src.nscore import nscore as nscore_corrected
 
 # --- kb2d search / kriging-type parameters -------------------------------
 # ktype=0 (simple kriging) is this project's baseline
@@ -285,20 +301,31 @@ def main(
     hmaj1: float = _COND_HMAJ1,
     hmin1: float = _COND_HMIN1,
     n_samples: int = N_SAMPLES,
+    nug: float = _COND_NUG,
 ):
     """Run the simple-kriging base-case pipeline.
 
     Defaults (``truth_seed=TRUTH_SEED``, ``sample_seed=SAMPLE_SEED``,
-    ``hmaj1``/``hmin1`` = the base-case 300m range, ``n_samples=N_SAMPLES``)
-    reproduce the exact base case. Passing a different ``hmaj1``/``hmin1``
-    (equal, isotropic) is how the range axis (docs/experiment_context.md
-    deliverable 2) varies the variogram range; passing a different
-    ``n_samples`` is how the sample-density axis varies the conditioning
-    sample count (each level drawn INDEPENDENTLY, not as a nested subset --
-    see base_case_conditioning.get_conditioning_samples). In both cases every
-    search/tuning constant below
+    ``hmaj1``/``hmin1`` = the base-case 300m range, ``n_samples=N_SAMPLES``,
+    ``nug=NUG``) reproduce the exact base case. Passing a different
+    ``hmaj1``/``hmin1`` (equal, isotropic) is how the range axis
+    (docs/experiment_context.md deliverable 2) varies the variogram range;
+    passing a different ``n_samples`` is how the sample-density axis varies
+    the conditioning sample count (each level drawn INDEPENDENTLY, not as a
+    nested subset -- see base_case_conditioning.get_conditioning_samples);
+    passing a different ``nug`` is how the nugget axis (deliverable 3) varies
+    the ground-truth nugget at a constant unit sill (cc1 = 1.0 - nug). In all
+    three cases every search/tuning constant below
     (NDMAX, RADIUS, BACKTR_ZMIN/ZMAX, etc.) stays fixed at its base-case
     value (one-factor-at-a-time -- do not vary those here).
+
+    NOTE on ``nug`` for this method specifically: kriging is a "correct
+    answer" baseline in this study (docs/experiment_context.md section 4), so
+    it is handed the TRUE nugget of the ground-truth variogram as its input,
+    exactly as it is handed the true range on the range axis. Only GP-MLE
+    (which learns its own noise variance by marginal likelihood) and
+    RBF+bootstrap (which has no nugget concept at all -- its CV-tuned
+    smoothing plays a loosely analogous role) have to infer anything here.
     """
     t_start = time.time()
 
@@ -308,14 +335,21 @@ def main(
         hmaj1=hmaj1,
         hmin1=hmin1,
         n_samples=n_samples,
+        nug=nug,
     )
     n_actual_samples = len(samples_df)
-    vario = build_vario(hmaj1=hmaj1, hmin1=hmin1)
+    vario = build_vario(hmaj1=hmaj1, hmin1=hmin1, nug=nug)
 
     # --- Normal-score transform of the sample data ----------------------
     # Exact variable names per project decision (do not rename vr/vrg --
     # they are the back-transform lookup table, not a mean/stdev pair).
-    ns, vr, vrg = geostats.nscore(samples_df, VCOL)
+    #
+    # src.nscore.nscore, NOT geostats.nscore: the library version mis-assigns
+    # the normal score of the SMALLEST datum (1-based GSLIB clamp on 0-based
+    # numpy arrays). See src/nscore.py. The returned audit record is written
+    # to the manifest below so every run states what, if anything, was
+    # repaired.
+    ns, vr, vrg, nscore_corrections = nscore_corrected(samples_df, VCOL)
     samples_df = samples_df.copy()
     samples_df["NPor"] = ns
 
@@ -539,10 +573,15 @@ def main(
         "grid": {"nx": NX, "ny": NY, "xsiz": XSIZ, "ysiz": YSIZ, "xmn": XMN, "ymn": YMN},
         "truth_seed": truth_seed,
         "sample_seed": sample_seed,
-        # hmaj1/hmin1 duplicated top-level (also present inside "variogram"
-        # below) for range-axis lookup convenience (task instruction).
+        # hmaj1/hmin1/nug/cc1 duplicated top-level (also present inside
+        # "variogram" below) for range-/nugget-axis lookup convenience.
+        # cc1 is recorded as the DERIVED value (1.0 - nug, build_vario's
+        # invariant) so a run's sill split is auditable from the manifest
+        # without re-deriving it.
         "hmaj1": hmaj1,
         "hmin1": hmin1,
+        "nug": nug,
+        "cc1": 1.0 - nug,
         "n_samples_requested": n_samples,
         "n_samples_actual": n_actual_samples,
         "n_samples_used_by_kb2d": n_samples_used_by_kb2d,
@@ -555,6 +594,11 @@ def main(
         "ndmax": NDMAX,
         "radius": RADIUS,
         "nscore_trim": {"tmin": KB2D_TMIN, "tmax": KB2D_TMAX},
+        # Audit record from src/nscore.py: which data (if any) had the
+        # upstream geostats.nscore lower-end off-by-one repaired, with the
+        # raw and repaired normal scores. n_corrected == 0 means the library
+        # happened to agree with the correct value for this data set.
+        "nscore_corrections": nscore_corrections,
         "backtransform": {
             "zmin": BACKTR_ZMIN,
             "zmax": BACKTR_ZMAX,
@@ -612,6 +656,12 @@ def main(
     print(f"Manifest: {manifest_path}")
     print(f"n_samples_actual = {n_actual_samples}")
     print(f"n_samples_used_by_kb2d = {n_samples_used_by_kb2d}")
+    print(
+        f"nscore off-by-one repairs applied: {nscore_corrections['n_corrected']} "
+        f"(max abs correction = {nscore_corrections['max_abs_correction']:.6g})"
+    )
+    print(f"NPor range: [{ns.min():.6f}, {ns.max():.6f}] "
+          f"(transform table vrg range [{vrg[0]:.6f}, {vrg[-1]:.6f}])")
     print(f"kmap_physical range: [{kmap_physical.min():.4f}, {kmap_physical.max():.4f}]")
     print(f"vmap_ns range: [{vmap_ns.min():.4f}, {vmap_ns.max():.4f}]")
     print(
