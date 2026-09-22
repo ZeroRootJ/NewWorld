@@ -38,6 +38,18 @@ Deliverable Order (설계 문서 7절 기준) — 각 단계는 이전 단계에
     (1% 레벨에서 ±2σ/±4σ/±6σ에 따라 8.64/9.84/11.03으로 순위가 3가지로 바뀜)가 이 판단의
     배경 중 하나다.
 
+- **600~700m tie가 진짜 평평한 CV-MSE surface인지 241점 재확인 — 사용자가 직접 처리 예정**
+  (2026-09-22, 사용자 지시: "그냥 둬, 내가 알아서 처리할게, 노트만 남겨놔"). 배경: 121점 production
+  grid에서 range=600m/700m이 여전히 같은 epsilon(practical range 327.22m)으로 tie. coder가
+  `src/experiments/_diagnose_range_axis_epsilon_convergence_check.py`(일회성, 241점, 500~800m
+  4레벨만)로 한 번 돌려 "700m가 334.53m로 분리됐다가 800m와 다시 tie"라는 결과를 보고했으나,
+  reviewer가 독립 재현을 시도했을 때 타임아웃으로 끝나지 못해 **이 특정 241점 결과는 미검증
+  상태**(`src/experiments/rbf_bootstrap.py`의 EPSILON_GRID 주석에 이미 이 사실 명시됨). 오케스트레이터가
+  같은 스크립트를 배경 작업으로 재시도하던 중 사용자 지시로 **중단**(`TaskStop`, task_id `b5b3a7tiw`,
+  실행 결과 없음 — 재현도 반증도 안 된 상태 그대로). 재시도 시 참고: 4레벨×241 epsilon×17 smoothing×5-fold
+  CV라 오래 걸림(coder 최초 실행도 오래 걸렸고, reviewer의 재시도가 580초 타임아웃 안에 못 끝남) —
+  `run_in_background`로 충분히 긴 타임아웃을 주거나 레벨을 나눠 실행 권장.
+
 ## 로그
 | 날짜 | 단계 | 상태 | 비고 |
 |---|---|---|---|
