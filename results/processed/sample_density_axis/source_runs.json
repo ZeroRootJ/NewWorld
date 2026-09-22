@@ -1,4 +1,16 @@
 {
+  "20": {
+    "kriging": "results/raw/kriging/20260921T190846278321Z",
+    "sgs": "results/raw/sgs/20260921T190951928723Z",
+    "rbf_bootstrap": "results/raw/rbf_bootstrap/20260921T190850936272Z",
+    "gp_mle": "results/raw/gp_mle/20260921T190845646940Z"
+  },
+  "10": {
+    "kriging": "results/raw/kriging/20260921T190845977129Z",
+    "sgs": "results/raw/sgs/20260921T190952982503Z",
+    "rbf_bootstrap": "results/raw/rbf_bootstrap/20260921T190836250062Z",
+    "gp_mle": "results/raw/gp_mle/20260921T190841979866Z"
+  },
   "5": {
     "kriging": "results/raw/kriging/20260914T184654Z",
     "sgs": "results/raw/sgs/20260914T141516Z",

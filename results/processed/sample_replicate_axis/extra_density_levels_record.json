@@ -1,0 +1,179 @@
+{
+  "replicate_axis": {
+    "levels": [
+      "20",
+      "10"
+    ],
+    "sample_seed_replicates": {
+      "rep0": 1001,
+      "rep1": 1002,
+      "rep2": 1003,
+      "rep3": 1004,
+      "rep4": 1005,
+      "rep5": 1006,
+      "rep6": 1007,
+      "rep7": 1008,
+      "rep8": 1009,
+      "rep9": 1010
+    },
+    "truth_seed": 101,
+    "hmaj1": 300.0,
+    "n_samples_requested": {
+      "20": 500,
+      "10": 250
+    },
+    "n_samples_actual": {
+      "20": {
+        "rep0": 442,
+        "rep1": 445,
+        "rep2": 453,
+        "rep3": 442,
+        "rep4": 445,
+        "rep5": 451,
+        "rep6": 445,
+        "rep7": 434,
+        "rep8": 452,
+        "rep9": 449
+      },
+      "10": {
+        "rep0": 244,
+        "rep1": 239,
+        "rep2": 235,
+        "rep3": 227,
+        "rep4": 236,
+        "rep5": 237,
+        "rep6": 236,
+        "rep7": 238,
+        "rep8": 241,
+        "rep9": 236
+      }
+    },
+    "run_dirs": {
+      "20": {
+        "rep0": {
+          "kriging": "results/raw/kriging/20260921T191052018452Z",
+          "sgs": "results/raw/sgs/20260921T191216859311Z",
+          "rbf_bootstrap": "results/raw/rbf_bootstrap/20260921T191053019177Z",
+          "gp_mle": "results/raw/gp_mle/20260921T191048368086Z"
+        },
+        "rep1": {
+          "kriging": "results/raw/kriging/20260921T191051794309Z",
+          "sgs": "results/raw/sgs/20260921T191217350995Z",
+          "rbf_bootstrap": "results/raw/rbf_bootstrap/20260921T191053295698Z",
+          "gp_mle": "results/raw/gp_mle/20260921T191049596511Z"
+        },
+        "rep2": {
+          "kriging": "results/raw/kriging/20260921T191051730455Z",
+          "sgs": "results/raw/sgs/20260921T191217985188Z",
+          "rbf_bootstrap": "results/raw/rbf_bootstrap/20260921T191055049254Z",
+          "gp_mle": "results/raw/gp_mle/20260921T191048885017Z"
+        },
+        "rep3": {
+          "kriging": "results/raw/kriging/20260921T191110850016Z",
+          "sgs": "results/raw/sgs/20260921T191246285872Z",
+          "rbf_bootstrap": "results/raw/rbf_bootstrap/20260921T191115177786Z",
+          "gp_mle": "results/raw/gp_mle/20260921T191111906819Z"
+        },
+        "rep4": {
+          "kriging": "results/raw/kriging/20260921T191112363781Z",
+          "sgs": "results/raw/sgs/20260921T191251751880Z",
+          "rbf_bootstrap": "results/raw/rbf_bootstrap/20260921T191117980167Z",
+          "gp_mle": "results/raw/gp_mle/20260921T191114733899Z"
+        },
+        "rep5": {
+          "kriging": "results/raw/kriging/20260921T191116179693Z",
+          "sgs": "results/raw/sgs/20260921T191304835673Z",
+          "rbf_bootstrap": "results/raw/rbf_bootstrap/20260921T191137533068Z",
+          "gp_mle": "results/raw/gp_mle/20260921T191132142501Z"
+        },
+        "rep6": {
+          "kriging": "results/raw/kriging/20260921T191135812037Z",
+          "sgs": "results/raw/sgs/20260921T191312351596Z",
+          "rbf_bootstrap": "results/raw/rbf_bootstrap/20260921T191140418365Z",
+          "gp_mle": "results/raw/gp_mle/20260921T191137740504Z"
+        },
+        "rep7": {
+          "kriging": "results/raw/kriging/20260921T191152593972Z",
+          "sgs": "results/raw/sgs/20260921T191333826597Z",
+          "rbf_bootstrap": "results/raw/rbf_bootstrap/20260921T191201419334Z",
+          "gp_mle": "results/raw/gp_mle/20260921T191157241558Z"
+        },
+        "rep8": {
+          "kriging": "results/raw/kriging/20260921T191200868671Z",
+          "sgs": "results/raw/sgs/20260921T191351768746Z",
+          "rbf_bootstrap": "results/raw/rbf_bootstrap/20260921T191224850975Z",
+          "gp_mle": "results/raw/gp_mle/20260921T191221541536Z"
+        },
+        "rep9": {
+          "kriging": "results/raw/kriging/20260921T191223668486Z",
+          "sgs": "results/raw/sgs/20260921T191423068794Z",
+          "rbf_bootstrap": "results/raw/rbf_bootstrap/20260921T191248063654Z",
+          "gp_mle": "results/raw/gp_mle/20260921T191242978715Z"
+        }
+      },
+      "10": {
+        "rep0": {
+          "kriging": "results/raw/kriging/20260921T191245147710Z",
+          "sgs": "results/raw/sgs/20260921T191424165092Z",
+          "rbf_bootstrap": "results/raw/rbf_bootstrap/20260921T191236768039Z",
+          "gp_mle": "results/raw/gp_mle/20260921T191255397961Z"
+        },
+        "rep1": {
+          "kriging": "results/raw/kriging/20260921T191306402271Z",
+          "sgs": "results/raw/sgs/20260921T191444054347Z",
+          "rbf_bootstrap": "results/raw/rbf_bootstrap/20260921T191300219509Z",
+          "gp_mle": "results/raw/gp_mle/20260921T191308568921Z"
+        },
+        "rep2": {
+          "kriging": "results/raw/kriging/20260921T191317360560Z",
+          "sgs": "results/raw/sgs/20260921T191453734989Z",
+          "rbf_bootstrap": "results/raw/rbf_bootstrap/20260921T191311760967Z",
+          "gp_mle": "results/raw/gp_mle/20260921T191323551978Z"
+        },
+        "rep3": {
+          "kriging": "results/raw/kriging/20260921T191331685361Z",
+          "sgs": "results/raw/sgs/20260921T191505823864Z",
+          "rbf_bootstrap": "results/raw/rbf_bootstrap/20260921T191322685315Z",
+          "gp_mle": "results/raw/gp_mle/20260921T191333718605Z"
+        },
+        "rep4": {
+          "kriging": "results/raw/kriging/20260921T191339901331Z",
+          "sgs": "results/raw/sgs/20260921T191519656249Z",
+          "rbf_bootstrap": "results/raw/rbf_bootstrap/20260921T191335137473Z",
+          "gp_mle": "results/raw/gp_mle/20260921T191349485422Z"
+        },
+        "rep5": {
+          "kriging": "results/raw/kriging/20260921T191358268737Z",
+          "sgs": "results/raw/sgs/20260921T191528169096Z",
+          "rbf_bootstrap": "results/raw/rbf_bootstrap/20260921T191348834488Z",
+          "gp_mle": "results/raw/gp_mle/20260921T191358718759Z"
+        },
+        "rep6": {
+          "kriging": "results/raw/kriging/20260921T191412485471Z",
+          "sgs": "results/raw/sgs/20260921T191538548652Z",
+          "rbf_bootstrap": "results/raw/rbf_bootstrap/20260921T191407428185Z",
+          "gp_mle": "results/raw/gp_mle/20260921T191415800711Z"
+        },
+        "rep7": {
+          "kriging": "results/raw/kriging/20260921T191421558144Z",
+          "sgs": "results/raw/sgs/20260921T191549686625Z",
+          "rbf_bootstrap": "results/raw/rbf_bootstrap/20260921T191424100715Z",
+          "gp_mle": "results/raw/gp_mle/20260921T191433904651Z"
+        },
+        "rep8": {
+          "kriging": "results/raw/kriging/20260921T191444440866Z",
+          "sgs": "results/raw/sgs/20260921T191601976556Z",
+          "rbf_bootstrap": "results/raw/rbf_bootstrap/20260921T191438601182Z",
+          "gp_mle": "results/raw/gp_mle/20260921T191445847984Z"
+        },
+        "rep9": {
+          "kriging": "results/raw/kriging/20260921T191456402234Z",
+          "sgs": "results/raw/sgs/20260921T191611603213Z",
+          "rbf_bootstrap": "results/raw/rbf_bootstrap/20260921T191455819231Z",
+          "gp_mle": "results/raw/gp_mle/20260921T191503057895Z"
+        }
+      }
+    },
+    "wall_time_s": 434.8
+  }
+}

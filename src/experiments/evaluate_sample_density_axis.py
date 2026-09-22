@@ -1,6 +1,12 @@
 """Evaluate the sample-density-axis 4-method comparison (kriging / SGS /
-RBF+bootstrap / GP-MLE) over the 3 axis levels 5% / 2% / 1% of the 2500-cell
-grid (n_samples = 125 / 50 / 25).
+RBF+bootstrap / GP-MLE) over the axis levels 5% / 2% / 1% of the 2500-cell
+grid (n_samples = 125 / 50 / 25), EXTENDED 2026-09-21 (user request) with two
+denser levels 20% / 10% (n_samples_requested = 500 / 250; ``axis_level``
+"20"/"10"), i.e. 5 levels total via sample_density_axis.EXTENDED_AXIS_LEVELS.
+The added levels are computed exactly like 2%/1% (fresh runs, MSE/UMG computed
+here; only the base-case level "5" reuses MSE/UMG from results/processed/
+base_case). Existing levels' rows are unchanged; the output tables are sorted
+dense -> sparse (20, 10, 5, 2, 1).
 
 Metrics -- reported SEPARATELY (never combined into one number; see
 src/evaluation.py's module docstring for the per-method source-array and
@@ -120,6 +126,7 @@ from src.experiments.sample_density_axis import (
     AXIS_HMAJ1,
     AXIS_HMIN1,
     BASE_CASE_AXIS_LEVEL,
+    EXTENDED_AXIS_LEVELS,
     METHODS,
     SAMPLE_COUNTS,
 )
@@ -575,10 +582,10 @@ def main():
     with open(SOURCE_RUNS_PATH, "r", encoding="utf-8") as f:
         source_runs = json.load(f)
 
-    if set(source_runs) != set(ALL_AXIS_LEVELS):
+    if set(source_runs) != set(EXTENDED_AXIS_LEVELS):
         raise ValueError(
             f"{SOURCE_RUNS_PATH} has axis levels {sorted(source_runs)}; expected "
-            f"{sorted(ALL_AXIS_LEVELS)}."
+            f"{sorted(EXTENDED_AXIS_LEVELS)}."
         )
 
     if not EMIT_SHARPNESS_METRICS:
@@ -594,7 +601,7 @@ def main():
     diagnostics_rows = []
     variance_source_rows = []
 
-    for axis_level in ALL_AXIS_LEVELS:
+    for axis_level in EXTENDED_AXIS_LEVELS:
         compute_mse_umg = axis_level != BASE_CASE_AXIS_LEVEL
         print(
             f"\nEvaluating sample fraction = {axis_level}% "
@@ -639,11 +646,11 @@ def main():
         raise ValueError("metrics_df contains NaN/inf values -- see printed metrics above.")
 
     expected_metrics = CORE_METRICS + (SHARPNESS_METRICS if EMIT_SHARPNESS_METRICS else ())
-    expected_n_rows = len(ALL_AXIS_LEVELS) * len(METHODS) * len(expected_metrics)
+    expected_n_rows = len(EXTENDED_AXIS_LEVELS) * len(METHODS) * len(expected_metrics)
     if len(metrics_df) != expected_n_rows:
         raise ValueError(
             f"metrics_df has {len(metrics_df)} rows; expected {expected_n_rows} "
-            f"({len(ALL_AXIS_LEVELS)} levels x {len(METHODS)} methods x "
+            f"({len(EXTENDED_AXIS_LEVELS)} levels x {len(METHODS)} methods x "
             f"{len(expected_metrics)} metrics: {', '.join(expected_metrics)})."
         )
     if set(metrics_df["metric"]) != set(expected_metrics):
@@ -653,8 +660,8 @@ def main():
             f"{EMIT_SHARPNESS_METRICS})."
         )
 
-    # Sort by DECREASING sample fraction (5 -> 2 -> 1), the axis's natural
-    # reading order.
+    # Sort by DECREASING sample fraction (20 -> 10 -> 5 -> 2 -> 1), the axis's
+    # natural reading order.
     metrics_df["_axis_level_numeric"] = metrics_df["axis_level"].astype(float)
     metrics_df = (
         metrics_df.sort_values(
@@ -762,7 +769,7 @@ def main():
     pd.set_option("display.width", 220)
     pd.set_option("display.max_columns", 50)
 
-    print("\nSample-density axis metrics (wide view; 3 levels x 4 methods):")
+    print("\nSample-density axis metrics (wide view; 5 levels x 4 methods):")
     print(wide.to_string(index=False))
     print("\nEvaluated-cell counts per level (levels are NOT scored on the same cells):")
     print(cell_counts.drop(columns="note").to_string(index=False))

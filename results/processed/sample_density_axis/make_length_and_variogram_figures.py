@@ -13,6 +13,15 @@ figures already built by ``make_sample_density_figures.py``:
     actual spatial-correlation structure before looking at how each method
     recovered (or failed to recover) it.
 
+EXTENSION 2026-09-21 (user request: 10% / 20% density levels): (a) now spans the 5
+levels 20% / 10% / 5% / 2% / 1% (EXTENDED_AXIS_LEVELS; ACTUAL n_samples 454 / 234 /
+121 / 50 / 25, the first two read from extra_density_levels_record.json). In
+length_scale_by_method.csv the original 5/2/1 rows are unchanged and the 20/10
+rows are APPENDED after them. (b) is unchanged (truth only). The GP-MLE column
+reads gp_hyperparameter_scale_conversion.csv, so run
+src.experiments.diagnose_sample_density_axis BEFORE this script when levels are
+added.
+
 Filenames are prefixed "00_" so they sort before every other file in
 results/figures/sample_density_axis/ (calibration_curves_grid.png,
 crossplot_*.png, metrics_vs_sample_density.png, qc_truth_predictions_*.png,
@@ -140,10 +149,17 @@ from src.experiments.base_case_conditioning import (  # noqa: E402
     TRUTH_SEED,
     get_base_case_truth,
 )
-from src.experiments.sample_density_axis import ALL_AXIS_LEVELS  # noqa: E402
+from src.experiments.sample_density_axis import (  # noqa: E402
+    ALL_AXIS_LEVELS,
+    EXTENDED_AXIS_LEVELS,
+    EXTRA_DENSITY_LEVELS,
+)
 from src.grid_utils import full_grid_coordinates  # noqa: E402
 
 PROCESSED_DIR = _REPO_ROOT / "results" / "processed" / "sample_density_axis"
+# CSV row order: the original 3 levels first (rows unchanged), then the 2 added
+# levels appended. The FIGURE uses EXTENDED_AXIS_LEVELS (dense -> sparse).
+CSV_LEVEL_ORDER = list(ALL_AXIS_LEVELS) + list(EXTRA_DENSITY_LEVELS)
 FIGURES_DIR = _REPO_ROOT / "results" / "figures" / "sample_density_axis"
 
 METHODS = ["kriging", "sgs", "rbf_bootstrap", "gp_mle"]
@@ -191,7 +207,7 @@ def build_length_scale_table(source_runs: dict, pct_actual: dict) -> pd.DataFram
 
     rows = []
     kriging_ranges = {}
-    for level in ALL_AXIS_LEVELS:
+    for level in CSV_LEVEL_ORDER:
         # --- kriging / SGS: the INPUT range, read from each run's own -------
         # manifest (not hardcoded), and cross-checked for equality since both
         # call build_vario() with the same base-case HMAJ1/HMIN1 by design.
@@ -263,7 +279,7 @@ def build_length_scale_table(source_runs: dict, pct_actual: dict) -> pd.DataFram
     df = pd.DataFrame(rows)
 
     print("\n--- Length-scale-by-method inputs, verified from source files ---")
-    for level in ALL_AXIS_LEVELS:
+    for level in CSV_LEVEL_ORDER:
         k_val = df[(df.axis_level == level) & (df.method == "kriging")]["length_scale_m"].iloc[0]
         s_val = df[(df.axis_level == level) & (df.method == "sgs")]["length_scale_m"].iloc[0]
         g_val = df[(df.axis_level == level) & (df.method == "gp_mle")]["length_scale_m"].iloc[0]
@@ -299,7 +315,7 @@ LENGTH_SCALE_JITTER_SEED = 13
 
 
 def make_length_scale_figure(df: pd.DataFrame, pct_actual: dict, n_samples_actual: dict):
-    axis_level_floats = [pct_actual[lvl] for lvl in ALL_AXIS_LEVELS]
+    axis_level_floats = [pct_actual[lvl] for lvl in EXTENDED_AXIS_LEVELS]
 
     replicate_df = pd.read_csv(
         REPLICATE_PROCESSED_DIR / "length_scale_by_replicate.csv", comment="#"
@@ -326,7 +342,7 @@ def make_length_scale_figure(df: pd.DataFrame, pct_actual: dict, n_samples_actua
     # --- GP-MLE / RBF+bootstrap: 10-replicate spread ------------------------
     for method in SPREAD_METHODS:
         mean_xs, mean_ys, mean_stds = [], [], []
-        for lvl in ALL_AXIS_LEVELS:
+        for lvl in EXTENDED_AXIS_LEVELS:
             x0 = pct_actual[lvl]
             m_sub = replicate_df[
                 (replicate_df["axis_level"] == lvl) & (replicate_df["method"] == method)
@@ -363,7 +379,7 @@ def make_length_scale_figure(df: pd.DataFrame, pct_actual: dict, n_samples_actua
     ax.set_xlim(max(axis_level_floats) * 1.35, min(axis_level_floats) / 1.35)
     ax.set_xticks(axis_level_floats)
     ax.set_xticklabels(
-        [f"{pct_actual[lvl]:.2f}%\n(n={n_samples_actual[lvl]})" for lvl in ALL_AXIS_LEVELS]
+        [f"{pct_actual[lvl]:.2f}%\n(n={n_samples_actual[lvl]})" for lvl in EXTENDED_AXIS_LEVELS]
     )
     ax.minorticks_off()
     ax.set_xlabel("Conditioning sample fraction of the 2500-cell grid (log scale, dense -> sparse)")
@@ -564,6 +580,13 @@ def main():
         overlap = json.load(f)
     pct_actual = {lvl: float(overlap["sample_fraction_actual_pct"][lvl]) for lvl in ALL_AXIS_LEVELS}
     n_samples_actual = {lvl: int(overlap["n_samples_actual"][lvl]) for lvl in ALL_AXIS_LEVELS}
+    # The two added levels are not in sample_overlap.json: ACTUAL counts come from
+    # the run record written by run_extra_density_levels.py.
+    with open(PROCESSED_DIR / "extra_density_levels_record.json", "r", encoding="utf-8") as f:
+        extra = json.load(f)["density_axis"]
+    for lvl in EXTRA_DENSITY_LEVELS:
+        n_samples_actual[lvl] = int(extra["n_samples_actual"][lvl])
+        pct_actual[lvl] = round(100.0 * n_samples_actual[lvl] / (NX * NY), 2)
 
     saved = []
 

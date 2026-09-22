@@ -29,10 +29,24 @@ make_sample_density_figures.py's module-level file reads as an import side
 effect) from results/processed/sample_density_axis/make_sample_density_figures.py's
 METHOD_COLORS / METHOD_MARKERS convention.
 
+2026-09-21 EXTENSION: two denser levels ("20" -> n_samples_requested=500,
+"10" -> 250) were added to the replicate axis (same 10 sample_seed replicates,
+see extra_density_levels_record.json). This script now also writes
+metrics_replicate_spread_level10.png / _level20.png with the IDENTICAL layout,
+style and axis conventions (each panel's y-limits are matplotlib autoscale from
+that figure's own points, as for the original three). The three original PNGs
+are unchanged (their caption text is kept verbatim; only the two new levels use
+the caption variant that reads n_samples_actual from
+extra_density_levels_record.json, because replicate_seeds.json only records the
+original 3 levels).
+
 Run with:
 .venv/Scripts/python.exe -m results.processed.sample_replicate_axis.make_sample_replicate_figures
+Optional: --levels 10 20  (subset), --out-dir <dir>  (write elsewhere, e.g. to
+verify the original PNGs are reproduced byte-identically).
 """
 
+import argparse
 import json
 import sys
 import textwrap
@@ -48,7 +62,10 @@ import matplotlib.pyplot as plt
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(_REPO_ROOT))
 
-from src.experiments.sample_density_axis import ALL_AXIS_LEVELS  # noqa: E402
+from src.experiments.sample_density_axis import (  # noqa: E402
+    ALL_AXIS_LEVELS,
+    EXTRA_DENSITY_LEVELS,
+)
 from src.experiments.sample_replicate_axis import (  # noqa: E402
     AXIS_HMAJ1,
     METHODS,
@@ -88,13 +105,41 @@ PANELS = [
 
 # axis_level ("5"/"2"/"1") -> output filename suffix / label, reused
 # consistently with make_sample_density_figures.py's own level identifiers.
-LEVEL_FILENAME_SUFFIX = {"5": "level5", "2": "level2", "1": "level1"}
+LEVEL_FILENAME_SUFFIX = {
+    "5": "level5", "2": "level2", "1": "level1", "10": "level10", "20": "level20",
+}
+
+# Levels added 2026-09-21 (see module docstring); ordered as in the original
+# 3-level list followed by the two new ones.
+DEFAULT_LEVELS = list(ALL_AXIS_LEVELS) + list(reversed(EXTRA_DENSITY_LEVELS))
+EXTRA_RECORD_PATH = PROCESSED_DIR / "extra_density_levels_record.json"
 
 
 def _caption(axis_level: str, seeds_record: dict) -> str:
+    n_requested = N_SAMPLES_REQUESTED_BY_LEVEL[axis_level]
+    if axis_level in EXTRA_DENSITY_LEVELS:
+        with open(EXTRA_RECORD_PATH, "r", encoding="utf-8") as f:
+            extra = json.load(f)["replicate_axis"]
+        n_actual = list(extra["n_samples_actual"][axis_level].values())
+        seeds = list(extra["sample_seed_replicates"].values())
+        return (
+            f"Same ground-truth field for all {len(REPLICATE_IDS)} replicates at this level "
+            f"(TRUTH_SEED={TRUTH_SEED}, range={AXIS_HMAJ1:g} m); only sample LOCATIONS vary, "
+            f"via sample_seed in {seeds} -- the SAME 10 seeds reused at every density level "
+            "of this axis (5 levels: 20/10/5/2/1 %; see sample_replicate_axis.py's module "
+            "docstring for the measured X/Y draw coupling this reuse creates BETWEEN "
+            f"levels). n_samples requested={n_requested} for every replicate at this "
+            f"level; actual count after grid-cell dedup ranges {min(n_actual)}-{max(n_actual)} "
+            "(see extra_density_levels_record.json). Each "
+            "small marker is one replicate's value for that method (jittered horizontally for "
+            "visibility, matching color); the larger black-edged marker is the mean across the "
+            "10 replicates and the error bar is +-1 sample std (ddof=1) -- see "
+            "metrics_summary.csv. variance_mean uses each method's own physical-unit variance "
+            "array (kriging's is a Monte Carlo back-transform approximation; the other three "
+            "are native) -- see variance_metric_sources.csv."
+        )
     n_actual = list(seeds_record["n_samples_actual"][axis_level].values())
     seeds = list(seeds_record["sample_seed_replicates"].values())
-    n_requested = N_SAMPLES_REQUESTED_BY_LEVEL[axis_level]
     return (
         f"Same ground-truth field for all {len(REPLICATE_IDS)} replicates at this level "
         f"(TRUTH_SEED={TRUTH_SEED}, range={AXIS_HMAJ1:g} m); only sample LOCATIONS vary, "
@@ -112,7 +157,8 @@ def _caption(axis_level: str, seeds_record: dict) -> str:
     )
 
 
-def make_figure(axis_level: str, metrics_df: pd.DataFrame, summary_df: pd.DataFrame, seeds_record: dict):
+def make_figure(axis_level: str, metrics_df: pd.DataFrame, summary_df: pd.DataFrame, seeds_record: dict,
+                out_dir: Path = None):
     level_metrics = metrics_df[metrics_df["axis_level"] == axis_level]
     level_summary = summary_df[summary_df["axis_level"] == axis_level]
     n_requested = N_SAMPLES_REQUESTED_BY_LEVEL[axis_level]
@@ -174,15 +220,17 @@ def make_figure(axis_level: str, metrics_df: pd.DataFrame, summary_df: pd.DataFr
     )
     plt.subplots_adjust(left=0.06, bottom=0.28, right=0.98, top=0.86, wspace=0.3)
 
-    FIGURES_DIR.mkdir(parents=True, exist_ok=True)
-    out = FIGURES_DIR / f"metrics_replicate_spread_{LEVEL_FILENAME_SUFFIX[axis_level]}.png"
+    out_dir = Path(out_dir) if out_dir is not None else FIGURES_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out = out_dir / f"metrics_replicate_spread_{LEVEL_FILENAME_SUFFIX[axis_level]}.png"
     plt.savefig(out, dpi=FIG_DPI, bbox_inches="tight")
     plt.close(fig)
     print(f"{out.name}: {out} ({out.stat().st_size} bytes)")
     return out
 
 
-def main():
+def main(levels=None, out_dir=None):
+    levels = list(levels) if levels else list(DEFAULT_LEVELS)
     metrics_df = pd.read_csv(PROCESSED_DIR / "metrics.csv")
     metrics_df["axis_level"] = metrics_df["axis_level"].astype(str)
     summary_df = pd.read_csv(PROCESSED_DIR / "metrics_summary.csv")
@@ -191,8 +239,8 @@ def main():
         seeds_record = json.load(f)
 
     saved = [
-        make_figure(axis_level, metrics_df, summary_df, seeds_record)
-        for axis_level in ALL_AXIS_LEVELS
+        make_figure(axis_level, metrics_df, summary_df, seeds_record, out_dir)
+        for axis_level in levels
     ]
     print("\nAll sample-replicate-axis figures:")
     for f in saved:
@@ -201,4 +249,8 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--levels", nargs="+", choices=sorted(LEVEL_FILENAME_SUFFIX), default=None)
+    ap.add_argument("--out-dir", default=None)
+    args = ap.parse_args()
+    main(args.levels, args.out_dir)

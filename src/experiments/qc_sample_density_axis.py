@@ -33,6 +33,13 @@ breaks something rather than that a long range does:
    COUNT those warnings. It saves nothing and does not touch results/raw/.
    Set RECHECK_SGSIM_WARNINGS = False to skip (it is the slow part).
 
+EXTENSION 2026-09-21 (user request: 10% / 20% density levels): the QC also runs
+for the added levels "20" (n requested 500) and "10" (n requested 250).
+qc_summary.csv keeps the original 5/2/1 rows unchanged and APPENDS the 20/10 rows
+(QC_LEVEL_ORDER). The truth-vs-prediction MAP PNGs (qc_truth_predictions_*) are
+produced by results/processed/sample_density_axis/make_sample_density_figures.py,
+which was extended to the same levels.
+
 Run with: .venv/Scripts/python.exe -m src.experiments.qc_sample_density_axis
 """
 
@@ -77,6 +84,7 @@ from src.experiments.sample_density_axis import (
     ALL_AXIS_LEVELS,
     AXIS_HMAJ1,
     AXIS_HMIN1,
+    EXTRA_DENSITY_LEVELS,
     METHODS,
     SAMPLE_COUNTS,
 )
@@ -86,6 +94,10 @@ from src.grid_utils import full_grid_coordinates
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 PROCESSED_DIR = _REPO_ROOT / "results" / "processed" / "sample_density_axis"
+
+# Row order of qc_summary.csv: original levels first (rows unchanged), then the
+# added levels appended.
+QC_LEVEL_ORDER = list(ALL_AXIS_LEVELS) + list(EXTRA_DENSITY_LEVELS)
 
 # A fitted hyperparameter is called "at bound" if it is within this factor of
 # either end of its (log-scaled) optimizer bound.
@@ -331,7 +343,7 @@ def main():
     source_runs = json.loads((PROCESSED_DIR / "source_runs.json").read_text(encoding="utf-8"))
 
     rows = []
-    for axis_level in ALL_AXIS_LEVELS:
+    for axis_level in QC_LEVEL_ORDER:
         print(f"QC sample fraction = {axis_level}% (n={SAMPLE_COUNTS[axis_level]}) ...")
         rows.append(qc_one_level(axis_level, source_runs[axis_level]))
 

@@ -44,6 +44,27 @@ Outputs (all in results/processed/sample_density_axis/)
    provenance for the tail-assumption caption printed on
    results/figures/sample_density_axis/interval_width_p95_vs_sample_density.png.
 
+5. ndmax_binding_by_level.csv                       (added 2026-09-21)
+   Per level: the search-cap diagnostic (kriging ndmax=50, SGS ndmax=20) --
+   number of conditioning samples within one variogram range (300 m) of each
+   grid cell (mean/max) and the fraction of cells with MORE than ndmax such
+   samples. Computed by qc_sample_density_axis.ndmax_capping (same function
+   that fills those columns of qc_summary.csv).
+
+6. gp_fitted_hyperparameters_by_level.csv            (added 2026-09-21)
+   Per level: GP-MLE fitted hyperparameters straight from each run's manifest
+   (length scale, practical range, signal/noise variance in real and
+   normalized units, log marginal likelihood). Complements table 3, which has
+   no log-marginal-likelihood column.
+
+EXTENSION 2026-09-21 (user request: 10% / 20% density levels): tables 1, 2, 3
+now also cover the added levels "20" (n requested 500) and "10" (n requested
+250). The original 5/2/1 rows are computed by the same code and stay unchanged;
+the 20/10 rows are APPENDED after them (LEVEL_ORDER). Table 4 (kriging
+back-transform tail sensitivity) is deliberately NOT extended: it needs the
+parked sharpness metrics (interval_width_p95 / crps), which
+metrics_parked_sharpness.csv holds for the original 3 levels only.
+
 Run with: .venv/Scripts/python.exe -m src.experiments.diagnose_sample_density_axis
 """
 
@@ -78,15 +99,21 @@ from src.experiments.base_case_conditioning import (
     get_conditioning_samples,
 )
 from src.experiments.kriging import LTAIL, UTAIL, backtr_value_vectorized
+from src.experiments.qc_sample_density_axis import ndmax_capping
 from src.experiments.sample_density_axis import (
     ALL_AXIS_LEVELS,
     AXIS_HMAJ1,
+    EXTRA_DENSITY_LEVELS,
     METHODS,
     SAMPLE_COUNTS,
 )
 
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 PROCESSED_DIR = _REPO_ROOT / "results" / "processed" / "sample_density_axis"
+
+# Row order of the tables that cover the added levels: original levels first
+# (rows unchanged), then the added levels appended.
+LEVEL_ORDER = list(ALL_AXIS_LEVELS) + list(EXTRA_DENSITY_LEVELS)
 
 # --- Null distribution of the conditioning-sample mean ----------------------
 # Same truth field, same n_samples, only the SAMPLE SEED changes. The seed
@@ -155,7 +182,7 @@ def conditioning_sample_bias(truth: np.ndarray) -> pd.DataFrame:
     ]
 
     rows = []
-    for level in ALL_AXIS_LEVELS:
+    for level in LEVEL_ORDER:
         n_requested = SAMPLE_COUNTS[level]
         samples = get_conditioning_samples(
             truth, sample_seed=SAMPLE_SEED, n_samples=n_requested
@@ -203,7 +230,7 @@ def mse_bias_variance(truth: np.ndarray, source_runs: dict) -> pd.DataFrame:
     recorded["axis_level"] = recorded["axis_level"].astype(str)
 
     rows = []
-    for level in ALL_AXIS_LEVELS:
+    for level in LEVEL_ORDER:
         samples = get_conditioning_samples(
             truth, sample_seed=SAMPLE_SEED, n_samples=SAMPLE_COUNTS[level]
         )
@@ -258,7 +285,7 @@ def gp_scale_conversion(source_runs: dict) -> pd.DataFrame:
     truth_nugget_real = NUG * POR_STDEV ** 2  # NS-space nugget x physical sill
 
     rows = []
-    for level in ALL_AXIS_LEVELS:
+    for level in LEVEL_ORDER:
         hp = _manifest_params(source_runs[level]["gp_mle"])["fitted_hyperparameters"]
         ell = float(hp["length_scale_m"])
         noise_real = float(hp["noise_variance_real_units"])
@@ -278,6 +305,53 @@ def gp_scale_conversion(source_runs: dict) -> pd.DataFrame:
                 ),
                 "truth_nugget_real_units": truth_nugget_real,
                 "gp_noise_over_truth_nugget": noise_real / truth_nugget_real,
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def ndmax_binding_by_level(truth: np.ndarray) -> pd.DataFrame:
+    """Table 5: search-cap (ndmax) binding per level, via the QC script's own
+    ndmax_capping()."""
+    rows = []
+    for level in LEVEL_ORDER:
+        samples = get_conditioning_samples(
+            truth, sample_seed=SAMPLE_SEED, n_samples=SAMPLE_COUNTS[level]
+        )
+        row = {
+            "axis_level": level,
+            "n_samples_requested": SAMPLE_COUNTS[level],
+            "n_samples_actual": len(samples),
+            "variogram_range_m": AXIS_HMAJ1,
+        }
+        row.update(ndmax_capping(samples))
+        rows.append(row)
+    return pd.DataFrame(rows)
+
+
+def gp_fitted_hyperparameters(source_runs: dict) -> pd.DataFrame:
+    """Table 6: GP-MLE fitted hyperparameters + log marginal likelihood per
+    level, read from each run's manifest."""
+    factor_exact = float(np.sqrt(-2.0 * np.log(CORRELATION_CUTOFF)))
+    rows = []
+    for level in LEVEL_ORDER:
+        params = _manifest_params(source_runs[level]["gp_mle"])
+        hp = params["fitted_hyperparameters"]
+        ell = float(hp["length_scale_m"])
+        rows.append(
+            {
+                "axis_level": level,
+                "n_samples_requested": SAMPLE_COUNTS[level],
+                "gp_length_scale_m": ell,
+                "practical_range_m": factor_exact * ell,
+                "practical_range_sqrt6_shorthand_m": float(np.sqrt(6.0)) * ell,
+                "signal_variance_real_units": float(hp["signal_variance_real_units"]),
+                "noise_variance_real_units": float(hp["noise_variance_real_units"]),
+                "signal_variance_normalized": float(hp["signal_variance_normalized"]),
+                "noise_variance_normalized": float(hp["noise_variance_normalized"]),
+                "log_marginal_likelihood": float(params["log_marginal_likelihood"]),
+                "posterior_sample_method": params.get("posterior_sample_method", "n/a"),
+                "source": f"{source_runs[level]['gp_mle']}/manifest.json",
             }
         )
     return pd.DataFrame(rows)
@@ -446,10 +520,24 @@ def main():
         ].to_string(index=False)
     )
 
+    ndmax_df = ndmax_binding_by_level(truth)
+    ndmax_path = PROCESSED_DIR / "ndmax_binding_by_level.csv"
+    ndmax_df.to_csv(ndmax_path, index=False)
+    print("\n--- 5. Search-cap (ndmax) binding: kriging ndmax=50, SGS ndmax=20 ---")
+    print(ndmax_df.to_string(index=False))
+
+    gp_hp_df = gp_fitted_hyperparameters(source_runs)
+    gp_hp_path = PROCESSED_DIR / "gp_fitted_hyperparameters_by_level.csv"
+    gp_hp_df.to_csv(gp_hp_path, index=False)
+    print("\n--- 6. GP-MLE fitted hyperparameters + log marginal likelihood ---")
+    print(gp_hp_df.drop(columns=["source"]).to_string(index=False))
+
     print(f"\nconditioning_sample_bias.csv: {bias_path}")
     print(f"mse_bias_variance_decomposition.csv: {decomp_path}")
     print(f"gp_hyperparameter_scale_conversion.csv: {gp_path}")
     print(f"kriging_backtransform_tail_sensitivity.csv: {tail_path}")
+    print(f"ndmax_binding_by_level.csv: {ndmax_path}")
+    print(f"gp_fitted_hyperparameters_by_level.csv: {gp_hp_path}")
 
     return bias_df, decomp_df, gp_df, tail_df
 

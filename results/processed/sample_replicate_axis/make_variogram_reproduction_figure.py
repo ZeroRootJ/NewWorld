@@ -153,9 +153,34 @@ OUTPUTS
       (per-level block under "levels": seeds, source runs, GP validation,
       timings, exceed-y-limit statistics; fixed y-limit rule at top level; re-running a subset of levels replaces only those)
 
-Run with (default: all three levels, ~5 min per level, dominated by the GP draws):
+2026-09-21 EXTENSION: levels '10' (10%, n_requested 250) and '20' (20%, n_requested
+500) were added with the IDENTICAL procedure/design and the same fixed y-axis 0-11.7
+(GP draw seeds 9300+k for level '10', 9400+k for level '20'; levels 1/2/5 untouched:
+9000/9100/9200+k). The LEVELS order is ("1", "2", "5", "10", "20"), so the new rows are
+appended after the existing 300 rows of the summary CSV. Outputs for the new levels:
+variogram_reproduction_{by_replicate,pooled}_level{10,20}.png. At these denser levels
+the GP fits use n ~ 235 (10%) / ~445 (20%) conditioning points, so the posterior
+covariance eigen-structure (size of the white-noise eigenvalue cluster) differs from
+levels 1/2/5; the procedure is unchanged and every replicate is validated as before.
+Every SGS realization is additionally scanned for values outside the physical range
+POR_MEAN +- 4 POR_STDEV (= 3..27, the back-transform limits); any hits are recorded in
+the seeds JSON ("sgs_out_of_range_values") and stated in that level's figure footnote
+(nothing is altered or clipped; the variogram is computed from the stored map as is).
+Known fact at level '10': rep4 (sample_seed 1005), SGS realization index 9 contains a
+value of about -304.6, so that realization's variogram is huge and is cut off by the
+fixed y-axis.
+
+Footnote layout: a footnote with more wrapped lines than the levels 1/2/5 ones (10 / 11
+lines for figure A / B; see FOOTNOTE_BASE_LINES, _footnote_layout) makes the figure taller
+by the missing lines plus a small pad so the footnote never touches the x-axis label; with
+no extra lines the layout is unchanged (levels 1, 2, 5 and 20 render as before; only the
+level-10 figures, whose footnote carries the extra out-of-range NOTE sentence, are taller).
+
+Run with (default: all five levels, ~5 min per level for the sparse ones, dominated by
+the GP draws; the denser levels take longer):
 .venv/Scripts/python.exe -m results.processed.sample_replicate_axis.make_variogram_reproduction_figure
-Optional: --levels 2 5
+Optional: --levels 10 20   (only those levels are regenerated / their CSV rows and JSON
+blocks replaced; all other levels' figures, rows and blocks stay as they are)
 """
 
 import contextlib
@@ -181,7 +206,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(_REPO_ROOT))
 
 from src.experiments.base_case import (  # noqa: E402
-    NX, NY, XMN, YMN, XSIZ, YSIZ, CC1, HMAJ1, NUG, POR_STDEV,
+    NX, NY, XMN, YMN, XSIZ, YSIZ, CC1, HMAJ1, NUG, POR_MEAN, POR_STDEV,
 )
 from src.experiments.base_case_conditioning import (  # noqa: E402
     VCOL,
@@ -220,15 +245,17 @@ SUMMARY_CSV_NAME = "variogram_reproduction_summary.csv"
 SEEDS_JSON_NAME = "variogram_reproduction_seeds.json"
 
 # --- design constants (all named; change here only) -------------------------
-LEVELS = ("1", "2", "5")                 # axis levels, run in this order (1%, 2%, 5%)
+LEVELS = ("1", "2", "5", "10", "20")     # axis levels, in this order (new rows are appended)
 # Text used in the figure titles: level 1 keeps its ORIGINAL wording so the
 # level-1 PNGs stay byte-identical to the first version of this script.
 LEVEL_TITLE = {
     "1": "1% level, n=25",
     "2": "2% level, n=50",
     "5": "5% level, n requested 125",
+    "10": "10% level, n requested 250",
+    "20": "20% level, n requested 500",
 }
-LEVEL_PERCENT = {"1": "1%", "2": "2%", "5": "5%"}
+LEVEL_PERCENT = {"1": "1%", "2": "2%", "5": "5%", "10": "10%", "20": "20%"}
 REPLICATES = tuple(REPLICATE_IDS)        # rep0 .. rep9
 METHODS = ("sgs", "rbf_bootstrap", "gp_mle")   # figure columns, left to right
 METHOD_LABELS = {"sgs": "SGS", "rbf_bootstrap": "RBF+bootstrap", "gp_mle": "GP-MLE"}
@@ -254,8 +281,9 @@ N_REALIZATIONS_EXPECTED = 10
 N_GP_DRAWS = N_REALIZATIONS_EXPECTED
 # NEW seed families, one per level (never colliding with each other or with
 # TRUTH/sample/pair/GP_SAMPLE seeds); GP draw seed of rep k at level L =
-# GP_DRAW_SEED_BASE_BY_LEVEL[L] + k  (1%: 9000..9009, 2%: 9100..9109, 5%: 9200..9209).
-GP_DRAW_SEED_BASE_BY_LEVEL = {"1": 9000, "2": 9100, "5": 9200}
+# GP_DRAW_SEED_BASE_BY_LEVEL[L] + k  (1%: 9000..9009, 2%: 9100..9109, 5%: 9200..9209,
+# 10%: 9300..9309, 20%: 9400..9409).
+GP_DRAW_SEED_BASE_BY_LEVEL = {"1": 9000, "2": 9100, "5": 9200, "10": 9300, "20": 9400}
 
 REPORT_LAG_M = 287.5         # lag bin reported in the summary (a 25 m bin centre)
 REPORT_STATS = ("min", "median", "max")
@@ -267,6 +295,37 @@ GP_MAP_RTOL = 1e-6
 GP_MAP_ATOL = 1e-6
 GP_CHI2_MAX_ABS_Z = 4.0      # |q-N| / sqrt(2N) bound for the stored draw under the rebuilt N(m, C)
 EIG_CLUSTER_REL_TOL = 1e-6   # diagnostic only
+# Physical range of the back-transformed porosity (base_case BACKTR_ZMIN/ZMAX =
+# POR_MEAN -+ 4 POR_STDEV = 3..27); SGS values outside it are reported (not altered).
+PHYS_RANGE = (POR_MEAN - 4.0 * POR_STDEV, POR_MEAN + 4.0 * POR_STDEV)
+
+# Footnote layout: FOOTNOTE_BASE_LINES are the wrapped-line counts of the levels 1/2/5
+# footnotes (figure A: 170 chars/line, figure B: 175 chars/line) for which the fixed
+# layout below was tuned. A footnote with MORE lines than that (e.g. level 10's extra
+# out-of-range NOTE sentence) makes the figure taller by exactly the missing lines
+# (+ FOOTNOTE_GAP_PAD_IN of extra air), keeping panels, legend and the distance
+# footnote <-> x-axis label as for the base case. With no extra lines nothing changes
+# (the figures of levels 1/2/5/20 are unaffected).
+FOOTNOTE_BASE_LINES = {"A": 10, "B": 11}
+FOOTNOTE_FONTSIZE = 8
+FOOTNOTE_LINE_HEIGHT_IN = FOOTNOTE_FONTSIZE * 1.25 / 72.0
+FOOTNOTE_GAP_PAD_IN = 0.15
+
+
+def _footnote_layout(kind, wrapped_footnote, height_in):
+    """Returns (new_height_in, top(f), bottom(f), foot(f)) coordinate maps, all identity
+    when the footnote needs no extra lines. top(f): a fraction measured from the bottom
+    of the ORIGINAL figure that is anchored at the top (legend, suptitle, panels top);
+    bottom(f): the tight_layout rect bottom; foot(f): the footnote text baseline."""
+    extra = max(0, wrapped_footnote.count(chr(10)) + 1 - FOOTNOTE_BASE_LINES[kind])
+    if extra == 0:
+        ident = lambda f: f  # noqa: E731
+        return height_in, ident, ident, ident, 0
+    dh = extra * FOOTNOTE_LINE_HEIGHT_IN + FOOTNOTE_GAP_PAD_IN
+    h2 = height_in + dh
+    return (h2, lambda f: 1.0 - (1.0 - f) * height_in / h2,
+            lambda f: (f * height_in + dh) / h2, lambda f: f * height_in / h2, extra)
+
 
 FIG_A_SIZE = (15.0, 30.0)
 FIG_B_SIZE = (15.0, 5.6)
@@ -461,6 +520,14 @@ def load_replicate(level: str, replicate_id: str, source_runs: dict, truth: np.n
             raise ValueError(f"level {level} {replicate_id}: {name} has shape {arr.shape}, expected "
                              f"({N_REALIZATIONS_EXPECTED}, {NY}, {NX}) (full grid).")
 
+    sgs_oor = []
+    for k in range(sgs.shape[0]):
+        lo, hi = float(np.min(sgs[k])), float(np.max(sgs[k]))
+        if lo < PHYS_RANGE[0] or hi > PHYS_RANGE[1]:
+            sgs_oor.append({"realization_index": k, "min": lo, "max": hi})
+            print(f"  NOTE: SGS realization {k} of L{level} {replicate_id} has values outside the "
+                  f"physical range {PHYS_RANGE}: min={lo:.4f}, max={hi:.4f} (kept as is)")
+
     gpr, _ = rebuild_fitted_gpr(runs["gp_mle"])
     validation = validate_gp_reconstruction(gpr, runs["gp_mle"], grid_coords,
                                             f"L{level} {replicate_id}", check_determinism)
@@ -477,6 +544,7 @@ def load_replicate(level: str, replicate_id: str, source_runs: dict, truth: np.n
         "n_actual": len(ref),
         "maps": {"sgs": sgs, "rbf_bootstrap": rbf, "gp_mle": gp_draws},
         "runs": {m: str(source_runs[level][replicate_id][m]) for m in METHODS},
+        "sgs_out_of_range": sgs_oor,
         "gp_validation": validation,
         "gp_draw_seed": seed,
         "gp_draw_method": method,
@@ -544,6 +612,22 @@ def _common_footnote_text(level, data):
         f"Y-axis fixed at 0-{Y_MAX:g} ({Y_MAX_SILL_FACTOR:g} x total sill {total_sill:g}) for "
         "every level and both figure types; curves exceeding it are cut off at the axis."
     )
+    oor = [(r, e) for r in REPLICATES for e in data[r]["sgs_out_of_range"]]
+    if oor:
+        if len(oor) == 1:
+            r, e = oor[0]
+            bad = e["min"] if abs(e["min"] - POR_MEAN) >= abs(e["max"] - POR_MEAN) else e["max"]
+            ylim_sentence += (
+                f" NOTE: one SGS realization of {r} contains an out-of-range value ({bad:.1f}; "
+                f"physical range {PHYS_RANGE[0]:g}-{PHYS_RANGE[1]:g}); its curve is cut off."
+            )
+        else:
+            ylim_sentence += (
+                f" NOTE: {len(oor)} SGS realizations ("
+                + ", ".join(f"{r} #{e['realization_index']}" for r, e in oor)
+                + f") contain out-of-range values (physical range {PHYS_RANGE[0]:g}-"
+                f"{PHYS_RANGE[1]:g}); their curves are cut off."
+            )
     return (
         f"{LEVEL_PERCENT[level]} sample-density level "
         f"(n_samples_requested={N_SAMPLES_REQUESTED_BY_LEVEL[level]}; "
@@ -575,7 +659,10 @@ def make_figure_a(level, data, varios, truth_vario, ylim):
     model_smooth = spherical_semivariance(h_smooth)
     total_sill = POR_STDEV ** 2
     n_rows = len(REPLICATES)
-    fig, axes = plt.subplots(n_rows, len(METHODS), figsize=FIG_A_SIZE, sharex=True, sharey=True)
+    footnote_wrapped = textwrap.fill(_common_footnote_text(level, data), 170)
+    h_a, top_a, bottom_a, foot_a, extra_a = _footnote_layout("A", footnote_wrapped, FIG_A_SIZE[1])
+    fig, axes = plt.subplots(n_rows, len(METHODS), figsize=(FIG_A_SIZE[0], h_a), sharex=True,
+                             sharey=True)
     for i, rep in enumerate(REPLICATES):
         for j, method in enumerate(METHODS):
             ax = axes[i, j]
@@ -593,15 +680,15 @@ def make_figure_a(level, data, varios, truth_vario, ylim):
                     f"{rep} (sample_seed {data[rep]['sample_seed']})\n"
                     "Semivariance (Porosity %$^2$)", fontsize=LABEL_FONTSIZE - 1,
                 )
-    footnote = _common_footnote_text(level, data)
     fig.suptitle(
         "Variogram of the individual realizations vs. the truth, by sampling replicate "
-        f"({LEVEL_TITLE[level]})", fontsize=15, y=0.9975,
+        f"({LEVEL_TITLE[level]})", fontsize=15, y=top_a(0.9975),
     )
-    fig.tight_layout(rect=(0.0, 0.065, 1.0, FIG_A_PANELS_TOP))
-    _figure_legend(fig, N_REALIZATIONS_EXPECTED, ALPHA, REALIZATION_LINEWIDTH, FIG_A_LEGEND_Y)
-    fig.text(0.5, 0.004, textwrap.fill(footnote, 170), ha="center", va="bottom",
-             fontsize=8, color="dimgray")
+    fig.tight_layout(rect=(0.0, bottom_a(0.065), 1.0, top_a(FIG_A_PANELS_TOP)))
+    _figure_legend(fig, N_REALIZATIONS_EXPECTED, ALPHA, REALIZATION_LINEWIDTH,
+                   top_a(FIG_A_LEGEND_Y))
+    fig.text(0.5, foot_a(0.004), footnote_wrapped, ha="center", va="bottom",
+             fontsize=FOOTNOTE_FONTSIZE, color="dimgray")
     FIGURES_DIR.mkdir(parents=True, exist_ok=True)
     out = FIGURES_DIR / FIGURE_A_NAME_TEMPLATE.format(level=level)
     fig.savefig(out, dpi=FIG_DPI, bbox_inches="tight")
@@ -613,7 +700,15 @@ def make_figure_b(level, data, varios, truth_vario, ylim):
     h_smooth = np.linspace(0.0, LAG_MAX_M, 300)
     model_smooth = spherical_semivariance(h_smooth)
     total_sill = POR_STDEV ** 2
-    fig, axes = plt.subplots(1, len(METHODS), figsize=FIG_B_SIZE, sharex=True, sharey=True)
+    footnote = (
+        "Pooled over all 10 sampling replicates (rep0-rep9) x 10 realizations per method = 100 "
+        "curves per panel, drawn at alpha=" + f"{POOLED_ALPHA:g}. "
+        + _common_footnote_text(level, data)
+    )
+    footnote_wrapped = textwrap.fill(footnote, 175)
+    h_b, top_b, bottom_b, foot_b, extra_b = _footnote_layout("B", footnote_wrapped, FIG_B_SIZE[1])
+    fig, axes = plt.subplots(1, len(METHODS), figsize=(FIG_B_SIZE[0], h_b), sharex=True,
+                             sharey=True)
     for j, method in enumerate(METHODS):
         ax = axes[j]
         pooled = [v for rep in REPLICATES for v in varios[(rep, method)]]
@@ -626,20 +721,15 @@ def make_figure_b(level, data, varios, truth_vario, ylim):
         ax.set_xlabel("Lag h (m)", fontsize=LABEL_FONTSIZE)
         if j == 0:
             ax.set_ylabel("Semivariance (Porosity %$^2$)", fontsize=LABEL_FONTSIZE)
-    footnote = (
-        "Pooled over all 10 sampling replicates (rep0-rep9) x 10 realizations per method = 100 "
-        "curves per panel, drawn at alpha=" + f"{POOLED_ALPHA:g}. "
-        + _common_footnote_text(level, data)
-    )
     fig.suptitle(
         "Variogram of the individual realizations vs. the truth, pooled over the 10 sampling "
-        f"replicates ({LEVEL_TITLE[level]})", fontsize=14, y=0.995,
+        f"replicates ({LEVEL_TITLE[level]})", fontsize=14, y=top_b(0.995),
     )
-    fig.tight_layout(rect=(0.0, 0.25, 1.0, FIG_B_PANELS_TOP))
+    fig.tight_layout(rect=(0.0, bottom_b(0.25), 1.0, top_b(FIG_B_PANELS_TOP)))
     _figure_legend(fig, len(REPLICATES) * N_REALIZATIONS_EXPECTED, POOLED_ALPHA,
-                   POOLED_LINEWIDTH, FIG_B_LEGEND_Y)
-    fig.text(0.5, 0.005, textwrap.fill(footnote, 175), ha="center", va="bottom",
-             fontsize=8, color="dimgray")
+                   POOLED_LINEWIDTH, top_b(FIG_B_LEGEND_Y))
+    fig.text(0.5, foot_b(0.005), footnote_wrapped, ha="center", va="bottom",
+             fontsize=FOOTNOTE_FONTSIZE, color="dimgray")
     out = FIGURES_DIR / FIGURE_B_NAME_TEMPLATE.format(level=level)
     fig.savefig(out, dpi=FIG_DPI, bbox_inches="tight")
     plt.close(fig)
@@ -758,6 +848,8 @@ def run_level(level, source_runs, truth, grid_coords, truth_vario):
         "sample_seed_by_replicate": {r: int(REPLICATE_SEED[r]) for r in REPLICATES},
         "gp_draw_seed_base": GP_DRAW_SEED_BASE_BY_LEVEL[level],
         "gp_draw_seed_by_replicate": {r: data[r]["gp_draw_seed"] for r in REPLICATES},
+        "sgs_out_of_range_values": {r: data[r]["sgs_out_of_range"] for r in REPLICATES
+                                    if data[r]["sgs_out_of_range"]},
         "gp_draw_method_by_replicate": {r: data[r]["gp_draw_method"] for r in REPLICATES},
         "gp_draw_seconds_by_replicate": {r: round(data[r]["gp_draw_seconds"], 2) for r in REPLICATES},
         "level_runtime_seconds": round(level_seconds, 1),
@@ -782,7 +874,9 @@ def _merge_csv(new_rows, levels_run):
     path = PROCESSED_DIR / SUMMARY_CSV_NAME
     new = pd.DataFrame(new_rows)
     if path.exists():
-        old = pd.read_csv(path, dtype={"axis_level": str})
+        # float_precision="round_trip": the default C parser can change the last digit of
+        # a float, which would alter the other levels' rows byte-wise on rewrite.
+        old = pd.read_csv(path, dtype={"axis_level": str}, float_precision="round_trip")
         old = old[~old["axis_level"].isin(levels_run)]
         combined = pd.concat([old, new], ignore_index=True)
     else:
@@ -842,8 +936,8 @@ def main(levels=LEVELS):
         "ylim": list(YLIM),
         "ylim_rule": (
             f"y-axis fixed at 0 to Y_MAX_SILL_FACTOR ({Y_MAX_SILL_FACTOR:g}) x total sill "
-            f"(POR_STDEV**2 = {POR_STDEV ** 2:g}) = {Y_MAX:g} for every panel of all six "
-            "figures; curves above it are cut off by the axis (data not clipped)."
+            f"(POR_STDEV**2 = {POR_STDEV ** 2:g}) = {Y_MAX:g} for every panel of all "
+            "variogram-reproduction figures; curves above it are cut off by the axis (data not clipped)."
         ),
         "truth_seed": TRUTH_SEED,
         "variogram_pair_seed": VARIOGRAM_PAIR_SEED,
@@ -874,5 +968,5 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("--levels", nargs="+", default=list(LEVELS), choices=list(LEVELS),
-                        help="axis levels to (re)generate; default: all three")
+                        help="axis levels to (re)generate; default: all five")
     main(tuple(parser.parse_args().levels))

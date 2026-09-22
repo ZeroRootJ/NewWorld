@@ -63,6 +63,24 @@ results/processed/sample_density_axis/sample_overlap.json, in the reused/new
 run manifests (via ``n_samples_requested``/``n_samples_actual``), and in the
 figure captions.
 
+Extension 2026-09-21 (user request: "density 10%, 20%도 실험해서 데이터 확보")
+------------------------------------------------------------------------------
+Two denser levels were added, WITHOUT touching the original three:
+
+    axis_level "20" -> n_samples_requested = 500  (20%)
+    axis_level "10" -> n_samples_requested = 250  (10%)
+
+They are registered in ``SAMPLE_COUNTS`` and listed in
+``EXTRA_DENSITY_LEVELS`` / ``EXTENDED_AXIS_LEVELS`` (dense -> sparse:
+"20", "10", "5", "2", "1"). ``ALL_AXIS_LEVELS`` is deliberately LEFT as the
+original ["5", "2", "1"]: the figure / QC / diagnostic scripts import it and
+zip it against 3-panel layouts, so silently growing it would make them plot
+the wrong levels. Only the two evaluate_* scripts use
+``EXTENDED_AXIS_LEVELS``. The two new levels use the same SAMPLE_SEED=20,
+TRUTH_SEED and range as the original levels, and are executed by
+src/experiments/run_extra_density_levels.py (NOT by ``main()`` below, which
+still runs/reuses only the original 3 levels).
+
 Run reuse (avoid recomputing identical runs)
 --------------------------------------------
 - 5% (n=125) IS the base case. Its four pinned runs are reused verbatim from
@@ -126,10 +144,18 @@ BASE_CASE_PROCESSED_DIR = _REPO_ROOT / "results" / "processed" / "base_case"
 
 # axis_level (percent of the 2500-cell grid, as a string) -> n_samples.
 # "5" must map to N_SAMPLES so the base case is reused, not redefined here.
-SAMPLE_COUNTS = {"5": N_SAMPLES, "2": 50, "1": 25}
+SAMPLE_COUNTS = {"5": N_SAMPLES, "2": 50, "1": 25, "10": 250, "20": 500}
 
 # Ordered high -> low density, which is also the order the figures use.
+# This is the ORIGINAL 3-level axis (see module docstring, "Extension
+# 2026-09-21"): the figure/QC/diagnostic scripts depend on its length, so the
+# added 10%/20% levels live in EXTRA_DENSITY_LEVELS / EXTENDED_AXIS_LEVELS.
 ALL_AXIS_LEVELS = ["5", "2", "1"]
+
+# Levels added 2026-09-21 (n_samples_requested = 500 / 250 of the 2500 cells).
+EXTRA_DENSITY_LEVELS = ["20", "10"]
+# All 5 levels, dense -> sparse. Used by the evaluate_* scripts.
+EXTENDED_AXIS_LEVELS = EXTRA_DENSITY_LEVELS + ALL_AXIS_LEVELS
 
 # The one level whose runs already exist (it IS the base case).
 BASE_CASE_AXIS_LEVEL = "5"

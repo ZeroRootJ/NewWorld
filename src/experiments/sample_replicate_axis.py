@@ -111,6 +111,20 @@ src/experiments/_axis_parallel.py's run_levels_parallel rather than a
 sequential loop -- exactly the pattern sample_density_axis.py and the
 original (n=125-only) version of this module already use.
 
+Extension 2026-09-21: 10% / 20% levels (WARNING about ``main()``)
+-----------------------------------------------------------------
+The same 10 sample_seed replicates (1001..1010) were also run at two denser
+levels, "10" (n_samples_requested=250) and "20" (500), registered in
+sample_density_axis.SAMPLE_COUNTS / EXTRA_DENSITY_LEVELS. They are executed
+and merged into source_runs.json by src/experiments/run_extra_density_levels.py,
+which only ADDS the new-level entries and leaves the existing ones untouched.
+
+``main()`` below still covers ONLY the original 3 levels and reads the frozen
+source_runs_level5_n125.json for level "5": that file points at the OLD
+(pre-2026-09-21 SMOOTHING_GRID) level-5 RBF runs, so re-running ``main()``
+would silently revert the current level-5 RBF pins in source_runs.json AND
+drop the new-level entries. Do not re-run ``main()`` as-is.
+
 Run with: .venv/Scripts/python.exe -m src.experiments.sample_replicate_axis
 """
 

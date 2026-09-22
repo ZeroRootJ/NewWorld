@@ -1,0 +1,6 @@
+axis_level,n_samples_requested,n_samples_actual,variogram_range_m,kriging_ndmax,sgs_ndmax,n_samples_within_range_mean,n_samples_within_range_max,frac_cells_over_kriging_ndmax,frac_cells_over_sgs_ndmax,kriging_ndmax_can_bind_at_all,sgs_ndmax_can_bind_at_all
+5,125,121,300.0,50,20,28.928,60,0.076,0.6852,True,True
+2,50,50,300.0,50,20,12.2832,27,0.0,0.112,False,True
+1,25,25,300.0,50,20,6.2412,15,0.0,0.0,False,True
+20,500,454,300.0,50,20,105.466,169,0.94,1.0,True,True
+10,250,234,300.0,50,20,54.1568,94,0.5592,0.9672,True,True

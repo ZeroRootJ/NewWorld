@@ -1,12 +1,16 @@
 """Length scale vs. "smoothing" parameter, for GP-MLE and RBF+bootstrap
 separately, across the 10 sample-seed replicates (src/experiments/
-sample_replicate_axis.py) at all 3 sample-density-axis levels ("5"/"2"/"1"
--> n_samples_requested = 125/50/25).
+sample_replicate_axis.py) at all 5 sample-density-axis levels ("20"/"10"/"5"/
+"2"/"1" -> n_samples_requested = 500/250/125/50/25; "20"/"10" added 2026-09-21,
+the original 3 levels are unchanged).
 
 WHAT this plots
 ----------------
-Two figures, each ONE ROW of 3 scatter panels (5% / 2% / 1%, dense -> sparse
-left to right, matching this project's standing panel-ordering convention --
+Two figures, each a 2-ROW GRID of 5 scatter panels (top row 20% / 10% / 5%, bottom row
+2% / 1%, dense -> sparse in reading order, left to right then top to bottom; the 6th
+grid slot holds a text box with the reading guide and the spread summary; changed from
+a single row of 5 on 2026-09-21 because a 1x5 figure was unreadable at page width),
+matching this project's standing panel-ordering convention --
 e.g. make_length_and_variogram_figures.py's density-axis panels). Every panel
 shows all 10 replicates (rep0..rep9, sample_seed 1001-1010) as points:
   x = length_scale_m, taken AS-IS from
@@ -53,10 +57,10 @@ AXIS SCALE CHOICES (both log, both panels of both figures)
 Y-AXIS: log, in both figures. Observed ranges (see VERIFICATION output below,
 printed by this script every run) span >=3 orders of magnitude within a
 single figure:
-  - rbf_bootstrap best_smoothing: 0.00215 to 1.0 across all 30 (17-value grid since 2026-09-21; was 0.001 to 1.0 on the old 7-value grid) (level,
+  - rbf_bootstrap best_smoothing: 0.00215 to 1.0 across all 50 (17-value grid since 2026-09-21; was 0.001 to 1.0 on the old 7-value grid) (level,
     replicate) cells (SMOOTHING_GRID is itself log-like: values selected by
     CV from a small discrete grid, not a continuum).
-  - gp_mle noise_variance_real_units: ~5.5e-5 to ~5.37 across all 30 cells --
+  - gp_mle noise_variance_real_units: ~5.5e-5 to ~5.37 across all 50 cells --
     over 4.5 orders of magnitude. A linear y-axis would compress every level
     "5" replicate's noise variance (order 1, see below) into indistinguishable
     dots on the same scale as level "1" replicates near the MLE's lower
@@ -71,8 +75,8 @@ the sparser levels (this project's own case-study figure,
 make_length_case_study_figures.py, already frames these swings
 multiplicatively -- "~5x (gp_mle)" and "~11x (rbf_bootstrap)" at the 1%
 level): this script's own re-tabulation from length_scale_by_replicate.csv
-confirms a ~1.5x-1.6x within-panel spread at the 5% level growing to
-~5.1x (gp_mle) / ~11.3x (rbf_bootstrap) at the 1% level. Since length scale is
+confirms a ~1.2x-1.3x (20% level) to ~1.5x-1.6x (5% level) within-panel spread
+growing to ~5.1x (gp_mle) / ~11.3x (rbf_bootstrap) at the 1% level. Since length scale is
 a fundamentally multiplicative quantity here (and the y-axis is already log
 for the reason above), a log x-axis keeps the sparsest-level panel's few very
 large fitted length scales from stretching the panel so far that the tighter
@@ -83,18 +87,18 @@ SHARED AXIS LIMITS -- WITHIN each figure, NEVER between the two figures
 ------------------------------------------------------------------------------
 The point these figures are asked to make visually is that hyperparameter
 optimization gets LESS STABLE as sample density drops. That comparison is
-only readable if the 3 panels of a figure sit on identical axes, so a wider
+only readable if the 5 panels of a figure sit on identical axes, so a wider
 cloud on screen means a genuinely wider spread and not merely a rescaled
 panel. Therefore:
 
-  * WITHIN a figure, all 3 panels share one x-limit pair and one y-limit pair,
-    computed from ALL 30 points of that figure and applied EXPLICITLY with
+  * WITHIN a figure, all 5 panels share one x-limit pair and one y-limit pair,
+    computed from ALL 50 points of that figure and applied EXPLICITLY with
     ax.set_xlim / ax.set_ylim (not left to sharex/sharey autoscaling, which
     would make the actual numbers implicit and non-reproducible). sharex=
     sharey=True is still passed to plt.subplots so panning/ticking stay
     locked together, but the limits themselves are the explicit ones below.
-    y tick labels are drawn on the LEFTMOST panel only (they are identical by
-    construction); x tick labels stay on all 3 panels.
+    y tick labels are drawn on the LEFTMOST panel of each row only (they are
+    identical by construction); x tick labels stay on all 5 panels.
   * BETWEEN the two figures, NOTHING is shared. GP-MLE's y is a noise
     variance in Porosity %^2 and RBF's y is a dimensionless smoothing
     parameter -- different physical quantities that must not be forced onto
@@ -136,29 +140,34 @@ computed values on every run (verify_documented_values(); the run FAILS with
 an explicit ValueError if they ever drift, telling the maintainer to update
 both the constants and this docstring).
 
-Observed values (both figures, dense -> sparse), as of 2026-09-21 (rbf rows re-measured
-after the RBF SMOOTHING_GRID was made 3x denser: 7 -> 17 values, same range; gp_mle rows unchanged):
-  gp_mle x: log10-sd 0.051 / 0.170 / 0.227, ratio 1.51x / 3.97x / 5.12x
-  gp_mle y: log10-sd 0.096 / 1.348 / 1.854
-  rbf     x: log10-sd 0.061 / 0.204 / 0.323, ratio 1.56x / 4.69x / 11.34x
-  rbf     y: log10-sd 0.263 / 0.663 / 0.671, ratio 4.64x / 215.44x / 215.44x
+Observed values (both figures, dense -> sparse = 20% / 10% / 5% / 2% / 1%), as of
+2026-09-21 (rbf 5/2/1% rows re-measured after the RBF SMOOTHING_GRID was made 3x denser:
+7 -> 17 values, same range; the 20% and 10% columns were added the same day):
+  gp_mle x: log10-sd 0.029 / 0.048 / 0.051 / 0.170 / 0.227, ratio 1.24x / 1.52x / 1.51x / 3.97x / 5.12x
+  gp_mle y: log10-sd 0.051 / 0.060 / 0.096 / 1.348 / 1.854
+  rbf     x: log10-sd 0.046 / 0.084 / 0.061 / 0.204 / 0.323, ratio 1.25x / 1.94x / 1.56x / 4.69x / 11.34x
+  rbf     y: log10-sd 0.172 / 0.189 / 0.263 / 0.663 / 0.671, ratio 2.15x / 4.64x / 4.64x / 215.44x / 215.44x
+  (rbf replicates are tied at the 20% / 10% / 5% panels: 4 / 5 / 6 distinct (x, y) points out
+  of 10; no ties at 2% / 1%. gp_mle: 10 distinct points in every panel.)
 
 TWO CAVEATS THAT MUST NOT BE OVERSTATED
 ------------------------------------------------------------------------------
 1. The spread is NOT monotonically increasing with sparsity for every
-   quantity. It is monotone for gp_mle's x AND y and for rbf_bootstrap's x,
-   and, on the 17-value SMOOTHING_GRID measured 2026-09-21, for
-   rbf_bootstrap's smoothing parameter too (log10-sd 0.263 / 0.663 / 0.671).
-   On the previous 7-value grid it was NOT monotone (0.316 / 0.738 / 0.675).
+   quantity. Over the 5 levels it is monotone (in log10-sd) for gp_mle's x AND y
+   and, on the 17-value SMOOTHING_GRID measured 2026-09-21, for rbf_bootstrap's
+   smoothing parameter (log10-sd 0.172 / 0.189 / 0.263 / 0.663 / 0.671), but NOT for
+   rbf_bootstrap's length scale (0.046 / 0.084 / 0.061 / 0.204 / 0.323: the 10% level
+   is wider than the 5% level). On the previous 7-value grid the 5/2/1% smoothing
+   spread was NOT monotone (0.316 / 0.738 / 0.675).
    best_smoothing is still chosen from a discrete grid, so its per-panel
-   spread moves in jumps (ratios 4.64x / 215.44x / 215.44x) and should not
+   spread moves in jumps (ratios 2.15x / 4.64x / 4.64x / 215.44x / 215.44x) and should not
    be read as a fine-grained trend. Do not describe these figures as "all spreads grow monotonically as
    density drops". (The captions state monotone vs. non-monotone from the
    computed numbers, not from a literal, so they stay correct if the data
    changes.)
 2. gp_mle's y spread is a LOWER BOUND on the spread an unconstrained fit
-   would show. Three of the 30 fitted noise variances (2% rep3, 1% rep0,
-   1% rep5 -- the set is determined at runtime by at_optimizer_noise_floor(),
+   would show. Three of the 50 fitted noise variances (2% rep3, 1% rep0,
+   1% rep5; none at 20% / 10% / 5% -- the set is determined at runtime by at_optimizer_noise_floor(),
    not hardcoded in the plotting code) sit EXACTLY on the optimizer's lower
    bound for the WhiteKernel noise level (noise_level_bounds[0] = 1e-5 in
    normalized units; each run's own manifest records the bound it used, and
@@ -179,7 +188,7 @@ VERIFICATION (same "verify before trusting" pattern this project's other
 processed-data scripts already use, e.g. make_length_case_study_figures.py's
 DECISIVE CORRECTNESS CHECK)
 ------------------------------------------------------------------------------
-For each of the 2 methods x 3 axis levels x 10 replicates = 60 cells, this
+For each of the 2 methods x 5 axis levels x 10 replicates = 100 cells, this
 script (a) reads that cell's run directory from source_runs.json, (b) opens
 that run's OWN manifest.json and extracts the method-specific y-field
 (raising KeyError loudly if the field is missing -- never silently defaulting),
@@ -187,7 +196,7 @@ and (c) looks up that cell's x-value (length_scale_m) from
 length_scale_by_replicate.csv, requiring EXACTLY ONE matching
 (axis_level, replicate, method) row (raising ValueError otherwise). After
 assembly, this script asserts each (method, axis_level) group has EXACTLY 10
-rows and each method has EXACTLY 30 rows (3 levels x 10 replicates) before
+rows and each method has EXACTLY 50 rows (5 levels x 10 replicates) before
 plotting anything -- so a missing or duplicated manifest can never be plotted
 silently. The observed per-axis value ranges (both x and y, per level and
 overall) plus the per-level log10-SD / max-min-ratio spread statistics are
@@ -201,7 +210,7 @@ autoscaled, every figure runs a LIMIT CHECK after the limits are set. It
 verifies exactly two things, and raises ValueError (not assert -- so `python
 -O` cannot strip it, matching every other check in this file and in
 results/processed/) on either:
-  (a) all 3 panels ended up with the SAME final ax.get_xlim() and the SAME
+  (a) all 5 panels ended up with the SAME final ax.get_xlim() and the SAME
       final ax.get_ylim() -- this is the whole contract of the shared-axes
       change, and nothing else in the script enforces it; and
   (b) every plotted (x, y) DATA POINT lies inside those final limits (1e-12
@@ -211,7 +220,7 @@ limits always contain the data by construction, so in normal operation (b)
 only catches a downstream bug that changed or overrode the limits after
 set_xlim/set_ylim (e.g. a stray autoscale, or a future edit plotting extra
 points). It does NOT check the things that could actually cross a spine:
-marker radius (s=70, s=230 for the boundary-stop rings), the replicate-id
+marker radius (s=SCATTER_S, s=RING_S for the boundary-stop rings), the replicate-id
 annotation text, and the per-panel spread box are all drawn in display space
 and are not covered by any check here -- they were verified by eye only.
 
@@ -236,7 +245,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(_REPO_ROOT))
 
 from src.experiments.base_case import NX, NY  # noqa: E402
-from src.experiments.sample_density_axis import ALL_AXIS_LEVELS  # noqa: E402
+from src.experiments.sample_density_axis import EXTENDED_AXIS_LEVELS  # noqa: E402
 from src.experiments.sample_replicate_axis import (  # noqa: E402
     AXIS_HMAJ1,
     N_SAMPLES_REQUESTED_BY_LEVEL,
@@ -245,6 +254,10 @@ from src.experiments.sample_replicate_axis import (  # noqa: E402
 )
 
 PROCESSED_DIR = _REPO_ROOT / "results" / "processed" / "sample_replicate_axis"
+EXTRA_RECORD_PATH = PROCESSED_DIR / "extra_density_levels_record.json"
+# 5 levels, dense -> sparse ("20", "10", "5", "2", "1"), left to right in the
+# figures (2026-09-21: was the original 3-level list ["5", "2", "1"]).
+AXIS_LEVELS = list(EXTENDED_AXIS_LEVELS)
 FIGURES_DIR = _REPO_ROOT / "results" / "figures" / "sample_replicate_axis"
 
 # Matches make_sample_replicate_figures.py's DPI, the most similar existing
@@ -275,18 +288,18 @@ LIMIT_CHECK_RTOL = 1e-12
 # figures is taken from these constants -- the figures format everything from
 # the just-computed stats -- these exist solely so the docstring cannot
 # silently go stale if the source runs in source_runs.json change. Values are
-# ordered dense -> sparse, i.e. ALL_AXIS_LEVELS order ("5", "2", "1").
+# ordered dense -> sparse, i.e. AXIS_LEVELS order ("20", "10", "5", "2", "1").
 DOCUMENTED_SPREAD = {
     "gp_mle": {
-        "x_log10_sd": (0.051, 0.170, 0.227),
-        "x_ratio": (1.51, 3.97, 5.12),
-        "y_log10_sd": (0.096, 1.348, 1.854),
+        "x_log10_sd": (0.029, 0.048, 0.051, 0.170, 0.227),
+        "x_ratio": (1.24, 1.52, 1.51, 3.97, 5.12),
+        "y_log10_sd": (0.051, 0.060, 0.096, 1.348, 1.854),
     },
     "rbf_bootstrap": {
-        "x_log10_sd": (0.061, 0.204, 0.323),
-        "x_ratio": (1.56, 4.69, 11.34),
-        "y_log10_sd": (0.263, 0.663, 0.671),
-        "y_ratio": (4.64, 215.44, 215.44),
+        "x_log10_sd": (0.046, 0.084, 0.061, 0.204, 0.323),
+        "x_ratio": (1.25, 1.94, 1.56, 4.69, 11.34),
+        "y_log10_sd": (0.172, 0.189, 0.263, 0.663, 0.671),
+        "y_ratio": (2.15, 4.64, 4.64, 215.44, 215.44),
     },
 }
 # Rounding used when comparing: the docstring quotes log10-SDs to 3 decimals
@@ -307,15 +320,35 @@ METHOD_MARKERS = {"rbf_bootstrap": "^", "gp_mle": "D"}
 METHOD_LABELS = {"rbf_bootstrap": "RBF+bootstrap", "gp_mle": "GP-MLE"}
 
 Y_FIELD_LABELS = {
-    "rbf_bootstrap": "CV-selected RBF smoothing parameter\n(params.best_smoothing, log scale)",
+    "rbf_bootstrap": "RBF smoothing parameter\n(params.best_smoothing, log scale)",
     "gp_mle": (
-        "Noise variance (Porosity %$^2$) -- GP's smoothing-equivalent\n"
-        "regularization term (params.fitted_hyperparameters."
-        "noise_variance_real_units), log scale"
+        "GP noise variance (Porosity %$^2$, log scale)\n"
+        "smoothing-equivalent term"
     ),
 }
 
-X_LABEL = "Fitted length scale (m, log scale) -- from length_scale_by_replicate.csv"
+X_LABEL = "Fitted length scale (m, log scale)"
+
+# --- layout (2-row grid, 3 columns; 5 panels + 1 text slot) and font sizes.
+# The published page shows the figure at ~930 px wide (~58 px per inch at this
+# figsize), so fonts are set larger than the earlier 1x3 / 1x5 versions (8.5 / 6.5 /
+# 7 pt) to stay readable there.
+FIG_SIZE = (16.0, 11.5)
+GRID_ROWS, GRID_COLS = 2, 3
+FIRST_PANEL_OF_ROW = (0, 3)      # panel indices (into AXIS_LEVELS) that carry the y label/ticks
+SCATTER_S = 95
+RING_S = 300
+FS_TITLE = 12.5
+FS_AXLABEL = 12
+FS_TICK = 11
+FS_REPLICATE = 9
+FS_BOX = 9
+FS_SLOT = 10
+FS_SUPTITLE = 15
+FS_CAPTION = 9.5
+CAPTION_WRAP = 165
+LABEL_NEIGHBOUR_DX = 0.22   # axes fraction: a right-hand neighbour closer than this ...
+LABEL_NEIGHBOUR_DY = 0.06   # ... at a height within this makes the label go to the left
 
 
 def load_length_df() -> pd.DataFrame:
@@ -330,8 +363,17 @@ def load_source_runs() -> dict:
 
 
 def load_replicate_seeds() -> dict:
+    """replicate_seeds.json only records the original 3 levels; the n_samples_actual of the
+    two added levels ("20"/"10") comes from extra_density_levels_record.json and is merged in."""
     with open(PROCESSED_DIR / "replicate_seeds.json", "r", encoding="utf-8") as f:
-        return json.load(f)
+        rec = json.load(f)
+    with open(EXTRA_RECORD_PATH, "r", encoding="utf-8") as f:
+        extra = json.load(f)["replicate_axis"]
+    for lvl, actual in extra["n_samples_actual"].items():
+        if lvl in rec["n_samples_actual"]:
+            raise ValueError(f"level {lvl} present in both replicate_seeds.json and the extra record")
+        rec["n_samples_actual"][lvl] = actual
+    return rec
 
 
 def extract_y_value(manifest_params: dict, method: str) -> float:
@@ -380,10 +422,10 @@ def build_dataset(method: str, length_df: pd.DataFrame, source_runs: dict) -> pd
     """Assemble one method's (axis_level, replicate) -> (length_scale_m,
     y_value) table by reading each run's OWN manifest.json fresh (y_value)
     and cross-referencing length_scale_by_replicate.csv (x_value, NOT
-    recomputed). Raises if any of the expected 3 levels x 10 replicates = 30
+    recomputed). Raises if any of the expected 5 levels x 10 replicates = 50
     cells is missing, duplicated, or mismatched."""
     rows = []
-    for level in ALL_AXIS_LEVELS:
+    for level in AXIS_LEVELS:
         for rep in REPLICATE_IDS:
             run_dir = _REPO_ROOT / source_runs[level][rep][method]
             manifest_path = run_dir / "manifest.json"
@@ -424,13 +466,13 @@ def build_dataset(method: str, length_df: pd.DataFrame, source_runs: dict) -> pd
             )
 
     df = pd.DataFrame(rows)
-    expected_total = len(ALL_AXIS_LEVELS) * len(REPLICATE_IDS)
+    expected_total = len(AXIS_LEVELS) * len(REPLICATE_IDS)
     if len(df) != expected_total:
         raise ValueError(
-            f"{method}: expected {expected_total} rows (({len(ALL_AXIS_LEVELS)} levels) x "
+            f"{method}: expected {expected_total} rows (({len(AXIS_LEVELS)} levels) x "
             f"({len(REPLICATE_IDS)} replicates)), found {len(df)}."
         )
-    for level in ALL_AXIS_LEVELS:
+    for level in AXIS_LEVELS:
         n_level = len(df[df["axis_level"] == level])
         if n_level != len(REPLICATE_IDS):
             raise ValueError(
@@ -440,9 +482,9 @@ def build_dataset(method: str, length_df: pd.DataFrame, source_runs: dict) -> pd
 
     print(
         f"{method}: verified {len(df)} manifest reads "
-        f"({len(ALL_AXIS_LEVELS)} levels x {len(REPLICATE_IDS)} replicates)."
+        f"({len(AXIS_LEVELS)} levels x {len(REPLICATE_IDS)} replicates)."
     )
-    for level in ALL_AXIS_LEVELS:
+    for level in AXIS_LEVELS:
         sub = df[df["axis_level"] == level]
         stats = panel_spread_stats(sub)
         print(
@@ -456,6 +498,18 @@ def build_dataset(method: str, length_df: pd.DataFrame, source_runs: dict) -> pd
             f"max/min={stats['x_ratio']:.2f}x | "
             f"y log10-sd(ddof=1)={stats['y_log10_sd']:.3f}, "
             f"max/min={stats['y_ratio']:.6g}x"
+        )
+        tie_key = list(zip(np.log10(sub["length_scale_m"]).round(3), np.log10(sub["y_value"]).round(3)))
+        tie_groups = {}
+        for rep_id, k in zip(sub["replicate"], tie_key):
+            tie_groups.setdefault(k, []).append(rep_id)
+        ties = [",".join(sorted((r.replace("rep", "") for r in g), key=int))
+                for g in tie_groups.values() if len(g) > 1]
+        print(
+            f"    distinct (x,y) points (log10 rounded to 3 dp): {len(tie_groups)}/10; "
+            f"tied replicate groups: {ties if ties else 'none'}; "
+            f"distinct x values: {sub['length_scale_m'].round(6).nunique()}/10, "
+            f"distinct y values: {sub['y_value'].round(12).nunique()}/10"
         )
         n_floor = int(sub["at_noise_floor"].sum())
         if n_floor:
@@ -517,7 +571,7 @@ def _trend_phrase(values) -> str:
     vals = [float(v) for v in values]
     if all(b > a for a, b in zip(vals, vals[1:])):
         return "widens monotonically as density drops"
-    widest = list(ALL_AXIS_LEVELS)[int(np.argmax(vals))]
+    widest = list(AXIS_LEVELS)[int(np.argmax(vals))]
     return f"does NOT widen monotonically (it is widest at the {widest}% level)"
 
 
@@ -526,7 +580,8 @@ def _fmt_seq(values, fmt: str) -> str:
     return " -> ".join(format(float(v), fmt) for v in values)
 
 
-def _emptiest_corner(sub: pd.DataFrame, xlim: tuple, ylim: tuple) -> tuple:
+def _emptiest_corner(sub: pd.DataFrame, xlim: tuple, ylim: tuple, box_w: float,
+                     box_h: float) -> tuple:
     """Pick the corner of a panel holding the fewest plotted points, so the
     spread-annotation box can be placed without hand-nudging. Deterministic:
     corners are tested in a fixed preference order (lower right first) and the
@@ -537,12 +592,21 @@ def _emptiest_corner(sub: pd.DataFrame, xlim: tuple, ylim: tuple) -> tuple:
     fy = (np.log10(sub["y_value"].to_numpy(dtype=float)) - np.log10(ylim[0])) / (
         np.log10(ylim[1]) - np.log10(ylim[0])
     )
-    box_w, box_h = 0.48, 0.34  # approximate footprint of the text box
+    # box_w / box_h: footprint of the text box in axes fractions (computed by the caller
+    # from the text size); a small margin covers the marker radius.
+    box_w, box_h = box_w + 0.03, box_h + 0.03
+    # The last two candidates ("mid ...") sit just above the lower corners; they are only
+    # chosen if they overlap strictly fewer points than every corner (ties keep the corners).
+    mid_y = 0.03 + box_h + 0.04
     candidates = [
         ("lower right", 0.98, 0.03, "right", "bottom", (fx > 1 - box_w) & (fy < box_h)),
         ("upper left", 0.02, 0.97, "left", "top", (fx < box_w) & (fy > 1 - box_h)),
         ("upper right", 0.98, 0.97, "right", "top", (fx > 1 - box_w) & (fy > 1 - box_h)),
         ("lower left", 0.02, 0.03, "left", "bottom", (fx < box_w) & (fy < box_h)),
+        ("mid left", 0.02, mid_y, "left", "bottom",
+         (fx < box_w) & (fy > mid_y - 0.03) & (fy < mid_y + box_h)),
+        ("mid right", 0.98, mid_y, "right", "bottom",
+         (fx > 1 - box_w) & (fy > mid_y - 0.03) & (fy < mid_y + box_h)),
     ]
     best = min(candidates, key=lambda c: int(c[5].sum()))
     return best[1], best[2], best[3], best[4]
@@ -570,13 +634,13 @@ def make_figure(method: str, df: pd.DataFrame, replicate_seeds: dict) -> Path:
     color = METHOD_COLORS[method]
     marker = METHOD_MARKERS[method]
 
-    # --- Shared limits: computed ONCE from this figure's own 30 points and
+    # --- Shared limits: computed ONCE from this figure's own 50 points and
     # applied explicitly to every panel. Never shared with the other figure
     # (different y quantity; see module docstring "SHARED AXIS LIMITS").
     xlim = shared_log_limits(df["length_scale_m"])
     ylim = shared_log_limits(df["y_value"])
     print(
-        f"  shared axis limits for the {METHOD_LABELS[method]} figure (all 3 panels): "
+        f"  shared axis limits for the {METHOD_LABELS[method]} figure (all 5 panels): "
         f"x=[{xlim[0]:.6g}, {xlim[1]:.6g}] m, y=[{ylim[0]:.6g}, {ylim[1]:.6g}]"
     )
 
@@ -585,15 +649,23 @@ def make_figure(method: str, df: pd.DataFrame, replicate_seeds: dict) -> Path:
     # of quoting literals that would silently go stale if the source runs
     # changed (the shared limits quoted in the caption already worked this way).
     level_stats = {}
+    pending_boxes = []  # (ax, sub, box_lines): spread boxes placed after the final layout
     floored_cells = []  # (axis_level, replicate) of every circled point
     noise_floor_values = set()
 
-    fig, axes = plt.subplots(1, 3, figsize=(18, 6.8), sharex=True, sharey=True)
-    for i_panel, (ax, level) in enumerate(zip(axes, ALL_AXIS_LEVELS)):
+    fig = plt.figure(figsize=FIG_SIZE)
+    gs = fig.add_gridspec(GRID_ROWS, GRID_COLS, wspace=0.10, hspace=0.36)
+    axes = []
+    for i_panel in range(len(AXIS_LEVELS)):
+        kw = {} if not axes else {"sharex": axes[0], "sharey": axes[0]}
+        axes.append(fig.add_subplot(gs[i_panel // GRID_COLS, i_panel % GRID_COLS], **kw))
+    slot_ax = fig.add_subplot(gs[GRID_ROWS - 1, GRID_COLS - 1])   # the 6th grid slot: text only
+    slot_ax.axis("off")
+    for i_panel, (ax, level) in enumerate(zip(axes, AXIS_LEVELS)):
         sub = df[df["axis_level"] == level].sort_values("replicate")
         ax.scatter(
             sub["length_scale_m"], sub["y_value"], color=color, marker=marker,
-            s=70, edgecolors="black", linewidths=0.7, alpha=0.85, zorder=3,
+            s=SCATTER_S, edgecolors="black", linewidths=0.7, alpha=0.85, zorder=3,
         )
         # Boundary stops (gp_mle only): the MLE stopped exactly ON the
         # WhiteKernel noise_level lower bound, so the unconstrained optimum
@@ -605,7 +677,7 @@ def make_figure(method: str, df: pd.DataFrame, replicate_seeds: dict) -> Path:
             ax.scatter(
                 floored["length_scale_m"], floored["y_value"],
                 facecolors="none", edgecolors="black", marker="o",
-                s=230, linewidths=1.1, zorder=4,
+                s=RING_S, linewidths=1.1, zorder=4,
             )
             floored_cells.extend(
                 (level, rep) for rep in sorted(
@@ -636,6 +708,7 @@ def make_figure(method: str, df: pd.DataFrame, replicate_seeds: dict) -> Path:
                 np.log10(sub["y_value"]).round(TIE_LOG_TOL),
             )
         )
+        groups = []
         for _, grp in sub.groupby("_tie_key", sort=False):
             reps_label = ",".join(
                 sorted(
@@ -643,25 +716,38 @@ def make_figure(method: str, df: pd.DataFrame, replicate_seeds: dict) -> Path:
                     key=int,
                 )
             )
+            groups.append((float(grp["length_scale_m"].iloc[0]), float(grp["y_value"].iloc[0]),
+                           reps_label))
+        # Label side: by default to the upper right of the point. If another point lies to
+        # the RIGHT at (nearly) the same height and close by (axes fractions below), this
+        # label would run into that neighbour, so it is put to the upper LEFT instead.
+        def _frac(v, lim):
+            return (np.log10(v) - np.log10(lim[0])) / (np.log10(lim[1]) - np.log10(lim[0]))
+        for gx, gy, glabel in groups:
+            crowded_right = any(
+                (0.0 < _frac(ox, xlim) - _frac(gx, xlim) < LABEL_NEIGHBOUR_DX)
+                and abs(_frac(oy, ylim) - _frac(gy, ylim)) < LABEL_NEIGHBOUR_DY
+                for ox, oy, _ in groups
+            )
             ax.annotate(
-                reps_label,
-                (grp["length_scale_m"].iloc[0], grp["y_value"].iloc[0]),
-                textcoords="offset points", xytext=(5, 4),
-                fontsize=6.5, color="dimgray", alpha=0.9,
+                glabel, (gx, gy), textcoords="offset points",
+                xytext=(-6, 4) if crowded_right else (5, 4),
+                ha="right" if crowded_right else "left",
+                fontsize=FS_REPLICATE, color="dimgray", alpha=0.95,
             )
         ax.set_xscale("log")
         ax.set_yscale("log")
         # Explicit shared limits (NOT autoscaled) -- identical numbers on all
-        # 3 panels so a wider cloud means a genuinely wider spread.
+        # 5 panels so a wider cloud means a genuinely wider spread.
         ax.set_xlim(xlim)
         ax.set_ylim(ylim)
-        ax.set_xlabel(X_LABEL, fontsize=8.5)
-        if i_panel == 0:
-            ax.set_ylabel(Y_FIELD_LABELS[method], fontsize=8.5)
+        ax.set_xlabel(X_LABEL, fontsize=FS_AXLABEL)
+        if i_panel in FIRST_PANEL_OF_ROW:
+            ax.set_ylabel(Y_FIELD_LABELS[method], fontsize=FS_AXLABEL)
         else:
-            # y tick labels only on the leftmost panel (all panels share the
-            # exact same y limits, so repeating them adds nothing); x tick
-            # labels are kept on all 3 panels.
+            # y tick labels only on the leftmost panel of each row (all panels share
+            # the exact same y limits, so repeating them adds nothing); x tick
+            # labels are kept on all 5 panels.
             ax.tick_params(labelleft=False)
         ax.tick_params(labelbottom=True)
         # With the shared x limits above, a panel can span slightly more than
@@ -675,35 +761,29 @@ def make_figure(method: str, df: pd.DataFrame, replicate_seeds: dict) -> Path:
         ax.xaxis.set_minor_formatter(
             LogFormatterSciNotation(labelOnlyBase=False, minor_thresholds=(np.inf, np.inf))
         )
-        ax.set_title(_level_label(level, replicate_seeds), fontsize=10.5)
+        ax.set_title(_level_label(level, replicate_seeds), fontsize=FS_TITLE)
+        ax.tick_params(axis="both", which="both", labelsize=FS_TICK)
         ax.grid(alpha=0.3, which="both")
 
         # --- Spread annotation: the numbers behind the visual claim.
         stats = panel_spread_stats(sub)
         level_stats[level] = stats
         box_lines = [
-            "spread of these 10 points",
-            f"x: log10-sd {stats['x_log10_sd']:.3f} | max/min {stats['x_ratio']:.2f}x",
-            f"y: log10-sd {stats['y_log10_sd']:.3f} | max/min {stats['y_ratio']:.6g}x",
+            "spread (log10-sd | max/min)",
+            f"x: {stats['x_log10_sd']:.3f} | {stats['x_ratio']:.2f}x",
+            f"y: {stats['y_log10_sd']:.3f} | {stats['y_ratio']:.6g}x",
         ]
         if len(floored):
-            box_lines.append(
-                f"y sd is a LOWER BOUND: {len(floored)} circled pt(s)\n"
-                f"sit ON the noise_level lower bound"
-            )
-        bx, by, ha, va = _emptiest_corner(sub, xlim, ylim)
-        ax.text(
-            bx, by, "\n".join(box_lines), transform=ax.transAxes,
-            ha=ha, va=va, fontsize=7.0, color="black", family="monospace",
-            bbox=dict(boxstyle="round,pad=0.35", facecolor="white",
-                      edgecolor="dimgray", alpha=0.88),
-            zorder=6,
-        )
+            box_lines.append("y sd is a LOWER BOUND:")
+            box_lines.append(f"{len(floored)} circled pt(s) ON the")
+            box_lines.append("noise_level lower bound")
+        # placed AFTER the final subplots_adjust (below), when the axes size is known
+        pending_boxes.append((ax, sub, box_lines))
 
     # --- LIMIT CHECK (two clauses; raises ValueError, never `assert`, so
     # `python -O` cannot strip it and so it matches every other check in this
     # file). WHAT IT COVERS:
-    #   (a) all 3 panels really did end up with the SAME final x limits and
+    #   (a) all 5 panels really did end up with the SAME final x limits and
     #       the SAME final y limits -- this is the actual contract of the
     #       shared-axes layout and nothing else in the script enforces it;
     #   (b) every plotted DATA POINT lies inside those final limits.
@@ -719,7 +799,7 @@ def make_figure(method: str, df: pd.DataFrame, replicate_seeds: dict) -> Path:
     x_all = df["length_scale_m"].to_numpy(dtype=float)
     y_all = df["y_value"].to_numpy(dtype=float)
     ref_x, ref_y = tuple(axes[0].get_xlim()), tuple(axes[0].get_ylim())
-    for ax, level in zip(axes, ALL_AXIS_LEVELS):
+    for ax, level in zip(axes, AXIS_LEVELS):
         got_x, got_y = tuple(ax.get_xlim()), tuple(ax.get_ylim())
         # (a) identical limits across panels
         for name, ref, got in (("x", ref_x, got_x), ("y", ref_y, got_y)):
@@ -727,8 +807,8 @@ def make_figure(method: str, df: pd.DataFrame, replicate_seeds: dict) -> Path:
                 raise ValueError(
                     f"{method}: panels do not share identical {name} limits -- panel "
                     f"axis_level={level} has [{got[0]!r}, {got[1]!r}] but the first panel "
-                    f"({ALL_AXIS_LEVELS[0]}) has [{ref[0]!r}, {ref[1]!r}]. The whole point "
-                    f"of this layout is that the 3 panels are directly comparable, so this "
+                    f"({AXIS_LEVELS[0]}) has [{ref[0]!r}, {ref[1]!r}]. The whole point "
+                    f"of this layout is that the 5 panels are directly comparable, so this "
                     f"is a hard failure."
                 )
         # (b) data points inside those limits
@@ -747,20 +827,20 @@ def make_figure(method: str, df: pd.DataFrame, replicate_seeds: dict) -> Path:
         f"the spread boxes are NOT covered by this check)."
     )
 
-    plt.suptitle(
+    fig.suptitle(
         f"{METHOD_LABELS[method]}: fitted length scale vs. "
         f"{'smoothing parameter' if method == 'rbf_bootstrap' else 'noise-variance (smoothing-equivalent) parameter'} "
-        "across 10 sample-location replicates, 3 sample-density levels",
-        fontsize=13, y=1.01,
+        "across 10 sample-location replicates, 5 sample-density levels",
+        fontsize=FS_SUPTITLE, y=0.995,
     )
 
     # --- Caption numbers are FORMATTED FROM level_stats / floored_cells (the
     # values just computed from the manifests), never typed in as literals, so
     # the caption cannot disagree with the points it sits under.
-    x_sds = [level_stats[lv]["x_log10_sd"] for lv in ALL_AXIS_LEVELS]
-    x_ratios = [level_stats[lv]["x_ratio"] for lv in ALL_AXIS_LEVELS]
-    y_sds = [level_stats[lv]["y_log10_sd"] for lv in ALL_AXIS_LEVELS]
-    y_ratios = [level_stats[lv]["y_ratio"] for lv in ALL_AXIS_LEVELS]
+    x_sds = [level_stats[lv]["x_log10_sd"] for lv in AXIS_LEVELS]
+    x_ratios = [level_stats[lv]["x_ratio"] for lv in AXIS_LEVELS]
+    y_sds = [level_stats[lv]["y_log10_sd"] for lv in AXIS_LEVELS]
+    y_ratios = [level_stats[lv]["y_ratio"] for lv in AXIS_LEVELS]
 
     if method == "rbf_bootstrap":
         y_field_caption = (
@@ -806,36 +886,70 @@ def make_figure(method: str, df: pd.DataFrame, replicate_seeds: dict) -> Path:
         f"Each panel: all 10 sample-seed replicates (rep0-rep9, sample_seed 1001-1010, "
         f"labelled by replicate index next to each point) at ONE sample-density-axis level, "
         f"SAME ground-truth field for every replicate/level (TRUTH_SEED={TRUTH_SEED}, "
-        f"range={AXIS_HMAJ1:g} m). Panels ordered dense -> sparse left to right (5% -> 2% -> "
-        "1% requested; actual post-dedup counts noted per panel). x = length_scale_m taken "
+        f"range={AXIS_HMAJ1:g} m). Panels ordered dense -> sparse in reading order (top row 20% -> "
+        "10% -> 5%, bottom row 2% -> 1% requested; actual post-dedup counts noted per panel). "
+        "x = length_scale_m taken "
         "AS-IS from length_scale_by_replicate.csv (NOT recomputed here -- see that file's own "
         "per-row length_definition/source columns). " + y_field_caption + " Both axes are "
-        "log-scaled, and ALL 3 PANELS OF THIS FIGURE SHARE IDENTICAL x AND y LIMITS "
+        "log-scaled, and ALL 5 PANELS OF THIS FIGURE SHARE IDENTICAL x AND y LIMITS "
         f"(x=[{xlim[0]:.4g}, {xlim[1]:.4g}] m, y=[{ylim[0]:.4g}, {ylim[1]:.4g}], computed from "
-        "this figure's own 30 points and padded symmetrically in log space), so a wider cloud "
-        "means a genuinely wider spread; y tick labels are drawn on the leftmost panel only. "
+        "this figure's own 50 points and padded symmetrically in log space), so a wider cloud "
+        "means a genuinely wider spread; y tick labels are drawn on the leftmost panel of each row only. "
         "Limits are NOT shared with the other figure of this pair, whose y is a different "
         "physical quantity. The box in each panel reports that panel's spread: SD of "
-        "log10(value) (ddof=1) and max/min ratio, for x and y separately. " + spread_caption
+        "log10(value) (ddof=1) and max/min ratio, for x and y separately. The spread summary "
+        "(trend wording, per-level numbers and, for GP-MLE, the boundary-stop note) is in the "
+        "text box in the 6th grid slot."
     )
 
-    # Caption wrap widened from 195 to 265 chars (still inside the 18in figure
-    # width at fontsize 7.3) and the axes bottom raised from 0.22 to 0.24: the
-    # caption grew by the shared-limits / spread-box / boundary-stop
-    # explanations, and at the old wrap width its taller text block ran into
-    # the panels' x-axis labels.
-    fig.text(
-        0.5, 0.005, textwrap.fill(caption, 265),
-        ha="center", va="bottom", fontsize=7.3, color="dimgray",
+    # 6th grid slot: reading guide + spread summary (formatted from the computed stats).
+    guide = (
+        "How to read this figure\n"
+        "Each marker = one sample-seed replicate; the number next to it is the replicate "
+        "index (ties = comma-separated list). "
+        + ("Circled markers sit ON the optimizer's noise_level lower bound. "
+           if method == "gp_mle" else "")
+        + "All 5 panels share identical x and y limits.\n\nSpread summary\n" + spread_caption
     )
-    plt.subplots_adjust(left=0.055, bottom=0.24, right=0.99, top=0.82, wspace=0.32)
+    slot_ax.text(
+        0.0, 1.0, ("\n".join(textwrap.fill(par, 62) for par in guide.split("\n"))), transform=slot_ax.transAxes,
+        ha="left", va="top", fontsize=FS_SLOT, color="black",
+    )
+
+    # The bottom margin is reserved in proportion to the caption's number of lines, so a
+    # longer caption can never run into the x-axis labels.
+    caption_wrapped = textwrap.fill(caption, CAPTION_WRAP)
+    n_caption_lines = caption_wrapped.count("\n") + 1
+    caption_height_frac = n_caption_lines * FS_CAPTION * 1.35 / 72.0 / FIG_SIZE[1]
+    fig.text(
+        0.5, 0.004, caption_wrapped,
+        ha="center", va="bottom", fontsize=FS_CAPTION, color="dimgray",
+    )
+    fig.subplots_adjust(left=0.075, right=0.99, top=0.925,
+                        bottom=caption_height_frac + 0.06)
+
+    # Spread boxes: the footprint (axes fractions) is computed from the text size and the
+    # FINAL axes size, then the emptiest corner is picked from it.
+    for ax, sub, box_lines in pending_boxes:
+        pos = ax.get_position()
+        axw_in, axh_in = pos.width * FIG_SIZE[0], pos.height * FIG_SIZE[1]
+        box_w = (max(len(l) for l in box_lines) * 0.62 * FS_BOX / 72.0 + 0.3) / axw_in
+        box_h = (len(box_lines) * FS_BOX * 1.3 / 72.0 + 0.3) / axh_in
+        bx, by, ha, va = _emptiest_corner(sub, xlim, ylim, box_w, box_h)
+        ax.text(
+            bx, by, chr(10).join(box_lines), transform=ax.transAxes,
+            ha=ha, va=va, fontsize=FS_BOX, color="black", family="monospace",
+            bbox=dict(boxstyle="round,pad=0.35", facecolor="white",
+                      edgecolor="dimgray", alpha=0.88),
+            zorder=6,
+        )
 
     FIGURES_DIR.mkdir(parents=True, exist_ok=True)
     out_name = (
         "length_vs_noise_gp_mle.png" if method == "gp_mle" else "length_vs_smoothing_rbf_bootstrap.png"
     )
     out = FIGURES_DIR / out_name
-    plt.savefig(out, dpi=FIG_DPI, bbox_inches="tight")
+    fig.savefig(out, dpi=FIG_DPI, bbox_inches="tight")
     plt.close(fig)
     print(f"{out.name}: {out} ({out.stat().st_size} bytes)")
     return out
@@ -863,16 +977,16 @@ def verify_documented_values(method: str, df: pd.DataFrame) -> None:
     documented = DOCUMENTED_SPREAD[method]
     computed_by_level = {
         level: panel_spread_stats(df[df["axis_level"] == level])
-        for level in ALL_AXIS_LEVELS
+        for level in AXIS_LEVELS
     }
     for key, expected_seq in documented.items():
         decimals = DOCUMENTED_DECIMALS[key]
-        if len(expected_seq) != len(ALL_AXIS_LEVELS):
+        if len(expected_seq) != len(AXIS_LEVELS):
             raise ValueError(
                 f"DOCUMENTED_SPREAD[{method!r}][{key!r}] has {len(expected_seq)} entries "
-                f"but there are {len(ALL_AXIS_LEVELS)} axis levels."
+                f"but there are {len(AXIS_LEVELS)} axis levels."
             )
-        for level, expected in zip(ALL_AXIS_LEVELS, expected_seq):
+        for level, expected in zip(AXIS_LEVELS, expected_seq):
             got = computed_by_level[level][key]
             if round(got, decimals) != round(float(expected), decimals):
                 problems.append(
@@ -895,7 +1009,7 @@ def verify_documented_values(method: str, df: pd.DataFrame) -> None:
             def _fmt(cells):
                 return ", ".join(
                     f"{lv}% {rep}"
-                    for lv, rep in sorted(cells, key=lambda c: (ALL_AXIS_LEVELS.index(c[0]), c[1]))
+                    for lv, rep in sorted(cells, key=lambda c: (AXIS_LEVELS.index(c[0]), c[1]))
                 ) or "(none)"
             problems.append(
                 f"{method} boundary-stop cells: docstring names {_fmt(documented_cells)}, "

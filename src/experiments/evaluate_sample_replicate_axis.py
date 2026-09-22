@@ -5,6 +5,16 @@ reused UNCHANGED at every level) x 3 density levels ("5"/"2"/"1" ->
 n_samples_requested = 125/50/25) x 4 methods (kriging / SGS / RBF+bootstrap /
 GP-MLE) = 120 (level, replicate, method) cells.
 
+EXTENDED 2026-09-21 (user request): the same 10 replicates were also run at two
+denser levels, "20" (n_samples_requested=500) and "10" (250), so this script
+now evaluates 5 levels (sample_density_axis.EXTENDED_AXIS_LEVELS, dense ->
+sparse: 20, 10, 5, 2, 1) x 10 replicates x 4 methods = 200 cells (metrics.csv
+600 rows). Rows of the original 3 levels are unchanged. The new levels'
+source_runs.json entries are added by src/experiments/run_extra_density_levels.py
+(not by sample_replicate_axis.main(), which would revert the level-5 RBF pins).
+Wherever the text below says "3 levels" / "120 cells" / "360 rows" it describes
+the original design; the arithmetic in the code uses len(EXTENDED_AXIS_LEVELS).
+
 Purpose: quantify how much each method's accuracy/calibration/predictive-
 variance moves from sample PLACEMENT alone, with sample count and ground
 truth held fixed WITHIN a level -- a different question from the
@@ -136,7 +146,7 @@ from src.experiments.base_case_conditioning import (
     get_conditioning_samples,
 )
 from src.experiments.kriging import BACKTR_ZMAX, BACKTR_ZMIN, LTAIL, LTPAR, UTAIL, UTPAR
-from src.experiments.sample_density_axis import ALL_AXIS_LEVELS
+from src.experiments.sample_density_axis import EXTENDED_AXIS_LEVELS
 from src.experiments.sample_replicate_axis import (
     AXIS_HMAJ1,
     AXIS_HMIN1,
@@ -421,12 +431,12 @@ def main():
     with open(SOURCE_RUNS_PATH, "r", encoding="utf-8") as f:
         source_runs = json.load(f)
 
-    if set(source_runs) != set(ALL_AXIS_LEVELS):
+    if set(source_runs) != set(EXTENDED_AXIS_LEVELS):
         raise ValueError(
             f"{SOURCE_RUNS_PATH} has axis levels {sorted(source_runs)}; expected "
-            f"{sorted(ALL_AXIS_LEVELS)}."
+            f"{sorted(EXTENDED_AXIS_LEVELS)}."
         )
-    for lvl in ALL_AXIS_LEVELS:
+    for lvl in EXTENDED_AXIS_LEVELS:
         if set(source_runs[lvl]) != set(REPLICATE_IDS):
             raise ValueError(
                 f"{SOURCE_RUNS_PATH} level '{lvl}' has replicate ids "
@@ -438,7 +448,7 @@ def main():
     variance_source_rows = []
     length_scale_rows = []
 
-    for axis_level in ALL_AXIS_LEVELS:
+    for axis_level in EXTENDED_AXIS_LEVELS:
         for replicate_id in REPLICATE_IDS:
             print(
                 f"\nEvaluating level '{axis_level}' {replicate_id} "
@@ -471,11 +481,11 @@ def main():
     if metrics_df["value"].isna().any() or not np.all(np.isfinite(metrics_df["value"].values)):
         raise ValueError("metrics_df contains NaN/inf values -- see printed metrics above.")
 
-    expected_n_rows = len(ALL_AXIS_LEVELS) * len(REPLICATE_IDS) * len(METHODS) * len(METRICS)
+    expected_n_rows = len(EXTENDED_AXIS_LEVELS) * len(REPLICATE_IDS) * len(METHODS) * len(METRICS)
     if len(metrics_df) != expected_n_rows:
         raise ValueError(
             f"metrics_df has {len(metrics_df)} rows; expected {expected_n_rows} "
-            f"({len(ALL_AXIS_LEVELS)} levels x {len(REPLICATE_IDS)} replicates x "
+            f"({len(EXTENDED_AXIS_LEVELS)} levels x {len(REPLICATE_IDS)} replicates x "
             f"{len(METHODS)} methods x {len(METRICS)} metrics: {', '.join(METRICS)})."
         )
     if set(metrics_df["metric"]) != set(METRICS):
@@ -541,11 +551,11 @@ def main():
     length_scale_df = pd.DataFrame(length_scale_rows)[
         ["axis_level", "replicate", "method", "length_scale_m", "length_definition", "source"]
     ]
-    expected_length_rows = len(ALL_AXIS_LEVELS) * len(REPLICATE_IDS) * len(LENGTH_SCALE_METHODS)
+    expected_length_rows = len(EXTENDED_AXIS_LEVELS) * len(REPLICATE_IDS) * len(LENGTH_SCALE_METHODS)
     if len(length_scale_df) != expected_length_rows:
         raise ValueError(
             f"length_scale_df has {len(length_scale_df)} rows; expected "
-            f"{expected_length_rows} ({len(ALL_AXIS_LEVELS)} levels x {len(REPLICATE_IDS)} "
+            f"{expected_length_rows} ({len(EXTENDED_AXIS_LEVELS)} levels x {len(REPLICATE_IDS)} "
             f"replicates x {len(LENGTH_SCALE_METHODS)} methods: {LENGTH_SCALE_METHODS})."
         )
     length_scale_csv = PROCESSED_DIR / "length_scale_by_replicate.csv"
@@ -564,7 +574,7 @@ def main():
     # PLUS gp_mle/rbf_bootstrap length-scale summary rows (3 levels x 2
     # methods = 6 more).
     summary_rows = []
-    for axis_level in ALL_AXIS_LEVELS:
+    for axis_level in EXTENDED_AXIS_LEVELS:
         for method in METHODS:
             for metric_name in METRICS:
                 vals = metrics_df.loc[
@@ -595,7 +605,7 @@ def main():
         "gp_mle": "length_scale_practical_range_m",
         "rbf_bootstrap": "length_scale_rbf_converted_m",
     }
-    for axis_level in ALL_AXIS_LEVELS:
+    for axis_level in EXTENDED_AXIS_LEVELS:
         for method in LENGTH_SCALE_METHODS:
             vals = length_scale_df.loc[
                 (length_scale_df["axis_level"] == axis_level)
