@@ -114,19 +114,77 @@ CV_SEED = 40  # controls the KFold shuffle only
 # beyond the diagonal) so the CV optimum is always strictly bracketed and a
 # runaway selection is detectable rather than silently pinned to an endpoint.
 #
-# INTENDED CONSEQUENCE: RBF+bootstrap results produced with this grid DIFFER
-# from every RBF result produced before 2026-09-17. The bit-for-bit
-# regression check against the previously pinned base-case RBF run is
-# therefore no longer expected to hold FOR RBF (it still holds for
-# kriging / SGS / GP-MLE, whose code is untouched). This is a change of the
-# epsilon grid ONLY -- SMOOTHING_GRID, CV_FOLDS, CV_SEED, N_BOOTSTRAP,
-# BOOTSTRAP_SEED, RBF_KERNEL and the duplicate-point dedup logic are all
-# unchanged (one-factor-at-a-time).
+# INTENDED CONSEQUENCE (2026-09-17 change): RBF+bootstrap results produced
+# with the 25-point grid DIFFERED from every RBF result produced before
+# 2026-09-17. The bit-for-bit regression check against the previously pinned
+# base-case RBF run was therefore no longer expected to hold FOR RBF (it
+# still held for kriging / SGS / GP-MLE, whose code is untouched). That was a
+# change of the epsilon grid ONLY -- SMOOTHING_GRID, CV_FOLDS, CV_SEED,
+# N_BOOTSTRAP, BOOTSTRAP_SEED, RBF_KERNEL and the duplicate-point dedup logic
+# were all unchanged (one-factor-at-a-time).
+#
+# WHY N_EPSILON WAS RAISED AGAIN, 25 -> 121 (2026-09-22)
+# -------------------------------------------------------
+# The 2026-09-17 diagnostic above already flagged that 5 of the range axis's
+# 8 levels -- 400, 500, 600, 700, 800 m -- collapsed onto just 2 distinct
+# 25-point grid values (274.2 m for {300, 400}; 342.0 m for {500, 600, 700,
+# 800}), leaving 4 of 8 levels distinguishable. This was re-measured properly
+# before touching the grid (src/experiments/diagnose_range_axis_epsilon_grid.py,
+# results/processed/range_axis/epsilon_grid_diagnostic.csv): the IDENTICAL CV
+# procedure (same CV_FOLDS=5, CV_SEED=40, SMOOTHING_GRID, RBF_KERNEL='gaussian'),
+# replayed on each range level's OWN regenerated 121-sample conditioning set
+# with a MUCH finer 121-point epsilon grid over the SAME domain-geometry
+# bounds (10-2000 m, unchanged), gives:
+#
+#   range (m)   100    200    300    400    500    600    700    800
+#   25-pt pick  90.9   176.4  274.2  274.2  342.0  342.0  342.0  342.0  (4/8 distinct)
+#   121-pt pick 95.0   184.3  262.4  299.6  313.1  327.2  327.2  342.0  (7/8 distinct)
+#
+# i.e. the 25-point grid's collapse was mostly a RESOLUTION ARTIFACT, not a
+# genuinely flat CV surface: at 300 vs. 400 m in particular, the true optima
+# are 262.4 m vs. 299.6 m (14% apart) -- two levels the 25-point grid
+# genuinely could not tell apart, yet the 25-point PICK's CV-MSE was only
+# 0.05-0.36% worse than the 121-point optimum at every level (the surface is
+# fairly flat near its minimum, which is exactly why coarse grids alias
+# nearby levels onto the same point rather than obviously mis-ranking them).
+#
+# The remaining tie (600 m and 700 m both landing on 327.2 m at 121 points)
+# was checked for further resolution artifacts by doubling to a 241-point
+# grid for just the 500-800 m levels
+# (src/experiments/_diagnose_range_axis_epsilon_convergence_check.py, one-off,
+# not part of the permanent diagnostic suite): the tie reportedly MOVED (600 m
+# stayed at 327.2 m, but 700 m separated to 334.5 m -- only to re-tie with
+# 800 m at the SAME 334.5 m), which would be the signature of a genuinely
+# near-flat, slowly-rising tail of the CV-MSE surface for range >= ~500 m
+# (true optimal practical range creeping from ~320 m at 500 m to ~335 m at
+# 800 m) rather than unresolved detail a finer grid would keep separating.
+# CAVEAT (independent review, 2026-09-22): the reviewer's own re-run of that
+# 241-point script did not finish inside its timeout and produced no saved
+# output, so this specific 241-point result is NOT independently verified --
+# unlike the 121-point figures above, which the reviewer did reproduce
+# exactly. The 500-800 m tail should therefore be read as "flat to within
+# 0.36% CV-MSE at 121-point resolution" (verified) rather than "provably flat
+# at arbitrary resolution" (the unverified, stronger claim). This is reported
+# as an open point, not chased with an ever-finer grid in this pass.
+#
+# DECISION: N_EPSILON raised from 25 to 121 -- exactly the resolution
+# measured above to resolve the genuine, previously-aliased differences among
+# the 100-500 m levels (and materially improve, even if not perfectly
+# separate, the 600-800 m tail). _EPS_LENGTH_MIN_M/_EPS_LENGTH_MAX_M (domain
+# geometry: below one grid cell, past the domain diagonal) are UNCHANGED --
+# this is a resolution increase between the same two physically-justified
+# endpoints, not a re-drawing of the span to chase an observed optimum.
+# SMOOTHING_GRID, CV_FOLDS, CV_SEED, N_BOOTSTRAP, BOOTSTRAP_SEED, RBF_KERNEL
+# and the dedup logic are unchanged (one-factor-at-a-time). Every RBF+
+# bootstrap run in this project is re-executed once against the new grid
+# (src/experiments/rerun_rbf_bootstrap_only_v2.py); kriging/SGS/GP-MLE runs,
+# code and pins are untouched.
 EPSILON_CUTOFF = 0.05          # same correlation cutoff used for GP-MLE's
                                # length_scale -> practical range conversion
 _EPS_LENGTH_MAX_M = 2000.0     # > 1414 m domain diagonal
 _EPS_LENGTH_MIN_M = 10.0       # < one 20 m grid cell
-N_EPSILON = 25                 # -> 24.7% steps, log-uniform
+N_EPSILON = 121                # -> ~4.5% steps, log-uniform (was 25 -> 24.7%
+                                # steps until 2026-09-22; see comment above)
 _EPSILON_LENGTHS_M = np.geomspace(_EPS_LENGTH_MAX_M, _EPS_LENGTH_MIN_M, N_EPSILON)
 EPSILON_GRID = np.sqrt(-np.log(EPSILON_CUTOFF)) / _EPSILON_LENGTHS_M  # ascending
 # Smoothing (lambda) swept from 0 (exact interpolation) across several

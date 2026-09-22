@@ -148,6 +148,61 @@ def make_metric_vs_range_figure():
 
 
 # ---------------------------------------------------------------------------
+# (a2) Accuracy + calibration ONLY (MSE, UMG) -- 2-panel companion for the
+# published Range Axis Experiment artifact.
+#
+# WHY THIS EXISTS (orchestrator decision, 2026-09-22): the artifact stopped
+# displaying interval width / CRPS ("sharpness" metrics), mirroring the
+# 2026-09-15 decision already applied to the sample-density axis
+# (docs/progress.md "보류(TODO)" section) -- extended here to the range-axis
+# ARTIFACT specifically. This is a DISPLAY-ONLY change: width/CRPS are still
+# computed and stored in metrics.csv (this script's own MAIN_PANELS list and
+# make_metric_vs_range_figure()/interval_width_p95_vs_range.png are UNCHANGED
+# and keep producing the full 4-panel figure), so nothing here removes data,
+# it only adds a 2-panel SUBSET for the page that no longer shows the other
+# two panels. Same METHODS/METHOD_COLORS/METHOD_MARKERS, same source
+# (metrics.csv), same x-axis (RANGE_VALUES) as make_metric_vs_range_figure().
+# ---------------------------------------------------------------------------
+def make_accuracy_calibration_figure():
+    metrics_df = pd.read_csv(PROCESSED_DIR / "metrics.csv")
+    metrics_df["axis_level_numeric"] = metrics_df["axis_level"].astype(float)
+
+    fig, axes = plt.subplots(1, 2, figsize=(14, 6))
+    for ax, (metric_name, title, ylabel) in zip(axes.ravel(), MAIN_PANELS[:2]):
+        sub = metrics_df[metrics_df["metric"] == metric_name]
+        for method in METHODS:
+            m_sub = sub[sub["method"] == method].sort_values("axis_level_numeric")
+            ax.plot(
+                m_sub["axis_level_numeric"], m_sub["value"],
+                marker=METHOD_MARKERS[method], color=METHOD_COLORS[method],
+                label=method, linewidth=2,
+            )
+        ax.set_xticks(RANGE_VALUES)
+        ax.set_xlabel("Ground-truth variogram range (m)")
+        ax.set_ylabel(ylabel)
+        ax.set_title(title)
+        ax.grid(alpha=0.3)
+        if metric_name == "umg":
+            ax.axhline(1.0, color="gray", linestyle="--", linewidth=1, label="ideal (UMG=1.0)")
+        ax.legend(fontsize=9)
+
+    plt.suptitle(
+        "Range axis: accuracy (MSE) vs. calibration (UMG)\n"
+        "one ground-truth realization per level (TRUTH_SEED=101), identical sample "
+        "locations across methods -- sharpness (interval width) and CRPS are computed "
+        "and archived in metrics.csv but not shown on this panel (2026-09-22)",
+        fontsize=12,
+    )
+    plt.subplots_adjust(left=0.07, bottom=0.13, right=0.98, top=0.83, wspace=0.25)
+    FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+    out = FIGURES_DIR / "accuracy_calibration_vs_range.png"
+    plt.savefig(out, dpi=MAIN_FIG_DPI, bbox_inches="tight")
+    plt.close(fig)
+    print(f"accuracy_calibration_vs_range.png: {out} ({out.stat().st_size} bytes)")
+    return out
+
+
+# ---------------------------------------------------------------------------
 # (b) Calibration curves, 2x4 grid over the 8 axis levels
 # ---------------------------------------------------------------------------
 def make_calibration_grid_figure():
@@ -363,6 +418,7 @@ def make_truth_predictions_figure_set(hmaj1: float, run_dirs: dict, out_dir: Pat
 def main():
     saved_files = []
     saved_files.extend(make_metric_vs_range_figure())
+    saved_files.append(make_accuracy_calibration_figure())
     saved_files.append(make_calibration_grid_figure())
 
     with open(PROCESSED_DIR / "source_runs.json", "r", encoding="utf-8") as f:
