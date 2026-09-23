@@ -2,8 +2,8 @@
 
 Purely illustrative: sample positions are seeded random draws, not the actual
 experiment samples. Levels for range / nugget / sample density are the ones
-implemented in src/experiments; the heterogeneity and concentration axes are
-schematic (no implementation yet).
+implemented in src/experiments; the heterogeneity (anisotropy ellipse) and
+concentration axes are schematic (no implementation yet).
 """
 from pathlib import Path
 
@@ -12,7 +12,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.patches import Circle, Rectangle
+from matplotlib.patches import Circle, Ellipse, Rectangle
 from scipy.spatial import ConvexHull
 
 OUT = Path(__file__).resolve().parent / "design_wireframe.png"
@@ -24,7 +24,7 @@ BASE_BG = "#eaf1fd"
 
 N_BASE = 125
 RANGE_BASE = 300.0
-NUG_BASE = 0.05
+NUG_BASE = 0.1
 L = 1000.0
 
 
@@ -84,13 +84,16 @@ def vario_panel(ax, nug, base=False):
     ax.plot(0, nug, "o", color=ACCENT, ms=4)
 
 
-def hetero_panel(ax, r_left, r_right, base=False):
-    pts = uniform_pts(N_BASE, seed=11)
-    map_panel(ax, pts, base)
-    ax.axvline(500, color=INK, lw=0.9, ls="-.")
-    for cx, cy, r in [(250, 500, r_left), (750, 500, r_right)]:
-        ax.add_patch(Circle((cx, cy), r, fill=False, ec=ACCENT, lw=1.2, ls="--"))
-        ax.plot([cx, cx + r], [cy, cy], color=ACCENT, lw=1.2)
+def hetero_panel(ax, ratio, base=False, major=300.0, azimuth=40.0):
+    """Spatial-continuity heterogeneity: anisotropic range ellipse (major : minor = ratio : 1)."""
+    map_panel(ax, uniform_pts(N_BASE, seed=11), base)
+    minor = major / ratio
+    th = np.deg2rad(azimuth)
+    for cx, cy in [(300, 300), (700, 650)]:
+        ax.add_patch(Ellipse((cx, cy), 2 * major, 2 * minor, angle=azimuth,
+                             fill=False, ec=ACCENT, lw=1.2, ls="--"))
+        ax.plot([cx, cx + major * np.cos(th)], [cy, cy + major * np.sin(th)], color=ACCENT, lw=1.2)
+        ax.plot(cx, cy, "o", color=ACCENT, ms=2.5)
 
 
 def conc_panel(ax, strength, base=False):
@@ -117,21 +120,21 @@ def density_panel(ax, pct, base=False):
 
 def main():
     rows = [
-        ("Base case", "isotropic, range 300 m, nugget 0.05,\nn = 125 (5 %), uniform, homogeneous",
+        ("Base case", "isotropic, range 300 m, nugget 0.1,\nn = 125 (5 %), uniform, homogeneous",
          [("base", lambda ax, b: map_panel(ax, uniform_pts(N_BASE), b))]),
         ("① Range axis", "range 100 – 800 m", [
             (f"{int(r)} m", (lambda r: lambda ax, b: range_panel(ax, r, b))(r), r == RANGE_BASE)
             for r in [100, 200, 300, 400, 500, 600, 700, 800]]),
         ("② Nugget axis", "nugget 0 – 0.5 of sill", [
-            (f"{n:.1f}", (lambda n: lambda ax, b: vario_panel(ax, n, b))(n), False)
+            (f"{n:.1f}", (lambda n: lambda ax, b: vario_panel(ax, n, b))(n), n == 0.1)
             for n in [0.0, 0.1, 0.2, 0.3, 0.4, 0.5]]),
         ("③ Density axis", "sample count 1 – 20 %", [
             (f"{p} %\n(n={int(2500 * p / 100)})", (lambda p: lambda ax, b: density_panel(ax, p, b))(p), p == 5)
             for p in [20, 10, 5, 2, 1]]),
-        ("④ Heterogeneity axis", "two zones, range contrast\n(left | right)", [
-            ("300 | 300\n(homog.)", lambda ax, b: hetero_panel(ax, 300, 300, b), True),
-            ("200 | 400", lambda ax, b: hetero_panel(ax, 200, 400, b), False),
-            ("100 | 600", lambda ax, b: hetero_panel(ax, 100, 600, b), False)]),
+        ("④ Heterogeneity axis", "spatial continuity varies with direction\n(anisotropy ellipse, major : minor)", [
+            ("1 : 1\n(isotropic)", lambda ax, b: hetero_panel(ax, 1, b), True),
+            ("2 : 1", lambda ax, b: hetero_panel(ax, 2, b), False),
+            ("3 : 1", lambda ax, b: hetero_panel(ax, 3, b), False)]),
         ("⑤ Concentration axis", "same n = 125, samples clustered\n(dashed = data hull)", [
             ("uniform", lambda ax, b: conc_panel(ax, 0.0, b), True),
             ("40 % clustered", lambda ax, b: conc_panel(ax, 0.4, b), False),
