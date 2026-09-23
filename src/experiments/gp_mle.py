@@ -97,6 +97,69 @@ def build_kernel():
     )
 
 
+def build_gpr() -> GaussianProcessRegressor:
+    """THE production GaussianProcessRegressor configuration (unfitted).
+
+    Exists so that diagnostics which only need the hyperparameter fit (e.g.
+    src/experiments/gp_realization_check_nugget_axis.py, which refits the
+    same GP on several ground-truth realizations) can reuse the exact
+    estimator configuration by IMPORT rather than re-declaring the kernel /
+    restarts / normalize_y / random_state -- a re-declaration would silently
+    decouple from this module and make the diagnostic incomparable to the
+    pinned production runs. ``main()`` below constructs its regressor through
+    this function, so there is exactly one definition of the configuration.
+
+    normalize_y=True: standard sklearn practice for GP regression when the
+    target has a non-zero mean (porosity ~15) -- the GP prior itself is
+    zero-mean, so y is internally centered/scaled for the optimizer, and
+    sklearn's predict() automatically reverses this so the returned mean
+    and std are already in the original porosity units.
+    """
+    return GaussianProcessRegressor(
+        kernel=build_kernel(),
+        n_restarts_optimizer=N_RESTARTS_OPTIMIZER,
+        normalize_y=True,
+        random_state=GP_RANDOM_STATE,
+    )
+
+
+def extract_fitted_hyperparameters(gpr: GaussianProcessRegressor) -> dict:
+    """Pull the fitted kernel hyperparameters off a FITTED ``gpr``, in the
+    exact dict shape stored as ``params.fitted_hyperparameters`` in every
+    gp_mle manifest.
+
+    ``gpr.kernel_`` == Sum(Product(ConstantKernel, RBF), WhiteKernel); the
+    three pieces are pulled out by structure (k1 = left branch, k2 = right
+    branch of each combinator), matching how ``build_kernel`` assembles it.
+
+    normalize_y=True means the raw kernel values are in the *internally
+    standardized* y-space; signal/noise variance are converted back to real
+    porosity^2 units here (length_scale is a function of X only, so it needs
+    no conversion). See sklearn GaussianProcessRegressor source:
+    ``gpr._y_train_std`` is the std used for that internal scaling.
+
+    Factored out of ``main()`` (unchanged arithmetic) so the realization
+    diagnostic reads its hyperparameters through the same code path the
+    manifests were written with.
+    """
+    fitted_kernel = gpr.kernel_
+    constant_kernel = fitted_kernel.k1.k1
+    rbf_kernel = fitted_kernel.k1.k2
+    white_kernel = fitted_kernel.k2
+
+    y_train_std = float(gpr._y_train_std)
+    signal_variance_normalized = float(constant_kernel.constant_value)
+    noise_variance_normalized = float(white_kernel.noise_level)
+    return {
+        "length_scale_m": float(rbf_kernel.length_scale),
+        "signal_variance_normalized": signal_variance_normalized,
+        "noise_variance_normalized": noise_variance_normalized,
+        "y_train_std": y_train_std,
+        "signal_variance_real_units": signal_variance_normalized * (y_train_std ** 2),
+        "noise_variance_real_units": noise_variance_normalized * (y_train_std ** 2),
+    }
+
+
 def main(
     truth_seed: int = TRUTH_SEED,
     sample_seed: int = SAMPLE_SEED,
@@ -139,18 +202,9 @@ def main(
     X = samples_df[["X", "Y"]].values
     y = samples_df[VCOL].values
 
-    kernel = build_kernel()
-    # normalize_y=True: standard sklearn practice for GP regression when the
-    # target has a non-zero mean (porosity ~15) -- the GP prior itself is
-    # zero-mean, so y is internally centered/scaled for the optimizer, and
-    # sklearn's predict() automatically reverses this so the returned mean
-    # and std are already in the original porosity units.
-    gpr = GaussianProcessRegressor(
-        kernel=kernel,
-        n_restarts_optimizer=N_RESTARTS_OPTIMIZER,
-        normalize_y=True,
-        random_state=GP_RANDOM_STATE,
-    )
+    # Kernel structure/bounds, restart count, normalize_y and random_state
+    # all live in build_gpr() (single definition, importable by diagnostics).
+    gpr = build_gpr()
 
     t_fit_start = time.time()
     gpr.fit(X, y)
@@ -219,25 +273,15 @@ def main(
     total_seconds = time.time() - t_start
 
     # --- Extract fitted kernel hyperparameters --------------------------
-    # gpr.kernel_ == Sum(Product(ConstantKernel, RBF), WhiteKernel); pull out
-    # the three pieces by structure (k1 = left branch, k2 = right branch of
-    # each combinator), matching how `kernel` was built above.
+    # (structure/unit-conversion details live in extract_fitted_hyperparameters)
     fitted_kernel = gpr.kernel_
-    constant_kernel = fitted_kernel.k1.k1
-    rbf_kernel = fitted_kernel.k1.k2
-    white_kernel = fitted_kernel.k2
-
-    # normalize_y=True means these raw values are in the *internally
-    # standardized* y-space; convert signal/noise variance back to real
-    # porosity^2 units for reporting (length_scale is a function of X only,
-    # so it needs no conversion). See sklearn GaussianProcessRegressor
-    # source: gpr._y_train_std is the std used for that internal scaling.
-    y_train_std = float(gpr._y_train_std)
-    signal_variance_normalized = float(constant_kernel.constant_value)
-    noise_variance_normalized = float(white_kernel.noise_level)
-    signal_variance_real = signal_variance_normalized * (y_train_std ** 2)
-    noise_variance_real = noise_variance_normalized * (y_train_std ** 2)
-    length_scale = float(rbf_kernel.length_scale)
+    fitted_hyperparameters = extract_fitted_hyperparameters(gpr)
+    y_train_std = fitted_hyperparameters["y_train_std"]
+    signal_variance_normalized = fitted_hyperparameters["signal_variance_normalized"]
+    noise_variance_normalized = fitted_hyperparameters["noise_variance_normalized"]
+    signal_variance_real = fitted_hyperparameters["signal_variance_real_units"]
+    noise_variance_real = fitted_hyperparameters["noise_variance_real_units"]
+    length_scale = fitted_hyperparameters["length_scale_m"]
 
     # --- Save outputs --------------------------------------------------
     run_dir = make_run_dir(EXPERIMENT_NAME)
@@ -322,14 +366,7 @@ def main(
         "posterior_sample_method": posterior_sample_method,
         "normalize_y": True,
         "fitted_kernel_str": str(fitted_kernel),
-        "fitted_hyperparameters": {
-            "length_scale_m": length_scale,
-            "signal_variance_normalized": signal_variance_normalized,
-            "noise_variance_normalized": noise_variance_normalized,
-            "y_train_std": y_train_std,
-            "signal_variance_real_units": signal_variance_real,
-            "noise_variance_real_units": noise_variance_real,
-        },
+        "fitted_hyperparameters": fitted_hyperparameters,
         "log_marginal_likelihood": float(gpr.log_marginal_likelihood(gpr.kernel_.theta)),
         "fit_seconds": fit_seconds,
         "predict_seconds": predict_seconds,

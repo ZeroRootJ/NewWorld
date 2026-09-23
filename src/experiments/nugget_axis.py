@@ -196,9 +196,33 @@ def truth_nugget_real_units(nug: float) -> float:
     return float(nug) * POR_STDEV ** 2
 
 
-def affine_scale_factor(nug: float) -> float:
+def affine_scale_factor_from_sim_ns(sim_ns) -> float:
+    """THE definition of the affine scale factor ``a``, given the raw
+    standard-normal simulation the affine correction was applied to:
+    ``a = POR_STDEV / np.std(sim_ns)`` (exactly what ``GSLIB.affine``
+    computes internally, see src/truth_model.py).
+
+    Exists so callers that ALREADY hold ``sim_ns`` -- e.g.
+    src/experiments/gp_realization_check_nugget_axis.py, which regenerates
+    each (level, realization) truth once via
+    ``make_porosity_truth_with_sim_ns`` and would otherwise pay a second
+    sgsim call per cell -- can get ``a`` without re-declaring the formula.
+    ``affine_scale_factor`` below delegates here, so there is exactly one
+    place where ``a`` is defined.
+    """
+    return float(POR_STDEV / np.std(sim_ns))
+
+
+def affine_scale_factor(nug: float, truth_seed: int = TRUTH_SEED) -> float:
     """The multiplicative factor ``a`` that ``GSLIB.affine`` actually applied
     to this level's ground-truth realization.
+
+    ``truth_seed`` defaults to the axis's pinned TRUTH_SEED, so an existing
+    no-seed call is unchanged; it is a parameter only because the
+    multi-realization GP-hyperparameter diagnostic
+    (src/experiments/gp_realization_check_nugget_axis.py) needs ``a`` for
+    OTHER ground-truth realizations, and ``a`` is a property of the
+    realization, not of the level.
 
     ``src/truth_model.py`` generates a standard-normal simulation ``sim_ns``
     under a UNIT-sill variogram and then calls
@@ -221,12 +245,12 @@ def affine_scale_factor(nug: float) -> float:
     vario = build_vario(hmaj1=AXIS_HMAJ1, hmin1=AXIS_HMIN1, nug=float(nug))
     _, sim_ns = make_porosity_truth_with_sim_ns(
         nx=NX, ny=NY, xsiz=XSIZ, ysiz=YSIZ, xmn=XMN, ymn=YMN,
-        vario=vario, mean=POR_MEAN, stdev=POR_STDEV, seed=TRUTH_SEED,
+        vario=vario, mean=POR_MEAN, stdev=POR_STDEV, seed=truth_seed,
     )
-    return float(POR_STDEV / np.std(sim_ns))
+    return affine_scale_factor_from_sim_ns(sim_ns)
 
 
-def truth_nugget_real_units_affine(nug: float) -> float:
+def truth_nugget_real_units_affine(nug: float, truth_seed: int = TRUTH_SEED) -> float:
     """ALTERNATIVE (non-headline) physical-unit nugget: ``nug * a**2``, where
     ``a`` is the scale factor the affine correction actually applied to this
     level's realization (see ``affine_scale_factor``).
@@ -236,8 +260,11 @@ def truth_nugget_real_units_affine(nug: float) -> float:
     experiment asked for, the other the sill the single realization actually
     got -- so both are recorded rather than one being declared correct
     (reviewer + orchestrator decision 2026-09-22). The headline is unchanged.
+
+    ``truth_seed`` defaults to the axis's pinned TRUTH_SEED (existing calls
+    unchanged); see ``affine_scale_factor`` for why it is a parameter.
     """
-    a = affine_scale_factor(nug)
+    a = affine_scale_factor(nug, truth_seed=truth_seed)
     return float(nug) * a * a
 
 
