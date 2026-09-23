@@ -194,13 +194,10 @@ def figure_length_scale_vs_range(df: pd.DataFrame) -> Path:
         zorder=1, label="y = x (fitted practical range = ground-truth range)",
     )
 
-    non_pinned = df[~df["is_pinned_realization"].astype(bool)]
-    pinned = df[df["is_pinned_realization"].astype(bool)].sort_values("range_m")
-
     ax.scatter(
-        non_pinned["truth_range_m"], non_pinned["gp_practical_range_m"],
+        df["truth_range_m"], df["gp_practical_range_m"],
         s=46, marker="o", facecolors="tab:blue", edgecolors="none", alpha=0.35, zorder=2,
-        label="individual GP fit (9 new realizations per level)",
+        label="individual GP fit (10 realizations per level)",
     )
     ax.errorbar(
         per_level["range_m"], per_level["mean"], yerr=per_level["std"],
@@ -209,15 +206,6 @@ def figure_length_scale_vs_range(df: pd.DataFrame) -> Path:
         zorder=4, label="per-level mean $\\pm$ 1 std (10 realizations)",
     )
     ax.plot(per_level["range_m"], per_level["mean"], color="tab:red", linewidth=1.4, zorder=3)
-    ax.plot(
-        pinned["truth_range_m"], pinned["gp_practical_range_m"],
-        color="goldenrod", linewidth=1.2, linestyle="-", zorder=4,
-    )
-    ax.scatter(
-        pinned["truth_range_m"], pinned["gp_practical_range_m"],
-        s=150, marker="*", facecolors="gold", edgecolors="black", linewidths=1.0,
-        zorder=5, label=f"pinned realization (truth_seed={TRUTH_SEED})",
-    )
 
     for _, row in per_level.iterrows():
         ax.annotate(
