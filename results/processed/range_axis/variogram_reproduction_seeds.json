@@ -1,0 +1,451 @@
+{
+  "note": "Seeds and provenance for range_axis/make_variogram_reproduction_figure.py (SGS vs. GP-MLE variogram reproduction across the 8 ground-truth range levels). Kriging and RBF+bootstrap are deliberately excluded -- see the script docstring and the figure footnotes. GP draws are re-generated on the fly (nothing written under results/raw): one sample_y(n_samples=10) call per level at gp_draw_seed_by_level[L]. GP_SAMPLE_SEED=55 is used only for the reconstruction-validation draw (the stored draw's own seed); it fixes a draw only for a bit-identical posterior covariance, which is why the seed-55 draw generally does NOT equal the stored one and the check is the chi-square consistency test instead (see corr_seed55_draw_vs_stored, n_eig_within_1e-6_rel_of_min and chi2_z_* per level).",
+  "levels_run_last": [
+    "100",
+    "200",
+    "300",
+    "400",
+    "500",
+    "600",
+    "700",
+    "800"
+  ],
+  "methods": [
+    "sgs",
+    "gp_mle"
+  ],
+  "methods_excluded": {
+    "kriging": "one smooth estimate, no realizations to reproduce a variogram with",
+    "rbf_bootstrap": "bootstrap replicate maps are resampled interpolations, not conditional simulations of a spatial random function"
+  },
+  "truth_seed": 101,
+  "sample_seed": 20,
+  "n_samples_requested": 125,
+  "variogram_pair_seed": 90,
+  "n_pairs_drawn": 200000,
+  "lag_bin_width_m": 25.0,
+  "lag_max_m": 1000.0,
+  "lag_window_rationale": "0-1000 m (vs. 0-750 m on the density/replicate axes): the largest ground-truth range on this axis is 800 m and a spherical model reaches its sill only AT the range, so 750 m would cut the top level off before its plateau. 1000 m is the domain side length (50 x 20 m); beyond it only near-diagonal corner pairs remain (975-1000 m bin: 1709 of 199,905 drawn pairs; 1175-1200 m bin: 141). The bin width stays 25 m so curves remain comparable with the other axes, and every one of the 40 bins carries at least 345 pairs, far above MIN_PAIRS_PER_BIN.",
+  "min_pairs_per_bin_guard": 30,
+  "gp_sample_seed_validation": 55,
+  "gp_draw_seed_base": 9600,
+  "gp_draw_seed_by_level": {
+    "100": 9600,
+    "200": 9601,
+    "300": 9602,
+    "400": 9603,
+    "500": 9604,
+    "600": 9605,
+    "700": 9606,
+    "800": 9607
+  },
+  "gp_draw_seed_block_note": "96xx is a NEW block reserved for the range axis; the sample-replicate axis uses 9000+k (1%), 9100+k (2%), 9200+k (5%), 9300+k (10%), 9400+k (20%), so there is no collision.",
+  "n_gp_draws_per_level": 10,
+  "gp_reconstruction_tolerances": {
+    "mean_var_rtol": 1e-06,
+    "mean_var_atol": 1e-06,
+    "chi2_max_abs_z": 4.0,
+    "eig_cluster_rel_tol": 1e-06
+  },
+  "report_lag_rule": "REPORT_LAG(R) = R - LAG_BIN_WIDTH_M/2, i.e. the centre of the last 25 m bin below that level's own ground-truth range (87.5 .. 787.5 m). This is the range-axis correspondent of the 287.5 m bin the density/replicate artifacts report against their fixed 300 m range; each value is expressed as a % of THAT level's own theoretical spherical model at the same lag.",
+  "theoretical_model": {
+    "nugget_real_units": 0.45,
+    "structured_sill_real_units": 8.549999999999999,
+    "total_sill_real_units": 9.0,
+    "range_m": "per level (the axis variable)"
+  },
+  "ylim": [
+    0.0,
+    11.700000000000001
+  ],
+  "ylim_rule": "y-axis fixed at 0 to Y_MAX_SILL_FACTOR (1.3) x total sill (POR_STDEV**2 = 9) = 11.7 in every panel, the same rule as the density/replicate variogram-reproduction figures; curves above it are cut off by the axis (data not clipped).",
+  "max_plotted_value": 15.54034349741591,
+  "exceed_ylim_by_method": {
+    "sgs": {
+      "n_curve_points": 3200,
+      "n_points_above_ylim": 97,
+      "pct_points_above_ylim": 3.03125,
+      "n_realizations": 80,
+      "n_realizations_with_any_bin_above_ylim": 15
+    },
+    "gp_mle": {
+      "n_curve_points": 3200,
+      "n_points_above_ylim": 254,
+      "pct_points_above_ylim": 7.9375,
+      "n_realizations": 80,
+      "n_realizations_with_any_bin_above_ylim": 32
+    }
+  },
+  "exceed_ylim_truth": {
+    "n_curve_points": 320,
+    "n_points_above_ylim": 8,
+    "pct_points_above_ylim": 2.5,
+    "n_levels": 8,
+    "levels_with_any_bin_above_ylim": [
+      "600",
+      "700",
+      "800"
+    ]
+  },
+  "alpha": 0.25,
+  "pooled_alpha": 0.22,
+  "pooled_alpha_replicate_axis_for_reference": 0.12,
+  "figure_a": "results/figures/range_axis/variogram_reproduction_by_range.png",
+  "figure_b": "results/figures/range_axis/variogram_reproduction_pooled_by_range.png",
+  "summary_csv": "results/processed/range_axis/variogram_reproduction_summary.csv",
+  "total_runtime_seconds_last_run": 244.1,
+  "levels": {
+    "100": {
+      "truth_range_m": 100.0,
+      "n_samples_requested": 125,
+      "n_samples_actual": 121,
+      "gp_draw_seed": 9600,
+      "gp_draw_method": "sklearn_sample_y_svd",
+      "gp_draw_seconds": 12.14,
+      "level_runtime_seconds": 43.0,
+      "source_runs": {
+        "sgs": "results/raw/sgs/20260914T203343Z",
+        "gp_mle": "results/raw/gp_mle/20260914T203412Z"
+      },
+      "sgs_out_of_range_values": [],
+      "gp_reconstruction_validation": {
+        "max_abs_diff_mean": 7.105427357601002e-15,
+        "max_abs_diff_var": 7.105427357601002e-15,
+        "max_abs_diff_seed55_draw_vs_stored": 6.887298588026965,
+        "corr_seed55_draw_vs_stored": 0.8179225190843463,
+        "chi2_z_stored_draw": -0.20927819371943213,
+        "chi2_z_reconstructed_seed55_draw": -0.20927819371939355,
+        "cov_eig_min": 2.1737418347325903,
+        "cov_eig_max": 159.88785307027024,
+        "n_eig_within_1e-6_rel_of_min": 736,
+        "draw_method_reproduction": "sklearn_sample_y_svd",
+        "draw_method_stored": "sklearn_sample_y_svd",
+        "seed55_draw_deterministic_checked": true
+      },
+      "report_lag_m": 87.5,
+      "report": {
+        "lag_m": 87.5,
+        "model_semivariance": 8.807958984374999,
+        "truth_pct_of_model": 96.38382444494914,
+        "sgs": {
+          "min_pct_of_model": 81.35419745722761,
+          "median_pct_of_model": 95.02341689665971,
+          "max_pct_of_model": 107.78269756255706
+        },
+        "gp_mle": {
+          "min_pct_of_model": 84.40888058780541,
+          "median_pct_of_model": 95.34333971154896,
+          "max_pct_of_model": 104.88981940207827
+        }
+      }
+    },
+    "200": {
+      "truth_range_m": 200.0,
+      "n_samples_requested": 125,
+      "n_samples_actual": 121,
+      "gp_draw_seed": 9601,
+      "gp_draw_method": "sklearn_sample_y_svd",
+      "gp_draw_seconds": 8.93,
+      "level_runtime_seconds": 25.7,
+      "source_runs": {
+        "sgs": "results/raw/sgs/20260914T203533Z",
+        "gp_mle": "results/raw/gp_mle/20260914T203601Z"
+      },
+      "sgs_out_of_range_values": [],
+      "gp_reconstruction_validation": {
+        "max_abs_diff_mean": 5.329070518200751e-15,
+        "max_abs_diff_var": 0.0,
+        "max_abs_diff_seed55_draw_vs_stored": 7.105427357601002e-15,
+        "corr_seed55_draw_vs_stored": 0.9999999999999999,
+        "chi2_z_stored_draw": -0.20927819371941928,
+        "chi2_z_reconstructed_seed55_draw": -0.20927819371941928,
+        "cov_eig_min": 1.968951748116404,
+        "cov_eig_max": 236.13705248960332,
+        "n_eig_within_1e-6_rel_of_min": 1819,
+        "draw_method_reproduction": "sklearn_sample_y_svd",
+        "draw_method_stored": "sklearn_sample_y_svd",
+        "seed55_draw_deterministic_checked": false
+      },
+      "report_lag_m": 187.5,
+      "report": {
+        "lag_m": 187.5,
+        "model_semivariance": 8.950946044921873,
+        "truth_pct_of_model": 92.2323927853372,
+        "sgs": {
+          "min_pct_of_model": 65.48114030219855,
+          "median_pct_of_model": 81.79166503829664,
+          "max_pct_of_model": 85.83987048674706
+        },
+        "gp_mle": {
+          "min_pct_of_model": 66.30594654477036,
+          "median_pct_of_model": 81.28788063662611,
+          "max_pct_of_model": 88.23668150960623
+        }
+      }
+    },
+    "300": {
+      "truth_range_m": 300.0,
+      "n_samples_requested": 125,
+      "n_samples_actual": 121,
+      "gp_draw_seed": 9602,
+      "gp_draw_method": "sklearn_sample_y_svd",
+      "gp_draw_seconds": 11.75,
+      "level_runtime_seconds": 28.0,
+      "source_runs": {
+        "sgs": "results/raw/sgs/20260914T141516Z",
+        "gp_mle": "results/raw/gp_mle/20260914T180412Z"
+      },
+      "sgs_out_of_range_values": [],
+      "gp_reconstruction_validation": {
+        "max_abs_diff_mean": 7.105427357601002e-15,
+        "max_abs_diff_var": 2.6645352591003757e-15,
+        "max_abs_diff_seed55_draw_vs_stored": 12.09823960621394,
+        "corr_seed55_draw_vs_stored": 0.594687897203269,
+        "chi2_z_stored_draw": -0.2092781937194064,
+        "chi2_z_reconstructed_seed55_draw": -0.2092781937194064,
+        "cov_eig_min": 1.601347018287746,
+        "cov_eig_max": 233.60322005939528,
+        "n_eig_within_1e-6_rel_of_min": 2162,
+        "draw_method_reproduction": "sklearn_sample_y_svd",
+        "draw_method_stored": "manual_cholesky_fallback",
+        "seed55_draw_deterministic_checked": false
+      },
+      "report_lag_m": 287.5,
+      "report": {
+        "lag_m": 287.5,
+        "model_semivariance": 8.978043619791665,
+        "truth_pct_of_model": 90.1314538039159,
+        "sgs": {
+          "min_pct_of_model": 59.28562620940284,
+          "median_pct_of_model": 71.29111880679658,
+          "max_pct_of_model": 95.2958099757656
+        },
+        "gp_mle": {
+          "min_pct_of_model": 57.96923753800741,
+          "median_pct_of_model": 66.31028776470339,
+          "max_pct_of_model": 80.54237711314832
+        }
+      }
+    },
+    "400": {
+      "truth_range_m": 400.0,
+      "n_samples_requested": 125,
+      "n_samples_actual": 121,
+      "gp_draw_seed": 9603,
+      "gp_draw_method": "sklearn_sample_y_svd",
+      "gp_draw_seconds": 11.35,
+      "level_runtime_seconds": 26.8,
+      "source_runs": {
+        "sgs": "results/raw/sgs/20260914T203738Z",
+        "gp_mle": "results/raw/gp_mle/20260914T203806Z"
+      },
+      "sgs_out_of_range_values": [],
+      "gp_reconstruction_validation": {
+        "max_abs_diff_mean": 8.881784197001252e-15,
+        "max_abs_diff_var": 0.0,
+        "max_abs_diff_seed55_draw_vs_stored": 8.881784197001252e-15,
+        "corr_seed55_draw_vs_stored": 1.0,
+        "chi2_z_stored_draw": -0.20927819371943213,
+        "chi2_z_reconstructed_seed55_draw": -0.20927819371943213,
+        "cov_eig_min": 1.3319921192648383,
+        "cov_eig_max": 202.75538956062235,
+        "n_eig_within_1e-6_rel_of_min": 2231,
+        "draw_method_reproduction": "sklearn_sample_y_svd",
+        "draw_method_stored": "sklearn_sample_y_svd",
+        "seed55_draw_deterministic_checked": false
+      },
+      "report_lag_m": 387.5,
+      "report": {
+        "lag_m": 387.5,
+        "model_semivariance": 8.987606048583983,
+        "truth_pct_of_model": 100.85829537668943,
+        "sgs": {
+          "min_pct_of_model": 71.49297624479937,
+          "median_pct_of_model": 91.75590580885606,
+          "max_pct_of_model": 115.47276931994986
+        },
+        "gp_mle": {
+          "min_pct_of_model": 73.18126939748196,
+          "median_pct_of_model": 88.45901057235032,
+          "max_pct_of_model": 101.09448907980213
+        }
+      }
+    },
+    "500": {
+      "truth_range_m": 500.0,
+      "n_samples_requested": 125,
+      "n_samples_actual": 121,
+      "gp_draw_seed": 9604,
+      "gp_draw_method": "sklearn_sample_y_svd",
+      "gp_draw_seconds": 10.28,
+      "level_runtime_seconds": 27.5,
+      "source_runs": {
+        "sgs": "results/raw/sgs/20260914T203943Z",
+        "gp_mle": "results/raw/gp_mle/20260914T204012Z"
+      },
+      "sgs_out_of_range_values": [],
+      "gp_reconstruction_validation": {
+        "max_abs_diff_mean": 1.2434497875801753e-14,
+        "max_abs_diff_var": 0.0,
+        "max_abs_diff_seed55_draw_vs_stored": 1.2434497875801753e-14,
+        "corr_seed55_draw_vs_stored": 1.0,
+        "chi2_z_stored_draw": -0.20927819371943213,
+        "chi2_z_reconstructed_seed55_draw": -0.20927819371943213,
+        "cov_eig_min": 1.2445726815843314,
+        "cov_eig_max": 184.88528409622404,
+        "n_eig_within_1e-6_rel_of_min": 2258,
+        "draw_method_reproduction": "sklearn_sample_y_svd",
+        "draw_method_stored": "sklearn_sample_y_svd",
+        "seed55_draw_deterministic_checked": false
+      },
+      "report_lag_m": 487.5,
+      "report": {
+        "lag_m": 487.5,
+        "model_semivariance": 8.992051171874998,
+        "truth_pct_of_model": 113.6794290481705,
+        "sgs": {
+          "min_pct_of_model": 93.08659385723084,
+          "median_pct_of_model": 105.60295178094543,
+          "max_pct_of_model": 131.5442485656038
+        },
+        "gp_mle": {
+          "min_pct_of_model": 96.42920874354328,
+          "median_pct_of_model": 110.83563022804799,
+          "max_pct_of_model": 119.48325432901362
+        }
+      }
+    },
+    "600": {
+      "truth_range_m": 600.0,
+      "n_samples_requested": 125,
+      "n_samples_actual": 121,
+      "gp_draw_seed": 9605,
+      "gp_draw_method": "sklearn_sample_y_svd",
+      "gp_draw_seconds": 11.74,
+      "level_runtime_seconds": 29.4,
+      "source_runs": {
+        "sgs": "results/raw/sgs/20260914T204200Z",
+        "gp_mle": "results/raw/gp_mle/20260914T204228Z"
+      },
+      "sgs_out_of_range_values": [],
+      "gp_reconstruction_validation": {
+        "max_abs_diff_mean": 1.2434497875801753e-14,
+        "max_abs_diff_var": 2.6645352591003757e-15,
+        "max_abs_diff_seed55_draw_vs_stored": 5.06050616436873,
+        "corr_seed55_draw_vs_stored": 0.873442733310751,
+        "chi2_z_stored_draw": -0.20927819371943213,
+        "chi2_z_reconstructed_seed55_draw": -0.20927819371943213,
+        "cov_eig_min": 1.2672772905820202,
+        "cov_eig_max": 177.78047434214056,
+        "n_eig_within_1e-6_rel_of_min": 2270,
+        "draw_method_reproduction": "sklearn_sample_y_svd",
+        "draw_method_stored": "sklearn_sample_y_svd",
+        "seed55_draw_deterministic_checked": false
+      },
+      "report_lag_m": 587.5,
+      "report": {
+        "lag_m": 587.5,
+        "model_semivariance": 8.994472249348958,
+        "truth_pct_of_model": 124.02317852331913,
+        "sgs": {
+          "min_pct_of_model": 101.92833799481919,
+          "median_pct_of_model": 113.76824526732642,
+          "max_pct_of_model": 131.51112780144518
+        },
+        "gp_mle": {
+          "min_pct_of_model": 110.1707625983218,
+          "median_pct_of_model": 112.57496682155715,
+          "max_pct_of_model": 123.29956827092207
+        }
+      }
+    },
+    "700": {
+      "truth_range_m": 700.0,
+      "n_samples_requested": 125,
+      "n_samples_actual": 121,
+      "gp_draw_seed": 9606,
+      "gp_draw_method": "sklearn_sample_y_svd",
+      "gp_draw_seconds": 11.6,
+      "level_runtime_seconds": 28.4,
+      "source_runs": {
+        "sgs": "results/raw/sgs/20260914T204407Z",
+        "gp_mle": "results/raw/gp_mle/20260914T204435Z"
+      },
+      "sgs_out_of_range_values": [],
+      "gp_reconstruction_validation": {
+        "max_abs_diff_mean": 2.1316282072803006e-14,
+        "max_abs_diff_var": 0.0,
+        "max_abs_diff_seed55_draw_vs_stored": 2.1316282072803006e-14,
+        "corr_seed55_draw_vs_stored": 0.9999999999999997,
+        "chi2_z_stored_draw": -0.20927819371943857,
+        "chi2_z_reconstructed_seed55_draw": -0.209278193719445,
+        "cov_eig_min": 1.3361751464875578,
+        "cov_eig_max": 174.66878344206327,
+        "n_eig_within_1e-6_rel_of_min": 2283,
+        "draw_method_reproduction": "sklearn_sample_y_svd",
+        "draw_method_stored": "sklearn_sample_y_svd",
+        "seed55_draw_deterministic_checked": false
+      },
+      "report_lag_m": 687.5,
+      "report": {
+        "lag_m": 687.5,
+        "model_semivariance": 8.995934738292636,
+        "truth_pct_of_model": 129.95140825372906,
+        "sgs": {
+          "min_pct_of_model": 108.73621040185343,
+          "median_pct_of_model": 120.67204876160815,
+          "max_pct_of_model": 145.4114493001847
+        },
+        "gp_mle": {
+          "min_pct_of_model": 115.82260946953527,
+          "median_pct_of_model": 128.438611259532,
+          "max_pct_of_model": 138.5674258447551
+        }
+      }
+    },
+    "800": {
+      "truth_range_m": 800.0,
+      "n_samples_requested": 125,
+      "n_samples_actual": 121,
+      "gp_draw_seed": 9607,
+      "gp_draw_method": "sklearn_sample_y_svd",
+      "gp_draw_seconds": 11.95,
+      "level_runtime_seconds": 29.3,
+      "source_runs": {
+        "sgs": "results/raw/sgs/20260914T193946Z",
+        "gp_mle": "results/raw/gp_mle/20260914T194013Z"
+      },
+      "sgs_out_of_range_values": [],
+      "gp_reconstruction_validation": {
+        "max_abs_diff_mean": 1.7763568394002505e-14,
+        "max_abs_diff_var": 2.6645352591003757e-15,
+        "max_abs_diff_seed55_draw_vs_stored": 5.770932183451755,
+        "corr_seed55_draw_vs_stored": 0.8351224065258157,
+        "chi2_z_stored_draw": -0.2092781937194064,
+        "chi2_z_reconstructed_seed55_draw": -0.2092781937194064,
+        "cov_eig_min": 1.394078716287874,
+        "cov_eig_max": 174.40266596639782,
+        "n_eig_within_1e-6_rel_of_min": 2287,
+        "draw_method_reproduction": "sklearn_sample_y_svd",
+        "draw_method_stored": "sklearn_sample_y_svd",
+        "seed55_draw_deterministic_checked": false
+      },
+      "report_lag_m": 787.5,
+      "report": {
+        "lag_m": 787.5,
+        "model_semivariance": 8.996885204315184,
+        "truth_pct_of_model": 128.83189752491353,
+        "sgs": {
+          "min_pct_of_model": 107.87458602829761,
+          "median_pct_of_model": 121.96781911920169,
+          "max_pct_of_model": 136.48004790388927
+        },
+        "gp_mle": {
+          "min_pct_of_model": 107.42354743948587,
+          "median_pct_of_model": 136.20630964306594,
+          "max_pct_of_model": 161.5103302078125
+        }
+      }
+    }
+  }
+}

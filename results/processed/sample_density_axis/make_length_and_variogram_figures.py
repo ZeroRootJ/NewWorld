@@ -432,13 +432,27 @@ LAG_MAX_M = 750.0
 MIN_PAIRS_PER_BIN = 30
 
 
-def compute_experimental_variogram(truth: np.ndarray) -> pd.DataFrame:
+def compute_experimental_variogram(
+    truth: np.ndarray, lag_max_m: float = None, range_m: float = None
+) -> pd.DataFrame:
     """Subsampled (NOT exhaustive) experimental variogram of ``truth``.
 
     Draws N_PAIRS_DRAWN random (i, j) cell-index pairs (i != j) from a fixed
     RandomState(VARIOGRAM_PAIR_SEED), computes each pair's lag and
     semivariance contribution, and aggregates into LAG_BIN_WIDTH_M-wide bins.
+
+    ``lag_max_m`` / ``range_m`` (both 2026-09-22, for the RANGE axis, whose
+    ground-truth range is a per-level quantity that reaches 800 m): the
+    largest lag binned, and the spherical range used for the returned
+    ``semivariance_theoretical`` column. BOTH DEFAULT TO None, which means the
+    module constants LAG_MAX_M (=750) and HMAJ1 (=300) -- i.e. every existing
+    caller (this module's main(), sample_replicate_axis/*) that passes only
+    ``truth`` gets bit-identical output to before this parameter existed.
+    The pair draw itself does not depend on either argument (same seed, same
+    n_cells), so widening ``lag_max_m`` only ADDS bins beyond 750 m and leaves
+    the 0-750 m bins untouched.
     """
+    lag_max_m = LAG_MAX_M if lag_max_m is None else float(lag_max_m)
     coords = full_grid_coordinates(NX, NY, XMN, YMN, XSIZ, YSIZ)
     z = truth.ravel()
     n_cells = coords.shape[0]
@@ -463,7 +477,7 @@ def compute_experimental_variogram(truth: np.ndarray) -> pd.DataFrame:
     h = np.sqrt(np.sum((coords[idx_i] - coords[idx_j]) ** 2, axis=1))
     gamma_contrib = 0.5 * (z[idx_i] - z[idx_j]) ** 2
 
-    edges = np.arange(0.0, LAG_MAX_M + LAG_BIN_WIDTH_M, LAG_BIN_WIDTH_M)
+    edges = np.arange(0.0, lag_max_m + LAG_BIN_WIDTH_M, LAG_BIN_WIDTH_M)
     bin_idx = np.digitize(h, edges) - 1  # 0-based bin index
 
     rows = []
@@ -488,19 +502,28 @@ def compute_experimental_variogram(truth: np.ndarray) -> pd.DataFrame:
         })
 
     df = pd.DataFrame(rows)
-    df["semivariance_theoretical"] = spherical_semivariance(df["lag_bin_center_m"].values)
+    df["semivariance_theoretical"] = spherical_semivariance(
+        df["lag_bin_center_m"].values, range_m=range_m
+    )
     return df
 
 
-def spherical_semivariance(h) -> np.ndarray:
+def spherical_semivariance(h, range_m: float = None) -> np.ndarray:
     """Theoretical spherical semivariance at the truth's own parameters
     (imported from src.experiments.base_case, never hardcoded here): nugget
     = NUG * POR_STDEV**2, structured sill = CC1 * POR_STDEV**2, range =
-    HMAJ1. See the module docstring's affine-linearity derivation."""
+    HMAJ1. See the module docstring's affine-linearity derivation.
+
+    ``range_m`` (2026-09-22) overrides the range for axes on which the
+    ground-truth range is the axis variable (range_axis: 100-800 m). It
+    DEFAULTS TO None = HMAJ1 (=300), so every existing caller that passes only
+    ``h`` is bit-identical to before this parameter existed. Only the range
+    moves: the nugget and the structured sill are base-case constants on the
+    range axis by its one-factor-at-a-time design."""
     h = np.asarray(h, dtype=float)
     nugget = NUG * POR_STDEV ** 2
     structured_sill = CC1 * POR_STDEV ** 2
-    rng = HMAJ1
+    rng = HMAJ1 if range_m is None else float(range_m)
     hr = np.clip(h / rng, 0.0, None)
     spherical_part = np.where(
         h < rng,
