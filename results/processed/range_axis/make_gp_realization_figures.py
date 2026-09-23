@@ -184,7 +184,7 @@ def figure_length_scale_vs_range(df: pd.DataFrame) -> Path:
     per_level = _per_level(df, "gp_practical_range_m")
     n_below = int(df["fitted_range_below_truth_range"].sum())
 
-    fig, ax = plt.subplots(figsize=(9.0, 7.6))
+    fig, ax = plt.subplots(figsize=(16.0, 9.0))
 
     lo = 0.0
     hi = float(max(df["truth_range_m"].max(), df["gp_practical_range_m"].max()))
@@ -222,7 +222,6 @@ def figure_length_scale_vs_range(df: pd.DataFrame) -> Path:
     if not x_log and not y_log:
         ax.set_xlim(lo, hi + pad)
         ax.set_ylim(lo, hi + pad)
-        ax.set_aspect("equal", adjustable="box")
     ax.set_xticks([float(r) for r in ALL_RANGE_VALUES])
     ax.set_xlabel("Ground-truth variogram range (m, isotropic)")
     ax.set_ylabel("GP-MLE fitted practical range (m)  [0.05 correlation cutoff]")
@@ -252,14 +251,14 @@ def figure_length_scale_vs_range(df: pd.DataFrame) -> Path:
             f"project's {RATIO_LOG_THRESHOLD:g}x rule with no override: x spread "
             f"{x_ratio:.2f}x -> {'log' if x_log else 'linear'}, y spread {y_ratio:.2f}x -> "
             f"{'log' if y_log else 'linear'}.",
-            150,
+            260,
         ),
         ha="center", fontsize=7.2, color="dimgray",
     )
-    plt.subplots_adjust(left=0.10, bottom=0.235, right=0.97, top=0.885)
+    plt.subplots_adjust(left=0.07, bottom=0.17, right=0.98, top=0.88)
     FIGURES_DIR.mkdir(parents=True, exist_ok=True)
     out = FIGURES_DIR / "length_scale_vs_range_realizations.png"
-    plt.savefig(out, dpi=FIG_DPI, bbox_inches="tight")
+    plt.savefig(out, dpi=FIG_DPI)
     plt.close(fig)
     print(f"[fig1] {out} ({out.stat().st_size} bytes)")
     return out
