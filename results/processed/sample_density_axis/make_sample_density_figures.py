@@ -339,7 +339,9 @@ def _replicate_figure_caption() -> str:
         "THIS figure only -- the calibration-curve grid, truth figure and crossplot figures "
         "still plot the single pinned run per level and still carry that limitation. "
         "X positions are the ACTUAL sampled fractions of the single pinned run at each level "
-        "(the 20% and 10% levels are the two levels added 2026-09-21). "
+        "(the 20% and 10% levels are the two levels added 2026-09-21); within each level the "
+        "4 methods are shifted slightly left/right of that x (cosmetic, +-10.5% max) so their "
+        "error bars do not overlap. "
         "Caveats that STILL apply here: (1) evaluated-cell count differs by level AND by "
         "replicate (n_cells_evaluated ranges " + ", ".join(cells_txt) + "; n_samples_actual "
         "ranges " + ", ".join(samples_txt) + " -- see "
@@ -425,8 +427,13 @@ def _style_density_axis(ax):
 # hiding another. Width chosen small relative to the >=2x spacing between
 # neighboring density levels (18.16% -> 9.36% -> 4.84% -> 2.00% -> 1.00%) so a jittered point
 # never crosses into a neighboring level's territory.
-REPLICATE_JITTER_FRAC = 0.045
+REPLICATE_JITTER_FRAC = 0.02
 REPLICATE_JITTER_SEED = 11
+# 2026-09-23 (user request): the 4 methods' mean+-std markers/error bars
+# overlapped at the same x, hiding the error bars. Each method is now shifted by a
+# fixed multiplicative x offset (purely cosmetic; tick labels stay at the true
+# fractions). Total span +-1.5*0.07 = +-10.5%, well inside the >=2x level spacing.
+METHOD_X_OFFSET_FRAC = 0.07
 
 
 def make_metric_vs_density_figure():
@@ -457,10 +464,11 @@ def make_metric_vs_density_figure():
 
     fig, axes = plt.subplots(1, 3, figsize=(18, 7.5))
     for ax, (metric_name, title, ylabel) in zip(axes.ravel(), MAIN_PANELS):
-        for method in METHODS:
+        for m_idx, method in enumerate(METHODS):
+            method_offset = (m_idx - (len(METHODS) - 1) / 2) * METHOD_X_OFFSET_FRAC
             mean_xs, mean_ys, mean_stds = [], [], []
             for lvl in EXTENDED_AXIS_LEVELS:  # dense -> sparse, matches AXIS_LEVEL_FLOATS order
-                x0 = PCT_ACTUAL[lvl]
+                x0 = PCT_ACTUAL[lvl] * (1.0 + method_offset)
                 m_sub = metrics_df[
                     (metrics_df["axis_level"] == lvl)
                     & (metrics_df["method"] == method)
