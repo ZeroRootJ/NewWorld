@@ -13,7 +13,6 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.patches import Circle, Ellipse, Rectangle
-from scipy.spatial import ConvexHull
 
 OUT = Path(__file__).resolve().parent / "design_wireframe.png"
 
@@ -97,17 +96,13 @@ def hetero_panel(ax, ratio, base=False, major=300.0, azimuth=40.0):
 
 
 def conc_panel(ax, strength, base=False):
-    """Same n, samples pulled toward one cluster centre; hull shows extrapolation."""
+    """Same n, a fraction of the samples pulled toward one cluster centre."""
     rng = np.random.default_rng(23)
     n_c = int(round(N_BASE * strength))
     clus = rng.normal([330, 330], 90, (n_c, 2))
     uni = uniform_pts(N_BASE - n_c, seed=5)
     pts = np.clip(np.vstack([clus, uni]), 0, L)
     map_panel(ax, pts, base)
-    if len(pts) > 3:
-        hull = ConvexHull(pts)
-        v = np.append(hull.vertices, hull.vertices[0])
-        ax.plot(pts[v, 0], pts[v, 1], color=ACCENT, lw=1.2, ls="--")
 
 
 def density_panel(ax, pct, base=False):
@@ -120,8 +115,6 @@ def density_panel(ax, pct, base=False):
 
 def main():
     rows = [
-        ("Base case", "isotropic, range 300 m, nugget 0.1,\nn = 125 (5 %), uniform, homogeneous",
-         [("base", lambda ax, b: map_panel(ax, uniform_pts(N_BASE), b))]),
         ("① Range axis", "range 100 – 800 m", [
             (f"{int(r)} m", (lambda r: lambda ax, b: range_panel(ax, r, b))(r), r == RANGE_BASE)
             for r in [100, 200, 300, 400, 500, 600, 700, 800]]),
@@ -135,44 +128,50 @@ def main():
             ("1 : 1\n(isotropic)", lambda ax, b: hetero_panel(ax, 1, b), True),
             ("2 : 1", lambda ax, b: hetero_panel(ax, 2, b), False),
             ("3 : 1", lambda ax, b: hetero_panel(ax, 3, b), False)]),
-        ("⑤ Concentration axis", "same n = 125, samples clustered\n(dashed = data hull)", [
-            ("uniform", lambda ax, b: conc_panel(ax, 0.0, b), True),
-            ("40 % clustered", lambda ax, b: conc_panel(ax, 0.4, b), False),
-            ("80 % clustered", lambda ax, b: conc_panel(ax, 0.8, b), False)]),
+        ("⑤ Concentration axis", "same n = 125, sampling locations\nclustered vs. random", [
+            ("uniform\n(random sampled)", lambda ax, b: conc_panel(ax, 0.0, b), True),
+            ("cluster\n(40 % clustered)", lambda ax, b: conc_panel(ax, 0.4, b), False),
+            ("cluster\n(80 % clustered)", lambda ax, b: conc_panel(ax, 0.8, b), False)]),
     ]
 
-    ncol = 8
-    panel = 1.35
-    label_w = 2.6
-    nrow = len(rows)
-    fig_w = label_w + ncol * panel + 0.3
-    fig_h = nrow * (panel + 0.55) + 1.3
+    fig_w, fig_h = 13.333, 7.5  # 16:9 slide
+    panel = 0.84       # panel edge (in)
+    pitch_x = 1.13
+    pitch_y = 1.25
+    label_w = 3.0
+    top = 0.95
     fig = plt.figure(figsize=(fig_w, fig_h), dpi=200, facecolor="white")
 
-    fig.text(0.02, 1 - 0.35 / fig_h, "Experimental design: one base case, one factor varied at a time",
-             fontsize=15, fontweight="bold", color=INK, va="center")
-    fig.text(0.02, 1 - 0.75 / fig_h,
-             "Every case is evaluated with 4 methods (simple kriging, SGS, RBF + bootstrap, GPR) on identical samples; "
-             "blue = the factor being varied, shaded panel = base-case level.",
-             fontsize=9, color=MUTED, va="center")
+    fig.text(0.02, 1 - 0.30 / fig_h, "Experimental design: one base case, one factor varied at a time",
+             fontsize=18, fontweight="bold", color=INK, va="center")
+    fig.text(0.02, 1 - 0.62 / fig_h,
+             "4 methods (simple kriging, SGS, RBF + bootstrap, GPR) on identical samples   |   "
+             "blue = factor being varied, shaded = base-case level",
+             fontsize=10.5, color=MUTED, va="center")
 
-    top = 1.1
+    # base-case block (right side, next to the axis rows)
+    bx, by, bs = 10.6, 2.55, 1.9
+    fig.text((bx + bs / 2) / fig_w, 1 - 2.25 / fig_h, "Base case", fontsize=14, fontweight="bold",
+             color=INK, ha="center", va="top")
+    bax = fig.add_axes([bx / fig_w, 1 - (by + bs) / fig_h, bs / fig_w, bs / fig_h])
+    map_panel(bax, uniform_pts(N_BASE), True)
+    fig.text((bx + bs / 2) / fig_w, 1 - (by + bs + 0.08) / fig_h,
+             "isotropic, range 300 m, nugget 0.1\nn = 125 (5 %), uniform (random sampled)",
+             fontsize=9.5, color=MUTED, ha="center", va="top", linespacing=1.35)
+
     for i, (title, sub, panels) in enumerate(rows):
-        y_top = top + i * (panel + 0.55)
-        fig.text(0.02, 1 - (y_top + 0.3) / fig_h, title, fontsize=12, fontweight="bold", color=INK, va="top")
-        fig.text(0.02, 1 - (y_top + 0.62) / fig_h, sub, fontsize=8.5, color=MUTED, va="top", linespacing=1.4)
+        y_top = top + i * pitch_y
+        fig.text(0.02, 1 - (y_top + 0.05) / fig_h, title, fontsize=14, fontweight="bold", color=INK, va="top")
+        fig.text(0.02, 1 - (y_top + 0.36) / fig_h, sub, fontsize=10, color=MUTED, va="top", linespacing=1.35)
         for j, p in enumerate(panels):
             label, fn = p[0], p[1]
             base = p[2] if len(p) > 2 else (i == 0)
-            x0 = label_w + j * panel
-            ax = fig.add_axes([(x0 + 0.06) / fig_w, 1 - (y_top + panel - 0.06 + 0.0) / fig_h,
-                               (panel - 0.12) / fig_w, (panel - 0.12) / fig_h])
+            x0 = label_w + j * pitch_x
+            ax = fig.add_axes([x0 / fig_w, 1 - (y_top + panel) / fig_h, panel / fig_w, panel / fig_h])
             fn(ax, base)
             if label != "base":
-                fig.text((x0 + panel / 2) / fig_w, 1 - (y_top + panel + 0.04) / fig_h, label,
-                         fontsize=8, color=INK, ha="center", va="top", linespacing=1.2)
-        if i in (1, 2):  # variogram-style rows note
-            pass
+                fig.text((x0 + panel / 2) / fig_w, 1 - (y_top + panel + 0.03) / fig_h, label,
+                         fontsize=8.5, color=INK, ha="center", va="top", linespacing=1.15)
     fig.savefig(OUT, dpi=200, facecolor="white")
     print(OUT)
 
