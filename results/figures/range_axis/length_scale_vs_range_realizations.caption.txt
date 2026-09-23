@@ -1,0 +1,14 @@
+65 of 80 fits lie below the y = x line, i.e. the marginal-likelihood fit learned a correlation length SHORTER
+than the ground truth's. Per level (100 m: 2/10, 200 m: 5/10, 300 m: 9/10, 400 m: 9/10, 500 m: 10/10, 600 m:
+10/10, 700 m: 10/10, 800 m: 10/10). Practical range = sqrt(2 ln 20) * fitted length_scale (~2.4477x, 0.05
+correlation cutoff, this project's standard conversion, reused from gp_hyperparameter_scale_conversion.csv and
+verified equal to it). WHAT VARIES: the ground-truth realization (truth_seed in {101, 7101, 7102, 7103, 7104,
+7105, 7106, 7107, 7108, 7109}, 10 per level) and the ground-truth variogram range (100-800 m, isotropic). WHAT
+IS FIXED: sample_seed=20, so the sample LOCATIONS are identical in all 80 fits and only the sample VALUES
+change (verified: max |X/Y| deviation 0 across all fits); the ground-truth nugget at the base-case value 0.05
+normalized = 0.45 Porosity %^2 at every level; n_samples requested 125 -> 121 actual after duplicate-cell
+removal; and the entire GP configuration (kernel structure, bounds, initial values, n_restarts_optimizer,
+normalize_y, random_state), imported from src/experiments/gp_mle.py rather than re-declared. truth_seed=101 is
+the realization every pinned range-axis artifact was built from; those rows reproduce the pinned values to
+<2e-16 relative. Axis scales follow this project's 10x rule with no override: x spread 8.00x -> linear, y
+spread 5.51x -> linear.

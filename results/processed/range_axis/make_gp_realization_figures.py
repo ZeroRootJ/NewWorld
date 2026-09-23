@@ -184,34 +184,34 @@ def figure_length_scale_vs_range(df: pd.DataFrame) -> Path:
     per_level = _per_level(df, "gp_practical_range_m")
     n_below = int(df["fitted_range_below_truth_range"].sum())
 
-    fig, ax = plt.subplots(figsize=(16.0, 9.0))
+    fig, ax = plt.subplots(figsize=(7.5, 4.2))
 
     lo = 0.0
     hi = float(max(df["truth_range_m"].max(), df["gp_practical_range_m"].max()))
     pad = 0.06 * hi
     ax.plot(
-        [lo, hi + pad], [lo, hi + pad], color="gray", linestyle="--", linewidth=1.3,
+        [lo, hi + pad], [lo, hi + pad], color="gray", linestyle="--", linewidth=1.0,
         zorder=1, label="y = x (fitted practical range = ground-truth range)",
     )
 
     ax.scatter(
         df["truth_range_m"], df["gp_practical_range_m"],
-        s=46, marker="o", facecolors="tab:blue", edgecolors="none", alpha=0.35, zorder=2,
+        s=18, marker="o", facecolors="tab:blue", edgecolors="none", alpha=0.35, zorder=2,
         label="individual GP fit (10 realizations per level)",
     )
     ax.errorbar(
         per_level["range_m"], per_level["mean"], yerr=per_level["std"],
-        fmt="D", markersize=8, color="tab:red", markerfacecolor="tab:red",
-        markeredgecolor="black", ecolor="tab:red", elinewidth=1.6, capsize=5,
+        fmt="D", markersize=5, color="tab:red", markerfacecolor="tab:red",
+        markeredgecolor="black", ecolor="tab:red", elinewidth=1.1, capsize=3,
         zorder=4, label="per-level mean $\\pm$ 1 std (10 realizations)",
     )
-    ax.plot(per_level["range_m"], per_level["mean"], color="tab:red", linewidth=1.4, zorder=3)
+    ax.plot(per_level["range_m"], per_level["mean"], color="tab:red", linewidth=1.1, zorder=3)
 
     for _, row in per_level.iterrows():
         ax.annotate(
             f"{int(row['n_below'])}/{int(row['n'])}\nbelow",
             (row["range_m"], row["max"]),
-            textcoords="offset points", xytext=(0, 8), fontsize=8.0, color="dimgray",
+            textcoords="offset points", xytext=(0, 5), fontsize=6.5, color="dimgray",
             ha="center",
         )
 
@@ -223,24 +223,20 @@ def figure_length_scale_vs_range(df: pd.DataFrame) -> Path:
         ax.set_xlim(lo, hi + pad)
         ax.set_ylim(lo, hi + pad)
     ax.set_xticks([float(r) for r in ALL_RANGE_VALUES])
-    ax.set_xlabel("Ground-truth variogram range (m, isotropic)")
-    ax.set_ylabel("GP-MLE fitted practical range (m)  [0.05 correlation cutoff]")
+    ax.set_xlabel("Ground-truth variogram range (m, isotropic)", fontsize=9)
+    ax.set_ylabel("GP-MLE fitted practical range (m)", fontsize=9)
     ax.set_title(
-        "Range axis, 10 ground-truth realizations per level: does the GP-MLE fitted\n"
-        "range track the ground-truth range?  "
-        f"{n_below} of {len(df)} fits lie BELOW y = x\n"
-        f"(per-level counts annotated; {len(ALL_RANGE_VALUES)} levels x 10 realizations)",
-        fontsize=11.5,
+        f"GP-MLE fitted range vs. ground-truth range "
+        f"({n_below} of {len(df)} fits below y = x)", fontsize=9.5,
     )
     ax.grid(alpha=0.3)
-    ax.legend(fontsize=8.5, loc="upper left")
+    ax.legend(fontsize=7.5, loc="upper left")
 
     per_level_txt = ", ".join(
         f"{int(r['range_m'])} m: {int(r['n_below'])}/{int(r['n'])}"
         for _, r in per_level.iterrows()
     )
-    fig.text(
-        0.5, 0.005,
+    caption = (
         textwrap.fill(
             f"{n_below} of {len(df)} fits lie below the y = x line, i.e. the "
             f"marginal-likelihood fit learned a correlation length SHORTER than the ground "
@@ -251,14 +247,14 @@ def figure_length_scale_vs_range(df: pd.DataFrame) -> Path:
             f"project's {RATIO_LOG_THRESHOLD:g}x rule with no override: x spread "
             f"{x_ratio:.2f}x -> {'log' if x_log else 'linear'}, y spread {y_ratio:.2f}x -> "
             f"{'log' if y_log else 'linear'}.",
-            260,
-        ),
-        ha="center", fontsize=7.2, color="dimgray",
+            110,
+        )
     )
-    plt.subplots_adjust(left=0.07, bottom=0.17, right=0.98, top=0.88)
+    fig.tight_layout()
     FIGURES_DIR.mkdir(parents=True, exist_ok=True)
     out = FIGURES_DIR / "length_scale_vs_range_realizations.png"
-    plt.savefig(out, dpi=FIG_DPI)
+    plt.savefig(out, dpi=FIG_DPI, bbox_inches="tight", pad_inches=0.05)
+    out.with_suffix(".caption.txt").write_text(caption, encoding="utf-8")
     plt.close(fig)
     print(f"[fig1] {out} ({out.stat().st_size} bytes)")
     return out
