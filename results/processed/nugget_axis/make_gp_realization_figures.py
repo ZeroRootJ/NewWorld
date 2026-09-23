@@ -178,77 +178,57 @@ def figure_fitted_vs_truth(df: pd.DataFrame) -> Path:
         .sort_values("nug_normalized")
     )
 
-    fig, ax = plt.subplots(figsize=(9.0, 8.0))
+    fig, ax = plt.subplots(figsize=(7.5, 4.2))
 
     hi = float(
         max(df["truth_nugget_real_units"].max(), df["gp_noise_variance_real_units"].max())
     )
     pad = 0.06 * hi
     ax.plot(
-        [0.0, hi + pad], [0.0, hi + pad], color="gray", linestyle="--", linewidth=1.3,
+        [0.0, hi + pad], [0.0, hi + pad], color="gray", linestyle="--", linewidth=1.0,
         zorder=1, label="y = x (fitted noise = true nugget)",
     )
 
-    non_pinned = df[~df["is_pinned_realization"].astype(bool)]
-    pinned = df[df["is_pinned_realization"].astype(bool)].sort_values("nug_normalized")
-
     ax.scatter(
-        non_pinned["truth_nugget_real_units"], non_pinned["gp_noise_variance_real_units"],
-        s=46, marker="o", facecolors="tab:blue", edgecolors="none", alpha=0.35, zorder=2,
-        label="individual GP fit (9 new realizations per level)",
+        df["truth_nugget_real_units"], df["gp_noise_variance_real_units"],
+        s=18, marker="o", facecolors="tab:blue", edgecolors="none", alpha=0.35, zorder=2,
+        label="individual GP fit (10 realizations per level)",
     )
     ax.errorbar(
         per_level["truth_nugget"], per_level["mean"], yerr=per_level["std"],
-        fmt="D", markersize=8, color="tab:red", markerfacecolor="tab:red",
-        markeredgecolor="black", ecolor="tab:red", elinewidth=1.6, capsize=5,
+        fmt="D", markersize=5, color="tab:red", markerfacecolor="tab:red",
+        markeredgecolor="black", ecolor="tab:red", elinewidth=1.1, capsize=3,
         zorder=4, label="per-level mean $\\pm$ 1 std (10 realizations)",
     )
     ax.plot(
-        per_level["truth_nugget"], per_level["mean"], color="tab:red", linewidth=1.4,
+        per_level["truth_nugget"], per_level["mean"], color="tab:red", linewidth=1.1,
         zorder=3,
     )
-    ax.scatter(
-        pinned["truth_nugget_real_units"], pinned["gp_noise_variance_real_units"],
-        s=150, marker="*", facecolors="gold", edgecolors="black", linewidths=1.0,
-        zorder=5, label=f"pinned realization (truth_seed={TRUTH_SEED})",
-    )
-
     for _, row in per_level.iterrows():
         ax.annotate(
             f"{int(row['n_above'])}/{int(row['n'])} above",
             (row["truth_nugget"], row["level_max"]),
-            textcoords="offset points", xytext=(0, 9), fontsize=8.5, color="dimgray",
+            textcoords="offset points", xytext=(0, 5), fontsize=6.5, color="dimgray",
             ha="center",
         )
 
-    ax.set_xlim(-pad, hi + pad)
+    x_max = float(df["truth_nugget_real_units"].max())
+    ax.set_xlim(-0.08 * x_max, 1.08 * x_max)
     ax.set_ylim(-pad, hi + pad)
-    ax.set_aspect("equal", adjustable="box")
     ax.set_xticks([truth_nugget_real_units(n) for n in ALL_NUGGET_VALUES])
-    ax.set_xlabel("Ground-truth nugget (Porosity %$^2$)")
-    ax.set_ylabel("GP-MLE fitted noise variance (Porosity %$^2$)")
+    ax.set_xlabel("Ground-truth nugget (Porosity %$^2$)", fontsize=9)
+    ax.set_ylabel("GP-MLE fitted noise variance (Porosity %$^2$)", fontsize=9)
     ax.set_title(
-        "Nugget axis, 10 ground-truth realizations per level: what nugget did\n"
-        "GP-MLE's marginal-likelihood fit learn?  "
-        f"{n_above} of {len(df)} fits lie ABOVE y = x, {n_below} below\n"
-        f"(total sill = {TOTAL_SILL_REAL:g} Porosity %$^2$)",
-        fontsize=11.5,
+        f"GP-MLE fitted noise variance vs. ground-truth nugget "
+        f"({n_above} of {len(df)} fits above y = x)", fontsize=9.5,
     )
     ax.grid(alpha=0.3)
     # Legend goes bottom-right (the region below the y = x line is empty here);
     # the headline count box takes the top-left. Neither may sit top-centre,
     # where the per-level "n/10 above" annotations are.
-    ax.legend(fontsize=8.5, loc="lower right")
+    ax.legend(fontsize=7.5, loc="lower right")
 
-    ax.text(
-        0.015, 0.975,
-        f"{n_above} / {len(df)} fits above y = x\n{n_below} / {len(df)} below",
-        transform=ax.transAxes, ha="left", va="top", fontsize=10.5,
-        bbox=dict(boxstyle="round,pad=0.4", facecolor="white", edgecolor="dimgray", alpha=0.9),
-    )
-
-    fig.text(
-        0.5, 0.005,
+    caption = (
         textwrap.fill(
             f"{n_above} of {len(df)} fits (6 nugget levels x 10 ground-truth realizations) "
             f"lie above the y = x line, i.e. the marginal-likelihood fit attributed MORE "
@@ -260,14 +240,14 @@ def figure_fitted_vs_truth(df: pd.DataFrame) -> Path:
             f"show, and a log y would destroy the meaning of the y = x line; the measured y "
             f"spread is {y_ratio:.2f}x against this project's {RATIO_LOG_THRESHOLD:g}x "
             f"log-axis threshold.",
-            152,
-        ),
-        ha="center", fontsize=7.2, color="dimgray",
+            110,
+        )
     )
-    plt.subplots_adjust(left=0.10, bottom=0.235, right=0.97, top=0.885)
+    fig.tight_layout()
     FIGURES_DIR.mkdir(parents=True, exist_ok=True)
     out = FIGURES_DIR / "nugget_fitted_vs_truth_realizations.png"
-    plt.savefig(out, dpi=FIG_DPI, bbox_inches="tight")
+    plt.savefig(out, dpi=FIG_DPI, bbox_inches="tight", pad_inches=0.05)
+    out.with_suffix(".caption.txt").write_text(caption, encoding="utf-8")
     plt.close(fig)
     print(f"[fig1] {out} ({out.stat().st_size} bytes)")
     return out

@@ -1,0 +1,13 @@
+54 of 60 fits (6 nugget levels x 10 ground-truth realizations) lie above the y = x line, i.e. the marginal-
+likelihood fit attributed MORE variance to noise than the ground truth's nugget; 6 lie below. Per-level counts
+are annotated above each error bar. WHAT VARIES: the ground-truth realization (truth_seed in {101, 7101, 7102,
+7103, 7104, 7105, 7106, 7107, 7108, 7109}, 10 per level) and the nugget level. WHAT IS FIXED: sample_seed=20,
+so the sample LOCATIONS are identical in all 60 fits and only the sample VALUES change (verified: max |X/Y|
+deviation 0 across all fits); variogram range 300 m isotropic; n_samples requested 125 -> 121 actual after
+duplicate-cell removal; and the entire GP configuration (kernel structure, bounds, initial values,
+n_restarts_optimizer, normalize_y, random_state), imported from src/experiments/gp_mle.py rather than re-
+declared. truth_seed=101 is the realization every pinned nugget-axis artifact was built from; those rows
+reproduce the pinned values to <1.2e-12 relative. x = nug * POR_STDEV^2 (nugget_axis.truth_nugget_real_units).
+Both axes are LINEAR: x contains an exact zero (the nug=0.0 level), which a log axis cannot show, and a log y
+would destroy the meaning of the y = x line; the measured y spread is 11.60x against this project's 10x log-
+axis threshold.
