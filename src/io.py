@@ -136,6 +136,7 @@ def save_result(
     run_dir: Optional[Union[str, Path]] = None,
     code_entrypoint: Optional[str] = None,
     output_files: Optional[List[str]] = None,
+    extra: Optional[Dict[str, Any]] = None,
 ) -> Path:
     """Write manifest.json into the run directory and return the manifest path.
 
@@ -159,6 +160,11 @@ def save_result(
         this run
     output_files : list of output file names (relative to run_dir) that this
         run produced
+    extra : optional dict of ADDITIONAL top-level manifest fields (e.g.
+        software versions, per-realization records). Additive only: a key
+        that collides with a standard manifest field raises ValueError, so
+        the standard schema can never be overridden. Default None leaves the
+        manifest exactly as before for existing callers.
     """
     if run_dir is None:
         target_dir = make_run_dir(experiment, output_dir)
@@ -193,6 +199,11 @@ def save_result(
         "code_entrypoint": code_entrypoint,
         "output_files": output_files if output_files is not None else [],
     }
+    if extra:
+        clash = sorted(set(extra) & set(manifest))
+        if clash:
+            raise ValueError("extra manifest keys collide with standard fields: %s" % clash)
+        manifest.update(extra)
 
     manifest_path = target_dir / "manifest.json"
     with open(manifest_path, "w", encoding="utf-8") as f:

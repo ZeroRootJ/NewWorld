@@ -1,5 +1,7 @@
 .idea/
 .venv/
+# Separate Python 3.11 venv for the ResMill (ALLUVSIM-based) ground-truth workflow (obm_benchmark/)
+.venv-obm/
 __pycache__/
 *.pyc
 
