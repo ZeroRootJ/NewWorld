@@ -1,0 +1,89 @@
+# ALLUVSIM-based ground truth (ResMill ChannelLayer), CB_JIGSAW, mud-facies porosity spread variant.
+#
+# Every value here was fixed BEFORE any full-run results were inspected
+# (brief section 14: "frozen before comparative results are inspected").
+# Do not tune these to obtain visually preferred realizations.
+
+experiment: obm_ground_truth_mud_sd
+
+generator:
+  package: resmill
+  layer_class: ChannelLayer          # GaussianLayer is NOT used anywhere (brief 5.1)
+  preset: CB_JIGSAW                  # resmill.layers.channel.CB_JIGSAW, unmodified
+  facies_props: default              # resmill.layers.channel.FACIES_PROPS, plus the poro_sd entries below
+  # Variant (user request 2026-10-05): ResMill pins mud facies (FF, FFCH) to a single
+  # porosity value and its texture only touches sand. This gives the mud facies the
+  # same relative spread as the sand texture (poro_noise_std), via ResMill's own
+  # per-facies poro_sd (log-normal, correlated over poro_noise_range). Sand is unchanged.
+  facies_poro_sd:
+    -1: 0.08                         # FF overbank fines
+    0: 0.08                          # FFCH abandoned mud plug
+
+# Grid matched to the existing SGS benchmark (src/experiments/base_case.py):
+# 50 x 50 cells of 20 m, 1000 m x 1000 m. nz = 16 layers over 16 m (1 m cells).
+grid:
+  nx: 50
+  ny: 50
+  nz: 16
+  x_len: 1000.0
+  y_len: 1000.0
+  z_len: 16.0
+  top_depth: 0.0
+
+porosity:
+  poro_noise_std: 0.08               # passed to create_geology
+  poro_noise_range: 5.0              # passed to create_geology (cells)
+  valid_min: 0.0                     # QC physical range only (not passed to ResMill)
+  valid_max: 0.5                     # QC physical range only (not passed to ResMill)
+
+# Fixed 2D slice rule, identical for every seed (brief 5.6).
+slice:
+  rule: "nz // 2"
+  axis: z
+
+# Per-realization affine rescale of the native-fraction 2D slice to the
+# units of the existing benchmark (POR_MEAN / POR_STDEV in base_case.py):
+#   truth = (x - mean(x)) * (target_stdev / std(x)) + target_mean   (std ddof=0)
+rescale:
+  target_mean: 15.0
+  target_stdev: 3.0
+  units: percent
+
+geological_seeds:
+  start: 0
+  stop_exclusive: 30
+
+qc:
+  # Exclusion rules: a realization failing any of these is EXCLUDED and the
+  # exact reason is logged in manifest.json (excluded_realizations).
+  exclusion_rules:
+    - id: shape
+      description: "3D arrays must have shape (nx, ny, nz); 2D arrays (ny, nx)"
+    - id: finite
+      description: "no NaN or inf in porosity (3D, 2D native, 2D rescaled)"
+    - id: porosity_range
+      description: "all native porosity within [valid_min, valid_max]"
+    - id: facies_codes
+      description: "all facies codes in the ResMill FACIES_PROPS keys {-1,0,1,2,3,4}"
+    - id: slice_nondegenerate
+      description: "native 2D slice porosity std must be > min_slice_std (else the affine rescale is undefined)"
+    - id: duplicate
+      description: "3D porosity+facies hash must not equal that of a lower seed (the higher seed is excluded)"
+  min_slice_std: 0.0                 # strict inequality: std > 0.0
+  # Fatal checks: these indicate a pipeline bug, not a geological outcome,
+  # so the run aborts instead of excluding a realization.
+  fatal_checks:
+    - id: slice_rule
+      description: "saved 2D arrays equal the transformed 3D[:, :, slice_index]"
+    - id: files_match_manifest
+      description: "every file listed in the manifest exists, its sha256 matches the record, and no unlisted files exist"
+    - id: determinism
+      description: "regenerating the first diagnostic seed reproduces bit-identical porosity and facies"
+
+diagnostics:
+  seeds: [0, 10, 20]
+  variogram_nlag: 25                 # lags 1..25 cells, x and y grid directions
+  connectivity:
+    variable: native_slice_porosity
+    threshold: 0.18                  # >= CS base porosity (FACIES_PROPS[1]) i.e. CS-or-better
+    structure: 4                     # 4-connectivity (scipy.ndimage.label default cross)

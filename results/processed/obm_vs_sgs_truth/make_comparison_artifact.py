@@ -17,7 +17,8 @@ REPO = HERE.parents[2]
 TEMPLATE = HERE / "comparison_artifact_template.html"
 OUT = REPO / ".artifact_tmp" / "obm_vs_sgs_truth.html"
 
-STATS_ORDER = ["min", "p10", "p50", "p90", "max", "skewness", "excess_kurtosis", "net_to_gross"]
+STATS_ORDER = ["min", "p10", "p50", "p90", "max", "skewness", "excess_kurtosis",
+               "largest_tie_fraction", "net_to_gross"]
 
 
 def main():
@@ -26,7 +27,7 @@ def main():
     stats_rows = []
     for st in STATS_ORDER:
         row = {"statistic": st}
-        for fam in ("sgs", "obm"):
+        for fam in ("sgs", "obm", "obm_mud"):
             r = agg[(agg.family == fam) & (agg.statistic == st)]
             row[fam] = None if r.empty else [round(float(r[c].iloc[0]), 3) for c in ("mean", "min", "max")]
         stats_rows.append(row)

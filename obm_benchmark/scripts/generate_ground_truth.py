@@ -31,7 +31,7 @@ import sys
 import time
 from importlib import metadata
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 import numpy as np
 
@@ -71,7 +71,8 @@ def resmill_provenance() -> Dict[str, Any]:
     }
 
 
-def generate_one(seed: int, cfg: Dict[str, Any], preset_kwargs: Dict[str, Any]):
+def generate_one(seed: int, cfg: Dict[str, Any], preset_kwargs: Dict[str, Any],
+                 facies_props_arg: Optional[Dict[int, Dict[str, float]]] = None):
     """One ChannelLayer realization. Returns (porosity_3d float32, facies_3d int8)
     in the native ResMill (nx, ny, nz) layout."""
     g = cfg["grid"]
@@ -84,6 +85,9 @@ def generate_one(seed: int, cfg: Dict[str, Any], preset_kwargs: Dict[str, Any]):
         seed=int(seed),
         poro_noise_std=float(cfg["porosity"]["poro_noise_std"]),
         poro_noise_range=float(cfg["porosity"]["poro_noise_range"]),
+        # None = ResMill's own default table, and the argument is then not passed
+        # at all, so runs without facies_poro_sd are bit-identical to before.
+        **({} if facies_props_arg is None else {"facies_props": facies_props_arg}),
         **preset_kwargs,
     )
     por3d = np.array(model.poro_mat, dtype=np.float32, copy=True)
@@ -111,6 +115,17 @@ def main(argv=None):
     preset_kwargs = dict(getattr(rm_channel, preset_name))
     facies_props = {int(k): dict(v) for k, v in rm_channel.FACIES_PROPS.items()}
     codes = sorted(facies_props)
+    # Optional per-facies porosity spread (ResMill ``poro_sd``: log-normal relative
+    # spread, correlated over poro_noise_range cells, drawn after the geometry).
+    # Absent from the config = default table untouched and not passed to ResMill.
+    poro_sd_cfg = cfg["generator"].get("facies_poro_sd") or {}
+    facies_props_arg = None
+    if poro_sd_cfg:
+        for code, sd in poro_sd_cfg.items():
+            if int(code) not in facies_props:
+                raise ValueError("facies_poro_sd: unknown facies code %r" % code)
+            facies_props[int(code)]["poro_sd"] = float(sd)
+        facies_props_arg = facies_props
     k = slice_index_from_rule(cfg)
     seeds = list(range(int(cfg["geological_seeds"]["start"]), int(cfg["geological_seeds"]["stop_exclusive"])))
     diag_seeds = [int(s) for s in cfg["diagnostics"]["seeds"]]
@@ -120,8 +135,8 @@ def main(argv=None):
     # --- FATAL: determinism check on the first diagnostic seed ------------
     d0 = diag_seeds[0]
     t0 = time.time()
-    a1 = generate_one(d0, cfg, preset_kwargs)
-    a2 = generate_one(d0, cfg, preset_kwargs)
+    a1 = generate_one(d0, cfg, preset_kwargs, facies_props_arg)
+    a2 = generate_one(d0, cfg, preset_kwargs, facies_props_arg)
     h1, h2 = array_sha256(*a1), array_sha256(*a2)
     determinism = {"seed": d0, "hash_run1": h1, "hash_run2": h2, "passed": h1 == h2}
     if not determinism["passed"]:
@@ -138,7 +153,7 @@ def main(argv=None):
     checks = {}
     for seed in seeds:
         t = time.time()
-        por3d, fac3d = cache.pop(seed) if seed in cache else generate_one(seed, cfg, preset_kwargs)
+        por3d, fac3d = cache.pop(seed) if seed in cache else generate_one(seed, cfg, preset_kwargs, facies_props_arg)
         por2d = slice_to_project_2d(por3d, k)
         fac2d = slice_to_project_2d(fac3d, k)
         stem = stem_for(preset_name, seed)

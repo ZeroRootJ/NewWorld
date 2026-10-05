@@ -8,10 +8,14 @@ grid, in the same units (porosity %):
   CB_JIGSAW), i.e. the ``*_truth_2d.npy`` files (affine-rescaled to mean 15 /
   std 3 per realization) of one results/raw/obm_ground_truth run. Only
   realizations with status "included" in that run's manifest are used.
+* ``obm_mud``: the same CB_JIGSAW realizations generated with
+  obm_benchmark/config/cb_jigsaw_mud_sd.yaml (mud facies FF/FFCH given ResMill's
+  per-facies ``poro_sd``; facies and sand porosity identical to ``obm``), from
+  one results/raw/obm_ground_truth_mud_sd run. Skipped if no such run exists.
 
 Runs in the project .venv (py3.8, geostatspy). From the repository root::
 
-    .venv/Scripts/python.exe -m src.experiments.compare_obm_vs_sgs_truth [--obm-run-dir DIR]
+    .venv/Scripts/python.exe -m src.experiments.compare_obm_vs_sgs_truth [--obm-run-dir DIR] [--obm-mud-run-dir DIR]
 
 Default OBM run: the latest (timestamp-sorted) directory under
 results/raw/obm_ground_truth/.
@@ -50,6 +54,8 @@ from src.truth_model import make_porosity_truth
 
 OUT_DIR = _REPO_ROOT / "results" / "processed" / "obm_vs_sgs_truth"
 OBM_RAW_ROOT = _REPO_ROOT / "results" / "raw" / "obm_ground_truth"
+OBM_MUD_RAW_ROOT = _REPO_ROOT / "results" / "raw" / "obm_ground_truth_mud_sd"
+OBM_FAMILIES = ("obm", "obm_mud")
 CODE_ENTRYPOINT = "src/experiments/compare_obm_vs_sgs_truth.py"
 
 NLAG = 25                    # lags 1..25 cells along x and y
@@ -60,10 +66,10 @@ PERCENTILES = [10, 50, 90]
 NET_FACIES_MIN = 1           # facies >= 1 (CS, LV, LA, CH) = net; matches obm_benchmark
 
 
-def latest_obm_run_dir() -> Path:
-    runs = sorted(p for p in OBM_RAW_ROOT.iterdir() if p.is_dir())
+def latest_obm_run_dir(root: Path = OBM_RAW_ROOT) -> Path:
+    runs = sorted(p for p in root.iterdir() if p.is_dir()) if root.is_dir() else []
     if not runs:
-        raise FileNotFoundError("no OBM runs under %s" % OBM_RAW_ROOT)
+        raise FileNotFoundError("no OBM runs under %s" % root)
     return runs[-1]
 
 
@@ -110,6 +116,9 @@ def field_stats(z: np.ndarray):
     ]
     for p in PERCENTILES:
         rows.append(("p%d" % p, float(np.percentile(v, p))))
+    # Share of cells holding the single most frequent (exactly equal) value.
+    _, counts = np.unique(v, return_counts=True)
+    rows.append(("largest_tie_fraction", float(counts.max() / v.size)))
     return rows
 
 
@@ -123,12 +132,20 @@ def write_csv(path: Path, header, rows):
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--obm-run-dir", default=None)
+    ap.add_argument("--obm-mud-run-dir", default=None)
     args = ap.parse_args(argv)
-    obm_dir = Path(args.obm_run_dir).resolve() if args.obm_run_dir else latest_obm_run_dir()
+    obm_dirs = {"obm": Path(args.obm_run_dir).resolve() if args.obm_run_dir else latest_obm_run_dir()}
+    if args.obm_mud_run_dir:
+        obm_dirs["obm_mud"] = Path(args.obm_mud_run_dir).resolve()
+    elif OBM_MUD_RAW_ROOT.is_dir():
+        obm_dirs["obm_mud"] = latest_obm_run_dir(OBM_MUD_RAW_ROOT)
 
     sgs = sgs_truths()
-    man, obm, obm_fac, obm_ntg = obm_truths(obm_dir)
-    families = {"sgs": sgs, "obm": obm}
+    families = {"sgs": sgs}
+    mans, facs, ntgs = {}, {}, {}
+    for fam, d in obm_dirs.items():
+        mans[fam], families[fam], facs[fam], ntgs[fam] = obm_truths(d)
+    man, obm, obm_fac = mans["obm"], families["obm"], facs["obm"]
 
     for fam, d in families.items():
         for seed, z in d.items():
@@ -146,8 +163,8 @@ def main(argv=None):
         for seed in sorted(d):
             for name, val in field_stats(d[seed]):
                 rows.append((fam, seed, name, val))
-            if fam == "obm":
-                rows.append((fam, seed, "net_to_gross", obm_ntg[seed]))
+            if fam in OBM_FAMILIES:
+                rows.append((fam, seed, "net_to_gross", ntgs[fam][seed]))
     write_csv(OUT_DIR / "summary_stats.csv", ["family", "seed", "statistic", "value"], rows)
 
     # --- histogram_bins.csv (pooled per family, common bins) ----------------
@@ -178,7 +195,7 @@ def main(argv=None):
               ["family", "seed", "direction", "lag_cells", "lag_m", "gamma", "gamma_std", "npairs"], vrows)
 
     # --- example_fields.json -------------------------------------------------
-    missing = [s for s in EXAMPLE_OBM_SEEDS if s not in obm]
+    missing = [(f, s) for f in obm_dirs for s in EXAMPLE_OBM_SEEDS if s not in families[f]]
     if missing:
         raise RuntimeError("example OBM seeds not included in the run: %s" % missing)
     examples = {
@@ -192,6 +209,9 @@ def main(argv=None):
         "obm": {str(s): {"truth": np.round(obm[s], 2).tolist(), "facies": obm_fac[s].astype(int).tolist()}
                 for s in EXAMPLE_OBM_SEEDS},
     }
+    if "obm_mud" in families:
+        examples["obm_mud"] = {str(s): {"truth": np.round(families["obm_mud"][s], 2).tolist()}
+                               for s in EXAMPLE_OBM_SEEDS}
     with open(OUT_DIR / "example_fields.json", "w", encoding="utf-8") as f:
         json.dump(examples, f, separators=(",", ":"))
 
@@ -199,21 +219,22 @@ def main(argv=None):
     fig_name = "truth_families_comparison.png"
     vmin = bc.POR_MEAN - 4 * bc.POR_STDEV
     vmax = bc.POR_MEAN + 4 * bc.POR_STDEV
-    fig = plt.figure(figsize=(16, 12))
-    panels = [("sgs", s) for s in EXAMPLE_SGS_SEEDS] + [("obm", s) for s in EXAMPLE_OBM_SEEDS]
+    nrow = len(families) + 1
+    fig = plt.figure(figsize=(16, 4 * nrow))
+    panels = [("sgs", s) for s in EXAMPLE_SGS_SEEDS] + [(f, s) for f in obm_dirs for s in EXAMPLE_OBM_SEEDS]
     for i, (fam, s) in enumerate(panels, start=1):
-        plt.subplot(3, 3, i)
+        plt.subplot(nrow, 3, i)
         GSLIB.pixelplt_st(families[fam][s], bc.XMIN, bc.XMAX, bc.YMIN, bc.YMAX, bc.XSIZ, vmin, vmax,
                           "%s truth - seed %d" % (fam.upper(), s), "X (m)", "Y (m)", "Porosity (%)",
                           plt.cm.viridis)
-    plt.subplot(3, 3, 7)
+    plt.subplot(nrow, 3, 3 * nrow - 2)
     centers = 0.5 * (edges[:-1] + edges[1:])
     for fam in families:
         plt.step(centers, hist[fam], where="mid", label="%s (n=%d)" % (fam.upper(), len(families[fam])))
     plt.xlabel("Porosity (%)"); plt.ylabel("Density"); plt.title("Pooled histogram"); plt.legend()
     for j, direction in enumerate(("x", "y")):
-        plt.subplot(3, 3, 8 + j)
-        for fam, color in (("sgs", "C0"), ("obm", "C1")):
+        plt.subplot(nrow, 3, 3 * nrow - 1 + j)
+        for fam, color in zip(families, ("C0", "C1", "C2")):
             curves = np.array([vario_store[(fam, s, direction)]["gamma_std"] for s in sorted(families[fam])])
             lag_m = vario_store[(fam, sorted(families[fam])[0], direction)]["lag_m"]
             for c in curves:
@@ -228,26 +249,27 @@ def main(argv=None):
 
     # --- source_runs.json ----------------------------------------------------
     git_dirty, git_dirty_files = get_git_status()
-    obm_manifest = obm_dir / "manifest.json"
-    try:
-        obm_manifest_rel = str(obm_manifest.relative_to(_REPO_ROOT)).replace("\\", "/")
-    except ValueError:
-        obm_manifest_rel = str(obm_manifest)
+    def rel(path):
+        try:
+            return str(path.relative_to(_REPO_ROOT)).replace("\\", "/")
+        except ValueError:
+            return str(path)
     source = {
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "code_entrypoint": CODE_ENTRYPOINT,
         "git_commit": get_git_commit(),
         "git_dirty": git_dirty,
         "git_dirty_files": git_dirty_files,
-        "obm": {
-            "manifest_path": obm_manifest_rel,
-            "manifest_git_commit": man["git_commit"],
-            "manifest_git_dirty": man.get("git_dirty"),
-            "resmill": man["software"]["resmill"],
-            "seeds_used": sorted(obm),
-            "seeds_excluded": [e["geological_seed"] for e in man["excluded_realizations"]],
+        **{fam: {
+            "manifest_path": rel(obm_dirs[fam] / "manifest.json"),
+            "manifest_git_commit": mans[fam]["git_commit"],
+            "manifest_git_dirty": mans[fam].get("git_dirty"),
+            "config_path": mans[fam]["params"].get("config_path"),
+            "resmill": mans[fam]["software"]["resmill"],
+            "seeds_used": sorted(families[fam]),
+            "seeds_excluded": [e["geological_seed"] for e in mans[fam]["excluded_realizations"]],
             "file_used": "<stem>_truth_2d.npy (affine-rescaled per realization)",
-        },
+        } for fam in obm_dirs},
         "sgs": {
             "regenerated_by": "src.truth_model.make_porosity_truth with src/experiments/base_case.py constants",
             "seeds": list(bc.SEEDS),
@@ -258,6 +280,7 @@ def main(argv=None):
             "skewness": "scipy.stats.skew(bias=True)",
             "excess_kurtosis": "scipy.stats.kurtosis(fisher=True, bias=True); normal = 0",
             "percentiles": "numpy.percentile default (linear)",
+            "largest_tie_fraction": "max count of exactly-equal values / number of cells",
             "net_to_gross": "fraction of 2D slice cells with facies code >= 1 (OBM only)",
             "histogram": "pooled over all realizations of a family, common bins of width %.2f %% from %.2f to %.2f, density=True"
                          % (HIST_BIN_WIDTH, lo, hi),
@@ -269,7 +292,8 @@ def main(argv=None):
     with open(OUT_DIR / "source_runs.json", "w", encoding="utf-8") as f:
         json.dump(source, f, indent=2, default=str)
 
-    print("OBM run: %s" % obm_dir)
+    for fam, d in obm_dirs.items():
+        print("%s run: %s" % (fam, d))
     print("Output: %s" % OUT_DIR)
     return OUT_DIR
 

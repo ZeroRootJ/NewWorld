@@ -6,17 +6,17 @@
 :root {
   --bg: #f7f8f7; --surface: #ffffff; --fg: #15191c; --fg-2: #4f575c; --muted: #7d858a;
   --rule: #dfe3e2; --grid: #eceeed;
-  --sgs: #2a78d6; --obm: #eb6834;
+  --sgs: #2a78d6; --obm: #eb6834; --obm_mud: #1baf7a;
   --display: "Source Serif 4", Georgia, serif;
   --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
   --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
 }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
   --bg: #141716; --surface: #1c201f; --fg: #eef1f0; --fg-2: #b9c0bd; --muted: #8a928f;
-  --rule: #313735; --grid: #262b29; --sgs: #3987e5; --obm: #d95926; color-scheme: dark } }
+  --rule: #313735; --grid: #262b29; --sgs: #3987e5; --obm: #d95926; --obm_mud: #199e70; color-scheme: dark } }
 :root[data-theme="dark"] {
   --bg: #141716; --surface: #1c201f; --fg: #eef1f0; --fg-2: #b9c0bd; --muted: #8a928f;
-  --rule: #313735; --grid: #262b29; --sgs: #3987e5; --obm: #d95926; color-scheme: dark }
+  --rule: #313735; --grid: #262b29; --sgs: #3987e5; --obm: #d95926; --obm_mud: #199e70; color-scheme: dark }
 body { background: var(--bg); color: var(--fg); font: 15px/1.55 var(--body); }
 .wrap { max-width: 1040px; margin: 0 auto; padding-inline: 20px; padding-block: 36px 56px; display: grid; gap: 40px; }
 h1 { font: 600 clamp(26px, 4vw, 34px)/1.15 var(--display); margin: 0 0 8px; text-wrap: balance; }
@@ -69,7 +69,7 @@ svg text { fill: var(--muted); font: 11px var(--mono); }
 <div class="wrap">
   <header>
     <h1>SGS vs ALLUVSIM Truths</h1>
-    <p class="lede">The existing Gaussian-simulation ground truths next to the new event-based fluvial realizations (ResMill <code>ChannelLayer</code>, CB_JIGSAW preset). Both families sit on the same 50 × 50 grid with 20 m cells and are affine-scaled to porosity mean 15 % and standard deviation 3 %.</p>
+    <p class="lede">The existing Gaussian-simulation ground truths next to the new event-based fluvial realizations (ResMill <code>ChannelLayer</code>, CB_JIGSAW preset). A third family repeats the same ALLUVSIM realizations with porosity variation inside the mud facies (FF, FFCH), which ResMill otherwise pins to one value. All families sit on the same 50 × 50 grid with 20 m cells and are affine-scaled to porosity mean 15 % and standard deviation 3 %.</p>
     <div class="meta" id="meta"></div>
   </header>
 
@@ -86,6 +86,7 @@ svg text { fill: var(--muted); font: 11px var(--mono); }
     </div>
     <div class="maprow" id="row-sgs"></div>
     <div class="maprow" id="row-obm"></div>
+    <div class="maprow" id="row-obm_mud"></div>
   </section>
 
   <section>
@@ -107,7 +108,7 @@ svg text { fill: var(--muted); font: 11px var(--mono); }
 
   <section>
     <h2>Summary statistics</h2>
-    <p class="cap">Mean over seeds, with min – max across seeds. Porosity in %. Net-to-gross is the fraction of slice cells with facies code ≥ 1.</p>
+    <p class="cap">Mean over seeds, with min – max across seeds. Porosity in %. Largest tie fraction is the share of cells holding the single most frequent exact value. Net-to-gross is the fraction of slice cells with facies code ≥ 1.</p>
     <div class="tblwrap"><table id="stats"></table></div>
   </section>
 </div>
@@ -115,12 +116,14 @@ svg text { fill: var(--muted); font: 11px var(--mono); }
 <script>
 const D = /*__DATA__*/null;
 const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-const FAM = { sgs: "SGS", obm: "ALLUVSIM" };
+const FAM = { sgs: "SGS", obm: "ALLUVSIM", obm_mud: "ALLUVSIM + mud spread" };
+const FAMS = ["sgs", "obm", "obm_mud"].filter(f => D.hist[f]);
 
 // ---- meta line
 document.getElementById("meta").innerHTML =
   `<span><b>SGS</b> n = ${D.n_seeds.sgs} (seeds 101–105)</span>` +
   `<span><b>ALLUVSIM</b> n = ${D.n_seeds.obm} (seeds 0–29)</span>` +
+  (D.n_seeds.obm_mud ? `<span><b>+ mud spread</b> n = ${D.n_seeds.obm_mud} (same seeds)</span>` : "") +
   `<span><b>ResMill</b> ${D.resmill_commit.slice(0, 7)}</span>` +
   `<span><b>run</b> ${D.obm_manifest.split("/").slice(-2, -1)[0]}</span>`;
 
@@ -136,7 +139,7 @@ function rampAt(t) {
 const FACIES = { "-1": "#c9c6bd", "0": "#6b5bc4", "1": "#eda100", "2": "#1baf7a", "3": "#2a78d6", "4": "#e34948" };
 
 const allVals = [];
-for (const fam of ["sgs", "obm"]) for (const s in D.fields[fam]) D.fields[fam][s].truth.forEach(r => allVals.push(...r));
+for (const fam of FAMS) for (const s in D.fields[fam]) D.fields[fam][s].truth.forEach(r => allVals.push(...r));
 const VMIN = Math.floor(Math.min(...allVals)), VMAX = Math.ceil(Math.max(...allVals));
 document.getElementById("smin").textContent = VMIN;
 document.getElementById("smax").textContent = VMAX;
@@ -166,12 +169,14 @@ function buildRow(id, fam, label, sub) {
 }
 buildRow("row-sgs", "sgs", "SGS", "Gaussian, isotropic variogram");
 buildRow("row-obm", "obm", "ALLUVSIM", "Channelized, CB_JIGSAW");
+if (D.fields.obm_mud) buildRow("row-obm_mud", "obm_mud", "ALLUVSIM + mud spread", "Same facies; FF/FFCH porosity varies (poro_sd 0.08)");
 let obmMode = "poro";
 function renderMaps() {
   document.querySelectorAll("canvas.map").forEach(cv => {
     const fam = cv.dataset.fam, f = D.fields[fam][cv.dataset.seed];
-    const mode = fam === "obm" && obmMode === "fac" ? "fac" : "poro";
-    drawMap(cv, mode === "fac" ? f.facies : f.truth, mode);
+    const mode = fam !== "sgs" && obmMode === "fac" ? "fac" : "poro";
+    // The mud-spread variant has the same facies as ALLUVSIM by construction.
+    drawMap(cv, mode === "fac" ? (f.facies || D.fields.obm[cv.dataset.seed].facies) : f.truth, mode);
   });
   document.getElementById("flegend").hidden = obmMode !== "fac";
 }
@@ -185,7 +190,7 @@ for (const [id, m] of [["btn-poro", "poro"], ["btn-fac", "fac"]])
 renderMaps();
 
 // ---- legends
-const legHTML = `<span><i class="sw" style="background:var(--sgs)"></i>SGS (n = ${D.n_seeds.sgs})</span><span><i class="sw" style="background:var(--obm)"></i>ALLUVSIM (n = ${D.n_seeds.obm})</span>`;
+const legHTML = FAMS.map(f => `<span><i class="sw" style="background:var(--${f})"></i>${FAM[f]} (n = ${D.n_seeds[f]})</span>`).join("");
 document.getElementById("leg1").innerHTML = legHTML;
 document.getElementById("leg2").innerHTML = legHTML;
 
@@ -219,7 +224,7 @@ function tooltip(svg, html, px, py) {
   const ymax = Math.max(...all.map(b => b[2])) * 1.05;
   const xs = v => M.l + (v - x0) / (x1 - x0) * (W - M.l - M.r), ys = v => H - M.b - v / ymax * (H - M.t - M.b);
   axes(svg, W, H, M, xs, ys, ticks(x0, x1, 10), ticks(0, ymax, 5), "porosity (%)", "density");
-  for (const fam of ["sgs", "obm"]) {
+  for (const fam of FAMS) {
     const bins = D.hist[fam]; let d = `M${xs(bins[0][0])},${ys(0)}`;
     for (const [l, r, v] of bins) d += `L${xs(l)},${ys(v)}L${xs(r)},${ys(v)}`;
     d += `L${xs(bins[bins.length - 1][1])},${ys(0)}`;
@@ -230,37 +235,37 @@ function tooltip(svg, html, px, py) {
   const find = (fam, v) => D.hist[fam].find(b => v >= b[0] && v < b[1]);
   hit.addEventListener("pointermove", e => {
     const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; const q = p.matrixTransform(svg.getScreenCTM().inverse());
-    const v = x0 + (q.x - M.l) / (W - M.l - M.r) * (x1 - x0); const bs = find("sgs", v), bo = find("obm", v);
+    const v = x0 + (q.x - M.l) / (W - M.l - M.r) * (x1 - x0); const bins = FAMS.map(f => find(f, v));
     hl.setAttribute("x1", q.x); hl.setAttribute("x2", q.x); hl.setAttribute("visibility", "visible");
-    const b = bs || bo; if (!b) return tooltip(svg, null);
-    tooltip(svg, `${b[0].toFixed(1)}–${b[1].toFixed(1)} %<br>SGS ${(bs ? bs[2] : 0).toFixed(4)}<br>ALLUVSIM ${(bo ? bo[2] : 0).toFixed(4)}`, q.x, q.y);
+    const b = bins.find(Boolean); if (!b) return tooltip(svg, null);
+    tooltip(svg, `${b[0].toFixed(1)}–${b[1].toFixed(1)} %<br>` + FAMS.map((f, k) => `${FAM[f]} ${(bins[k] ? bins[k][2] : 0).toFixed(4)}`).join("<br>"), q.x, q.y);
   });
   hit.addEventListener("pointerleave", () => { tooltip(svg, null); hl.setAttribute("visibility", "hidden"); });
 })();
 
 // ---- variograms
-const VMAXG = Math.max(...["sgs", "obm"].flatMap(f => ["x", "y"].flatMap(d => D.vario[f][d].map(r => r[3])))) * 1.05;
+const VMAXG = Math.max(...FAMS.flatMap(f => ["x", "y"].flatMap(d => D.vario[f][d].map(r => r[3])))) * 1.05;
 function vario(id, dir) {
   const svg = document.getElementById(id), W = 470, H = 300, M = { l: 48, r: 14, t: 12, b: 40 };
   const lags = D.vario.sgs[dir].map(r => r[0]), x1 = Math.max(...lags);
   const xs = v => M.l + v / x1 * (W - M.l - M.r), ys = v => H - M.b - v / VMAXG * (H - M.t - M.b);
   axes(svg, W, H, M, xs, ys, ticks(0, x1, 5), ticks(0, VMAXG, 5), "lag (m)", "γ / variance");
   el("line", { x1: M.l, x2: W - M.r, y1: ys(1), y2: ys(1), stroke: "var(--fg-2)", "stroke-width": 1, "stroke-dasharray": "2 4" }, svg);
-  for (const fam of ["sgs", "obm"]) {
+  for (const fam of FAMS) {
     const r = D.vario[fam][dir];
     const band = r.map(p => `${xs(p[0])},${ys(p[3])}`).join(" ") + " " + r.slice().reverse().map(p => `${xs(p[0])},${ys(p[2])}`).join(" ");
     el("polygon", { points: band, fill: `var(--${fam})`, "fill-opacity": 0.14, stroke: "none" }, svg);
     el("polyline", { points: r.map(p => `${xs(p[0])},${ys(p[1])}`).join(" "), fill: "none", stroke: `var(--${fam})`, "stroke-width": 2, "stroke-linejoin": "round" }, svg);
   }
   const hl = el("line", { y1: M.t, y2: H - M.b, stroke: "var(--fg-2)", "stroke-width": 1, "stroke-dasharray": "3 3", visibility: "hidden" }, svg);
-  const dots = ["sgs", "obm"].map(f => el("circle", { r: 4, fill: `var(--${f})`, stroke: "var(--surface)", "stroke-width": 2, visibility: "hidden" }, svg));
+  const dots = FAMS.map(f => el("circle", { r: 4, fill: `var(--${f})`, stroke: "var(--surface)", "stroke-width": 2, visibility: "hidden" }, svg));
   const hit = el("rect", { x: M.l, y: M.t, width: W - M.l - M.r, height: H - M.t - M.b, fill: "transparent" }, svg);
   hit.addEventListener("pointermove", e => {
     const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; const q = p.matrixTransform(svg.getScreenCTM().inverse());
     const lag = (q.x - M.l) / (W - M.l - M.r) * x1;
     const i = lags.reduce((bi, l, k) => Math.abs(l - lag) < Math.abs(lags[bi] - lag) ? k : bi, 0);
     const X = xs(lags[i]); hl.setAttribute("x1", X); hl.setAttribute("x2", X); hl.setAttribute("visibility", "visible");
-    const rows = ["sgs", "obm"].map((f, k) => { const r = D.vario[f][dir][i]; dots[k].setAttribute("cx", X); dots[k].setAttribute("cy", ys(r[1])); dots[k].setAttribute("visibility", "visible");
+    const rows = FAMS.map((f, k) => { const r = D.vario[f][dir][i]; dots[k].setAttribute("cx", X); dots[k].setAttribute("cy", ys(r[1])); dots[k].setAttribute("visibility", "visible");
       return `${FAM[f]} ${r[1].toFixed(3)} <span style="opacity:.7">(${r[2].toFixed(2)}–${r[3].toFixed(2)})</span>`; });
     tooltip(svg, `lag ${lags[i]} m<br>${rows.join("<br>")}`, X, q.y);
   });
@@ -269,9 +274,10 @@ function vario(id, dir) {
 vario("vx", "x"); vario("vy", "y");
 
 // ---- stats table
-const LABEL = { min: "Minimum", p10: "P10", p50: "P50 (median)", p90: "P90", max: "Maximum", skewness: "Skewness", excess_kurtosis: "Excess kurtosis", net_to_gross: "Net-to-gross" };
-const cell = v => v ? `<td>${v[0].toFixed(2)}<span class="rng">${v[1].toFixed(2)} – ${v[2].toFixed(2)}</span></td>` : `<td class="na">—</td>`;
+const LABEL = { min: "Minimum", p10: "P10", p50: "P50 (median)", p90: "P90", max: "Maximum", skewness: "Skewness", excess_kurtosis: "Excess kurtosis", largest_tie_fraction: "Largest tie fraction", net_to_gross: "Net-to-gross" };
+const DIGITS = { largest_tie_fraction: 3 };
+const cell = (v, st) => { const d = DIGITS[st] || 2; return v ? `<td>${v[0].toFixed(d)}<span class="rng">${v[1].toFixed(d)} – ${v[2].toFixed(d)}</span></td>` : `<td class="na">—</td>`; };
 document.getElementById("stats").innerHTML =
-  `<thead><tr><th>Statistic</th><th>SGS (n = ${D.n_seeds.sgs})</th><th>ALLUVSIM (n = ${D.n_seeds.obm})</th></tr></thead><tbody>` +
-  D.stats.map(r => `<tr><td>${LABEL[r.statistic] || r.statistic}</td>${cell(r.sgs)}${cell(r.obm)}</tr>`).join("") + `</tbody>`;
+  `<thead><tr><th>Statistic</th>${FAMS.map(f => `<th>${FAM[f]} (n = ${D.n_seeds[f]})</th>`).join("")}</tr></thead><tbody>` +
+  D.stats.map(r => `<tr><td>${LABEL[r.statistic] || r.statistic}</td>${FAMS.map(f => cell(r[f], r.statistic)).join("")}</tr>`).join("") + `</tbody>`;
 </script>
