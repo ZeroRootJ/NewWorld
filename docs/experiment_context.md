@@ -150,8 +150,10 @@ depends on showing they can diverge.
 - **Accuracy:** MSE / RMSE, MAE at withheld locations.
 - **Uncertainty quality:** calibration of the predicted distributions against the
   known truth — e.g. coverage of prediction intervals across nominal levels
-  (an accuracy plot / goodness measure), interval width, and a proper scoring
-  rule. The key diagnostic is whether observed coverage falls below nominal
+  (an accuracy plot / goodness measure, UMG) and the predictive variance
+  (`variance_mean`). Sharpness metrics (interval width, CRPS) were removed from
+  the study entirely by user decision on 2026-10-05 — neither computed nor
+  stored. The key diagnostic is whether observed coverage falls below nominal
   (overconfidence / underestimated uncertainty), which is the predicted failure
   mode for both RBF-bootstrap and auto-tuned GPR.
 

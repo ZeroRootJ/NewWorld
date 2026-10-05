@@ -14,29 +14,7 @@ Deliverable Order (설계 문서 7절 기준) — 각 단계는 이전 단계에
 
 ## 보류(TODO) — 나중에 다시 판단할 것
 
-- **sharpness 계열 지표(interval width, CRPS)를 workflow에서 일단 제외** (사용자 결정 2026-09-15).
-  사유: 현재 보고 싶은 것을 제대로 표현하지 못한다는 판단. 대신 예측 분산의 합(`variance_sum`)/
-  평균(`variance_mean`)을 비교 지표로 사용.
-  - 적용 범위: **sample density 축의 workflow/CSV**. range axis(`results/processed/range_axis/`)는
-    `metrics.csv`/`evaluate_range_axis.py` 자체는 그대로 두고 width/CRPS를 계속 계산·저장한다
-    (row 5개 metric × 8레벨 × 4방법 = 160행, 불변). **단, 2026-09-22부터 게시된 Range Axis
-    Experiment 아티팩트에서는 width/CRPS를 표시하지 않는다**(사용자 지시) — sample density 축과
-    동일하게 "계산은 유지, 표시만 제외"로 확장. 근거: `accuracy_calibration_vs_range.png`(MSE+UMG
-    2-panel, `results/processed/range_axis/make_range_axis_figures.py`의
-    `make_accuracy_calibration_figure()`)가 새로 아티팩트에 들어갔고, 기존 4-panel
-    `metrics_vs_range.png`/`interval_width_p95_vs_range.png`는 로컬 그림 디렉토리에는 그대로
-    남아있으나 아티팩트에서는 빠졌다.
-  - 코드는 살아있다: `src/evaluation.py`의 `gaussian_interval_widths`/`gaussian_crps`/
-    `kriging_interval_widths`/`kriging_crps` 등과 그 테스트 9개는 전부 유지·검증된 상태이고,
-    `evaluate_sample_density_axis.py`의 `EMIT_SHARPNESS_METRICS=False` 플래그만 True로 되돌리면
-    즉시 복구된다.
-  - 계산된 값도 버리지 않았다: `results/processed/sample_density_axis/metrics_parked_sharpness.csv`
-    에 보존. 관련 진단(`crps_convergence.csv`, `kriging_backtransform_tail_sensitivity.csv`)도 유지.
-  - 다시 볼 때 같이 고려할 것: (a) `docs/experiment_context.md` 5절이 interval width와 proper
-    scoring rule을 평가 요구사항으로 명시하고 있으므로, 최종 논문에서 이들을 완전히 빼려면 그
-    근거가 필요하다. (b) kriging의 width만 back-transform tail 가정에 민감하다는 측정 결과
-    (1% 레벨에서 ±2σ/±4σ/±6σ에 따라 8.64/9.84/11.03으로 순위가 3가지로 바뀜)가 이 판단의
-    배경 중 하나다.
+- ~~sharpness 계열 지표(interval width, CRPS) 보류~~ → **2026-10-05 최종 결정: 완전 제거** (사용자: "sharpness 지표는 계산도 할 필요 없고 데이터도 가지고 있을 필요없어"). 계산 코드·테스트·processed CSV·그림에서 모두 삭제. 불확실성 비교 지표는 UMG와 `variance_mean`만 사용. `docs/experiment_context.md` 5절과 CLAUDE.md 평가 항목도 같이 갱신. `results/raw/`는 원본 불변 원칙에 따라 그대로 둠.
 
 - **600~700m tie가 진짜 평평한 CV-MSE surface인지 241점 재확인 — 사용자가 직접 처리 예정**
   (2026-09-22, 사용자 지시: "그냥 둬, 내가 알아서 처리할게, 노트만 남겨놔"). 배경: 121점 production
