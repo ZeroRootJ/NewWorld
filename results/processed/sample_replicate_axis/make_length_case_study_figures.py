@@ -31,10 +31,13 @@ task was handed off:
 
 Layout
 ------
-ONE figure per method, 4 ROWS x 4 COLUMNS, organised as TWO BLOCKS of
-2 rows each (2026-09-18: the panel set grew from 6 to 8, so instead of one
-very wide 2x6 strip each replicate is now FOLDED into its own 2x4 block for
-legibility). The two blocks are separated by a wider vertical gap than the
+ONE figure per method, 4 ROWS, organised as TWO BLOCKS of 2 rows each
+(2026-09-18: the panel set grew from 6 to 8, so instead of one very wide 2x6
+strip each replicate was FOLDED into its own 2x4 block for legibility;
+2026-10-05: a 9th panel, the conditional expectation plot, was added to the
+bottom row, so each block is now 4 map panels over 5 diagnostic panels, built
+by make_block_axes(), and the figure width grew from 21 to FIG_WIDTH_IN=25.5
+in). The two blocks are separated by a wider vertical gap than the
 gap between the two rows inside a block, and each block sits on its own
 tinted background band with its own bold block title carrying the same
 identifying information the old per-row panel titles carried (role
@@ -47,11 +50,13 @@ Inside one block:
   ROW A (map panels):        1. truth + samples   2. example realization
                              3. prediction mean   4. predictive variance
   ROW B (diagnostic panels): 5. UMG plot          6. accuracy crossplot
-                             7. variogram reproduction
-                             8. distribution reproduction
+                             7. conditional expectation
+                             8. variogram reproduction
+                             9. distribution reproduction
 
 Panels 1-6 are UNCHANGED in content and in their array-selection rules from
-the previous 2x6 version; panels 7-8 are new (see their own sections below).
+the previous 2x6 version; panels 8-9 were added 2026-09-18 (numbered 7-8
+until panel 7 was inserted on 2026-10-05; see their own sections below).
 
   1. Ground truth + THAT replicate's own conditioning samples overlaid.
   2. Example realization (gp_mle: posterior_sample_map.npy, one posterior
@@ -95,7 +100,23 @@ the previous 2x6 version; panels 7-8 are new (see their own sections below).
      already-documented distinction in this project (see
      CROSSPLOT_POINT_ESTIMATE_FILE in make_sample_density_figures.py and the
      note under column 3 above) -- it is preserved here, not blurred.
-  7. VARIOGRAM REPRODUCTION (new, 2026-09-18). Four curves on ONE set of
+  7. CONDITIONAL EXPECTATION (new, 2026-10-05). Built from EXACTLY the
+     arrays panel 6 scatters (truth and that method's point estimate on the
+     evaluated cells, conditioning cells excluded). Cells are sorted by the
+     point estimate Z* and split into COND_EXP_N_BINS=20 equal-count
+     (quantile) bins; each marker is (mean Z* in the bin, mean truth Z in
+     the bin), i.e. a binned E[Z | Z*], drawn with the same 1:1 dashed gray
+     line, the same axis limits (crossplot_lims) and equal aspect as panel 6
+     (axes are swapped relative to panel 6: estimate on x). On the 1:1 line
+     = conditionally unbiased. The title's slope is the OLS slope of Z
+     regressed on Z* over ALL evaluated cells (not the binned means) -- the
+     standard conditional-bias slope, 1.0 = no conditional bias. The
+     binning / slope / sanity-check code is ONE helper,
+     ``compute_conditional_expectation`` (reused by
+     make_fixed_range_case_study_figures.py), and the binned values of all
+     boards are written to case_study_conditional_expectation.csv (tidy;
+     this script replaces only its own methods' rows).
+  8. VARIOGRAM REPRODUCTION (new, 2026-09-18). Four curves on ONE set of
      lag bins: (i) the ground-truth field's experimental variogram, (ii)
      the experimental variogram of THAT replicate's example realization /
      draw (exactly the array panel 2 shows -- gp_mle:
@@ -135,9 +156,9 @@ the previous 2x6 version; panels 7-8 are new (see their own sections below).
      lower-variance than the truth -- that is a generic property of
      estimation, not a defect of a method, and is not described as one
      here. Interpretation is left to the paper.
-  8. DISTRIBUTION REPRODUCTION (new, 2026-09-18). Overlaid empirical CDFs
+  9. DISTRIBUTION REPRODUCTION (new, 2026-09-18). Overlaid empirical CDFs
      of: the ground-truth field, the same example realization/draw as
-     panel 7 (ii), the same prediction mean as panel 7 (iii), and THAT
+     panel 8 (ii), the same prediction mean as panel 8 (iii), and THAT
      replicate's own conditioning-sample values (samples.csv's VCOL). The
      mean and standard deviation (ddof=1 for all four curves, stated on the
      panel) of each curve are printed inside the panel. EVALUATION-CELL
@@ -148,10 +169,10 @@ the previous 2x6 version; panels 7-8 are new (see their own sections below).
      conditioning-sample curve is, by construction, the values AT those
      excluded cells (all 25 of them); that is the only way the four curves
      differ in support and it is stated in the panel note and the caption.
-     NOTE that panel 7's variogram, by contrast, is computed on the FULL
+     NOTE that panel 8's variogram, by contrast, is computed on the FULL
      50x50 grid (the imported estimator draws pairs over every cell and has
-     no mask argument) -- this difference between panels 7 and 8 is stated
-     on panel 7 and in the caption rather than silently glossed over.
+     no mask argument) -- this difference between panels 8 and 9 is stated
+     on panel 8 and in the caption rather than silently glossed over.
 
 DECISIVE CORRECTNESS CHECK (same pattern make_crossplot_figure() already
 uses for MSE elsewhere in this project): for each of the 4 (method,
@@ -200,7 +221,8 @@ make_sample_density_figures.py's module docstring)
   blocks, explicitly (set_xlim/set_ylim), because comparing the MIN-length
   block against the MAX-length block IS the purpose of the figure: UMG
   [0,1]x[0,1] (as before), accuracy crossplot on the truth field's own
-  [min,max]+5% (as before), and -- new -- the variogram panels share one
+  [min,max]+5% (as before), the conditional-expectation panel on the SAME
+  limits as the crossplot on both axes, and the variogram panels share one
   lag range and one semivariance range (computed over BOTH blocks' curves
   plus the theoretical model) and the distribution panels share one
   porosity range (computed over BOTH blocks' truth/example/mean/sample
@@ -249,7 +271,7 @@ from src.experiments.sample_replicate_axis import (  # noqa: E402
 )
 
 # The variogram estimator + theoretical spherical model are REUSED, not
-# reimplemented (see module docstring, panel 7). That module does no
+# reimplemented (see module docstring, panel 8). That module does no
 # file reading at import time (its I/O all lives inside main()), so this
 # import has no side effects.
 from results.processed.sample_density_axis.make_length_and_variogram_figures import (  # noqa: E402
@@ -272,7 +294,8 @@ AXIS_LEVEL = "1"
 
 FIG_DPI = 300
 
-# 4 rows x 4 cols = TWO stacked 2x4 BLOCKS, one per replicate. Each entry is
+# TWO stacked replicate BLOCKS, each 2 rows: top row = 4 map panels, bottom
+# row = 5 diagnostic panels (see make_block_axes()). Each entry is
 # that block's (gridspec top, gridspec bottom) in figure coordinates. The
 # GAP BETWEEN BLOCKS (0.585 - 0.450 = 0.135) is deliberately ~1.75x the gap
 # between the two rows INSIDE a block (block height 0.355 over 2 rows at
@@ -283,6 +306,24 @@ BLOCK_BAND_FACECOLORS = ("#eef4fb", "#fbf3ee")
 BLOCK_BAND_PAD_TOP = 0.036
 BLOCK_BAND_PAD_BOTTOM = 0.058
 BLOCK_GRID_KWARGS = dict(left=0.05, right=0.985, wspace=0.42, hspace=0.55)
+# Figure width grew 21.0 -> 25.5 in (2026-10-05) when the bottom row went
+# from 4 to 5 panels, so each bottom-row panel keeps roughly its old width.
+FIG_WIDTH_IN = 25.5
+
+# --- Panel 7 (conditional expectation, E[truth | estimate]) ----------------
+# Equal-count (quantile) bins of the point estimate over the evaluated cells.
+COND_EXP_N_BINS = 20
+# Tolerance for the internal sanity check "n_cells-weighted mean of the
+# per-bin truth means == mean truth over all evaluated cells".
+COND_EXP_MEAN_CHECK_ATOL = 1e-10
+CONDITIONAL_EXPECTATION_CSV = (
+    _REPO_ROOT / "results" / "processed" / "sample_replicate_axis"
+    / "case_study_conditional_expectation.csv"
+)
+CONDITIONAL_EXPECTATION_COLUMNS = [
+    "method", "level", "replicate_id", "role", "bin", "n_cells",
+    "estimate_mean", "truth_mean", "slope",
+]
 
 EXTENT = [XMIN, XMAX, YMIN, YMAX]
 
@@ -319,7 +360,7 @@ METHOD_POINT_ESTIMATE_FILES = {
     "rbf_bootstrap": "point_estimate_map.npy",
 }
 
-# --- Panels 7-8 (variogram / distribution reproduction) --------------------
+# --- Panels 8-9 (variogram / distribution reproduction) --------------------
 # The imported ``spherical_semivariance`` builds its theoretical curve from
 # src.experiments.base_case's HMAJ1 internally, while THIS axis's truth field
 # is generated with sample_density_axis's AXIS_HMAJ1/AXIS_HMIN1. They are the
@@ -334,7 +375,7 @@ if not (AXIS_HMAJ1 == HMAJ1 and AXIS_HMIN1 == HMAJ1):
         "theoretical variogram curve would not describe the plotted truth field."
     )
 
-# One color per CURVE ROLE, used identically in panels 7 and 8 so the reader
+# One color per CURVE ROLE, used identically in panels 8 and 9 so the reader
 # reads one legend for both. tab:purple (not tab:red) for the theoretical
 # model so it never collides with gp_mle's own tab:red method color.
 CURVE_COLORS = {
@@ -395,6 +436,143 @@ def _panel(ax, arr, title, vmin, vmax, cmap, cbar_label, samples_df, scatter_col
     return im
 
 
+def make_block_axes(fig, gs_top: float, gs_bottom: float) -> dict:
+    """Axes for ONE replicate block: top row = 4 map panels (truth, example,
+    mean, variance), bottom row = 5 diagnostic panels (UMG, accuracy
+    crossplot, conditional expectation, variogram, distribution).
+
+    Implemented as a 2x1 outer GridSpec whose two rows are split by their own
+    sub-GridSpecs (1x4 and 1x5), so the 4 maps keep equal relative widths
+    and the 5 diagnostics get equal widths too; both rows use the same
+    BLOCK_GRID_KWARGS wspace. Shared by make_length_case_study_figures.py and
+    make_fixed_range_case_study_figures.py."""
+    kw = dict(BLOCK_GRID_KWARGS)
+    wspace = kw.pop("wspace")
+    outer = fig.add_gridspec(2, 1, top=gs_top, bottom=gs_bottom, **kw)
+    top = outer[0].subgridspec(1, 4, wspace=wspace)
+    bottom = outer[1].subgridspec(1, 5, wspace=wspace)
+    return {
+        "truth": fig.add_subplot(top[0, 0]),
+        "example": fig.add_subplot(top[0, 1]),
+        "mean": fig.add_subplot(top[0, 2]),
+        "var": fig.add_subplot(top[0, 3]),
+        "umg": fig.add_subplot(bottom[0, 0]),
+        "crossplot": fig.add_subplot(bottom[0, 1]),
+        "cond_exp": fig.add_subplot(bottom[0, 2]),
+        "vario": fig.add_subplot(bottom[0, 3]),
+        "dist": fig.add_subplot(bottom[0, 4]),
+    }
+
+
+def compute_conditional_expectation(truth_masked, estimate_masked, n_bins=COND_EXP_N_BINS):
+    """Binned conditional expectation E[Z | Z*] of the truth Z given the point
+    estimate Z*, on exactly the (truth, estimate) arrays the accuracy
+    crossplot scatters (evaluated cells, conditioning cells excluded).
+
+    Cells are sorted by Z* (stable mergesort) and split into ``n_bins``
+    equal-count bins (np.array_split: bin sizes differ by at most 1 when the
+    cell count is not divisible by n_bins). Per bin: n_cells, mean Z*, mean Z.
+
+    ``slope`` is the OLS slope of Z regressed on Z* over ALL evaluated cells
+    (not the binned means): cov(Z*, Z) / var(Z*) -- the standard
+    conditional-bias slope, 1.0 = no conditional bias. NaN if Z* is constant.
+
+    Internal sanity checks (raise on failure): the bin cell counts sum to the
+    number of evaluated cells, and the n_cells-weighted mean of the per-bin
+    truth means equals the mean truth over all evaluated cells (atol
+    COND_EXP_MEAN_CHECK_ATOL).
+
+    Returns (bins_df, slope).
+    """
+    z = np.asarray(truth_masked, dtype=float).ravel()
+    zs = np.asarray(estimate_masked, dtype=float).ravel()
+    if z.shape != zs.shape or z.size == 0:
+        raise ValueError(
+            f"compute_conditional_expectation: truth/estimate shape mismatch or empty "
+            f"({z.shape} vs {zs.shape})."
+        )
+    if z.size < n_bins:
+        raise ValueError(f"only {z.size} cells for {n_bins} bins.")
+    order = np.argsort(zs, kind="mergesort")
+    rows = []
+    for b, idx in enumerate(np.array_split(order, n_bins), start=1):
+        rows.append({
+            "bin": b,
+            "n_cells": int(idx.size),
+            "estimate_mean": float(np.mean(zs[idx])),
+            "truth_mean": float(np.mean(z[idx])),
+        })
+    bins_df = pd.DataFrame(rows)
+
+    zs_c = zs - zs.mean()
+    denom = float(np.sum(zs_c * zs_c))
+    slope = float(np.sum(zs_c * (z - z.mean())) / denom) if denom > 0.0 else float("nan")
+
+    n_total = int(bins_df["n_cells"].sum())
+    if n_total != z.size:
+        raise ValueError(f"conditional expectation: bins hold {n_total} cells, expected {z.size}.")
+    weighted = float(np.sum(bins_df["truth_mean"] * bins_df["n_cells"]) / n_total)
+    if not np.isclose(weighted, float(np.mean(z)), rtol=0.0, atol=COND_EXP_MEAN_CHECK_ATOL):
+        raise ValueError(
+            f"conditional expectation: weighted bin truth mean {weighted} != mean truth "
+            f"{float(np.mean(z))}."
+        )
+    return bins_df, slope
+
+
+def plot_conditional_expectation(ax, bins_df, slope, lims, color, point_estimate_label, tag):
+    """Draw panel 7 (conditional expectation) on ``ax``: binned E[truth |
+    estimate] as a line with markers plus the same 1:1 dashed gray line and
+    the same axis limits / equal aspect as the accuracy crossplot."""
+    ax.plot(
+        bins_df["estimate_mean"], bins_df["truth_mean"], marker="o", markersize=4,
+        color=color, linewidth=1.4,
+        label=f"binned E[Z | Z*] ({len(bins_df)} equal-count bins)",
+    )
+    ax.plot(lims, lims, color="gray", linestyle="--", label="1:1")
+    ax.set_xlim(lims)
+    ax.set_ylim(lims)
+    ax.set_xlabel(f"{point_estimate_label} (Porosity %)")
+    ax.set_ylabel("E[Truth | estimate] (Porosity %)")
+    ax.set_title(f"{tag} Conditional expectation (slope={slope:.3f})")
+    ax.legend(loc="upper left", fontsize=8)
+    ax.grid(alpha=0.3)
+    ax.set_aspect("equal", adjustable="box")
+
+
+def conditional_expectation_rows(method, replicate_id, role, bins_df, slope) -> pd.DataFrame:
+    """Tidy rows (CONDITIONAL_EXPECTATION_COLUMNS) for one board's panel 7."""
+    df = bins_df.copy()
+    df.insert(0, "role", role)
+    df.insert(0, "replicate_id", replicate_id)
+    df.insert(0, "level", AXIS_LEVEL)
+    df.insert(0, "method", method)
+    df["slope"] = slope
+    return df[CONDITIONAL_EXPECTATION_COLUMNS]
+
+
+def update_conditional_expectation_csv(new_rows: pd.DataFrame, methods) -> Path:
+    """Merge ``new_rows`` into CONDITIONAL_EXPECTATION_CSV, replacing ONLY the
+    rows whose method is in ``methods`` (each case-study script owns its own
+    methods' rows; the other script's rows are kept as-is)."""
+    methods = set(methods)
+    if not set(new_rows["method"]).issubset(methods):
+        raise ValueError("new_rows contains methods outside the ones being replaced.")
+    path = CONDITIONAL_EXPECTATION_CSV
+    if path.exists():
+        old = pd.read_csv(path, dtype={"level": str})
+        old = old[~old["method"].isin(methods)]
+        merged = pd.concat([old, new_rows], ignore_index=True)
+    else:
+        merged = new_rows.copy()
+    merged = merged[CONDITIONAL_EXPECTATION_COLUMNS].sort_values(
+        ["method", "level", "replicate_id", "role", "bin"]
+    ).reset_index(drop=True)
+    merged.to_csv(path, index=False)
+    print(f"{path.name}: {path} ({len(merged)} rows; replaced methods {sorted(methods)})")
+    return path
+
+
 def _empirical_cdf(values: np.ndarray):
     """Plotting-position empirical CDF ((i - 0.5)/n, the standard
     mid-point convention) of ``values``. Returns (sorted values, cumulative
@@ -439,7 +617,7 @@ def _variogram_at_reference_lags(vario_df: pd.DataFrame) -> list:
 
 def compute_map_variogram(map_2d: np.ndarray, label: str) -> pd.DataFrame:
     """Thin logging wrapper around the IMPORTED
-    ``compute_experimental_variogram`` (see module docstring, panel 7).
+    ``compute_experimental_variogram`` (see module docstring, panel 8).
     The imported function re-seeds its own RandomState(VARIOGRAM_PAIR_SEED)
     on every call, so every map passed through here is evaluated on the
     IDENTICAL (i, j) pair set and lag bins."""
@@ -483,7 +661,7 @@ def load_case_study_row(
         example_label = f"GP-MLE -- posterior sample (1 draw, {replicate_id})"
         mean_label = "GP-MLE -- posterior mean"
         var_label = "GP-MLE -- posterior variance"
-        # Short forms for the panel-7/8 legends -- SAME arrays as panels 2/3.
+        # Short forms for the panel-8/9 legends -- SAME arrays as panels 2/3.
         example_short_label = "posterior draw (panel 2)"
         mean_short_label = "posterior mean (panel 3)"
     else:  # rbf_bootstrap
@@ -548,10 +726,10 @@ def load_case_study_row(
             "drifted from evaluate_sample_replicate_axis.py; not plotting silently."
         )
 
-    # --- (d) Panel 7 inputs: experimental variograms of the SAME arrays -----
+    # --- (d) Panel 8 inputs: experimental variograms of the SAME arrays -----
     # panels 2 and 3 display. Computed on the FULL grid (the imported
     # estimator has no mask argument) -- deliberately different from the
-    # masked support panel 8 uses; both are stated on the figure.
+    # masked support panel 9 uses; both are stated on the figure.
     vario_example = compute_map_variogram(
         example_map, f"{method} {replicate_id} ({role}) example realization/draw"
     )
@@ -559,7 +737,7 @@ def load_case_study_row(
         mean_map, f"{method} {replicate_id} ({role}) prediction mean"
     )
 
-    # --- (e) Panel 8 inputs: values on the SAME evaluated-cell mask used ----
+    # --- (e) Panel 9 inputs: values on the SAME evaluated-cell mask used ----
     # for the UMG and MSE checks above (conditioning cells excluded), plus
     # the conditioning-sample values themselves (which live exactly at the
     # excluded cells).
@@ -619,7 +797,7 @@ def make_case_study_figure(
     crossplot_pad = 0.05 * (porosity_vmax - porosity_vmin)
     crossplot_lims = (porosity_vmin - crossplot_pad, porosity_vmax + crossplot_pad)
 
-    # --- Panel 7 bookkeeping: verify every variogram curve really was -------
+    # --- Panel 8 bookkeeping: verify every variogram curve really was -------
     # computed on the SAME pair set / lag bins (the imported estimator
     # re-seeds RandomState(VARIOGRAM_PAIR_SEED) per call, so the bin centres
     # AND the per-bin pair counts must come out bit-identical; if they ever
@@ -673,7 +851,10 @@ def make_case_study_figure(
     dist_pad = 0.03 * (float(dist_all.max()) - float(dist_all.min()))
     dist_xlim = (float(dist_all.min()) - dist_pad, float(dist_all.max()) + dist_pad)
 
-    fig = plt.figure(figsize=(21.0, 22.5))
+    method_color = "tab:red" if method == "gp_mle" else "tab:orange"
+    ce_rows = []
+
+    fig = plt.figure(figsize=(FIG_WIDTH_IN, 22.5))
     for block_idx, row_data in enumerate(block_rows):
         gs_top, gs_bottom = BLOCK_GEOMETRY[block_idx]
 
@@ -685,15 +866,13 @@ def make_case_study_figure(
             transform=fig.transFigure, facecolor=BLOCK_BAND_FACECOLORS[block_idx],
             edgecolor="0.55", linewidth=1.2, zorder=-1,
         ))
-        gs = fig.add_gridspec(2, 4, top=gs_top, bottom=gs_bottom, **BLOCK_GRID_KWARGS)
-        ax_truth = fig.add_subplot(gs[0, 0])
-        ax_example = fig.add_subplot(gs[0, 1])
-        ax_mean = fig.add_subplot(gs[0, 2])
-        ax_var = fig.add_subplot(gs[0, 3])
-        ax_umg = fig.add_subplot(gs[1, 0])
-        ax_crossplot = fig.add_subplot(gs[1, 1])
-        ax_vario = fig.add_subplot(gs[1, 2])
-        ax_dist = fig.add_subplot(gs[1, 3])
+        axes = make_block_axes(fig, gs_top, gs_bottom)
+        ax_truth, ax_example, ax_mean, ax_var = (
+            axes["truth"], axes["example"], axes["mean"], axes["var"]
+        )
+        ax_umg, ax_crossplot, ax_cond_exp, ax_vario, ax_dist = (
+            axes["umg"], axes["crossplot"], axes["cond_exp"], axes["vario"], axes["dist"]
+        )
 
         fig.text(
             0.5, gs_top + 0.013,
@@ -769,7 +948,22 @@ def make_case_study_figure(
         ax_crossplot.grid(alpha=0.3)
         ax_crossplot.set_aspect("equal", adjustable="box")
 
-        # ---- 7. Variogram reproduction --------------------------------
+        # ---- 7. Conditional expectation E[truth | estimate] -----------
+        # SAME arrays the crossplot scatters (evaluated cells only).
+        ce_bins, ce_slope = compute_conditional_expectation(
+            row_data["truth_masked"], row_data["point_estimate_masked"]
+        )
+        row_data["cond_exp_slope"] = ce_slope
+        row_data["cond_exp_bins"] = ce_bins
+        plot_conditional_expectation(
+            ax_cond_exp, ce_bins, ce_slope, crossplot_lims, method_color,
+            point_estimate_label, f"[{row_data['role']}]",
+        )
+        ce_rows.append(conditional_expectation_rows(
+            method, row_data["replicate_id"], row_data["role"], ce_bins, ce_slope
+        ))
+
+        # ---- 8. Variogram reproduction --------------------------------
         vario_curves = [
             ("truth field", truth_vario, CURVE_COLORS["truth"], "o", "-"),
             (row_data["example_short_label"], row_data["vario_example"],
@@ -828,7 +1022,7 @@ def make_case_study_figure(
             bbox=dict(boxstyle="round", facecolor="white", alpha=0.82, linewidth=0.4),
         )
 
-        # ---- 8. Distribution reproduction -----------------------------
+        # ---- 9. Distribution reproduction -----------------------------
         dist_curves = [
             ("truth field", row_data["truth_masked"], CURVE_COLORS["truth"], "-"),
             (row_data["example_short_label"], row_data["example_masked"],
@@ -880,6 +1074,12 @@ def make_case_study_figure(
             f"{row_data['mse_pinned']:.6f} (match)"
         )
         print(
+            f"    conditional expectation: slope (OLS truth on estimate, all "
+            f"{row_data['n_evaluated_cells']} evaluated cells)={ce_slope:.6f}; "
+            f"{len(ce_bins)} bins, n_cells sum={int(ce_bins['n_cells'].sum())}, "
+            f"bin sizes {int(ce_bins['n_cells'].min())}-{int(ce_bins['n_cells'].max())}"
+        )
+        print(
             f"    distribution ({row_data['n_evaluated_cells']} evaluated cells; samples = "
             f"{len(row_data['sample_values'])} excluded conditioning cells), mean/std "
             f"(ddof={DIST_STD_DDOF}): "
@@ -908,13 +1108,14 @@ def make_case_study_figure(
         f"MAX-fitted-length-scale replicate (LOWER BLOCK, {max_row['replicate_id']}, "
         f"{max_row['length_scale_m']:.1f} m) among the SAME 10 sample-location replicates "
         f"(sample_seed 1001-1010), same ground-truth field for every replicate (TRUTH_SEED="
-        f"{TRUTH_SEED}, range={AXIS_HMAJ1:g} m). Each replicate occupies ONE 2x4 BLOCK on its "
-        "own tinted band: top sub-row = maps (truth+samples / example realization / prediction "
-        "mean / predictive variance), bottom sub-row = diagnostics (UMG / accuracy crossplot / "
-        f"variogram / distribution). Length scale definition: {length_definition_note} "
+        f"{TRUTH_SEED}, range={AXIS_HMAJ1:g} m). Each replicate occupies ONE 2-row BLOCK on its "
+        "own tinted band: top sub-row = 4 maps (truth+samples / example realization / prediction "
+        "mean / predictive variance), bottom sub-row = 5 diagnostics (UMG / accuracy crossplot / "
+        "conditional expectation / variogram / distribution). Length scale definition: "
+        f"{length_definition_note} "
         "Porosity color scale (truth/example/mean panels) is SHARED across both blocks (same "
         "truth field, same units); variance color scale is PER BLOCK (see the note under each "
-        "variance panel) -- see module docstring for why. The two new diagnostic panels' axis "
+        "variance panel) -- see module docstring for why. The variogram and distribution panels' axis "
         "ranges are SHARED across both blocks (explicit set_xlim/set_ylim over both blocks' "
         "curves) so the blocks can be compared directly. UMG values plotted/annotated are "
         "recomputed here from this run's own predictive mean/variance maps and are verified "
@@ -927,6 +1128,14 @@ def make_case_study_figure(
         "conditioning samples excluded), with axis limits from the truth field's own [min, max] "
         "(5% padding) and MSE recomputed and verified (np.isclose) to match metrics.csv's "
         "pinned value for the same (axis_level, replicate, method, metric='mse') row. "
+        "CONDITIONAL EXPECTATION panel: built from the SAME (truth, point estimate) cells the "
+        f"crossplot scatters -- cells sorted by the point estimate Z* and split into "
+        f"{COND_EXP_N_BINS} equal-count bins; each marker is (mean Z* in the bin, mean truth Z in "
+        "the bin), i.e. a binned E[Z | Z*]; same 1:1 line and axis limits as the crossplot "
+        "(note the axes are swapped relative to the crossplot: estimate on x). The slope in the "
+        "title is the OLS slope of truth regressed on the point estimate over ALL evaluated cells "
+        "(not the binned means); 1.0 = no conditional bias. Binned values are written to "
+        "results/processed/sample_replicate_axis/case_study_conditional_expectation.csv. "
         "VARIOGRAM panel: the experimental variogram of the truth field, of the SAME example "
         "realization/draw shown in the example panel, and of the SAME prediction mean shown in "
         "the prediction-mean panel, plus the truth's theoretical spherical model (nugget="
@@ -971,7 +1180,7 @@ def make_case_study_figure(
     plt.savefig(out, dpi=FIG_DPI, bbox_inches="tight")
     plt.close(fig)
     print(f"{out.name}: {out} ({out.stat().st_size} bytes)")
-    return out
+    return out, pd.concat(ce_rows, ignore_index=True)
 
 
 def main():
@@ -995,14 +1204,16 @@ def main():
     )
     truth_vario = compute_map_variogram(truth, "ground-truth field")
 
-    saved = []
-    for method in ["gp_mle", "rbf_bootstrap"]:
+    saved, ce_frames = [], []
+    methods = ["gp_mle", "rbf_bootstrap"]
+    for method in methods:
         print(f"\nBuilding case-study figure for {method}...")
-        saved.append(
-            make_case_study_figure(
-                method, truth, source_runs, length_df, metrics_df, truth_vario
-            )
+        out, ce_df = make_case_study_figure(
+            method, truth, source_runs, length_df, metrics_df, truth_vario
         )
+        saved.append(out)
+        ce_frames.append(ce_df)
+    update_conditional_expectation_csv(pd.concat(ce_frames, ignore_index=True), methods)
 
     print("\nAll length-extreme case-study figures:")
     for f in saved:
