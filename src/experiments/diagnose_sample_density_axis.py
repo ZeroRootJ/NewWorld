@@ -36,13 +36,12 @@ Outputs (all in results/processed/sample_density_axis/)
    physical units. See the CORRELATION_CUTOFF comment below for the
    conversion and its basis.
 
-4. kriging_backtransform_tail_sensitivity.csv
-   Per level x back-transform bound: kriging's 95%-interval width and CRPS
-   recomputed with BACKTR_ZMIN/ZMAX set to POR_MEAN -+ k*POR_STDEV for
-   k in TAIL_BOUND_SIGMAS, with the three physical-unit Gaussian methods'
-   (bound-independent) values from metrics.csv alongside. This is the
-   provenance for the tail-assumption caption printed on
-   results/figures/sample_density_axis/interval_width_p95_vs_sample_density.png.
+4. (removed 2026-10-05) kriging_backtransform_tail_sensitivity.csv used to
+   be table 4: kriging's 95%-interval width and CRPS under several
+   back-transform tail bounds. It existed only to support the sharpness
+   metrics, which were removed (no longer computed or stored) per user
+   decision; the table and its code were removed with them. Numbering of
+   tables 5 and 6 is kept unchanged so existing references stay valid.
 
 5. ndmax_binding_by_level.csv                       (added 2026-09-21)
    Per level: the search-cap diagnostic (kriging ndmax=50, SGS ndmax=20) --
@@ -60,10 +59,7 @@ Outputs (all in results/processed/sample_density_axis/)
 EXTENSION 2026-09-21 (user request: 10% / 20% density levels): tables 1, 2, 3
 now also cover the added levels "20" (n requested 500) and "10" (n requested
 250). The original 5/2/1 rows are computed by the same code and stay unchanged;
-the 20/10 rows are APPENDED after them (LEVEL_ORDER). Table 4 (kriging
-back-transform tail sensitivity) is deliberately NOT extended: it needs the
-parked sharpness metrics (interval_width_p95 / crps), which
-metrics_parked_sharpness.csv holds for the original 3 levels only.
+the 20/10 rows are APPENDED after them (LEVEL_ORDER).
 
 Run with: .venv/Scripts/python.exe -m src.experiments.diagnose_sample_density_axis
 """
@@ -74,17 +70,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from src.evaluation import (
-    INTERVAL_WIDTH_HEADLINE_P,
-    conditioning_cell_mask,
-    kriging_crps,
-    kriging_interval_widths,
-)
+from src.evaluation import conditioning_cell_mask
 from src.experiments.base_case import (
     NUG,
     NX,
     NY,
-    POR_MEAN,
     POR_STDEV,
     XMN,
     XSIZ,
@@ -98,7 +88,6 @@ from src.experiments.base_case_conditioning import (
     get_base_case_truth,
     get_conditioning_samples,
 )
-from src.experiments.kriging import LTAIL, UTAIL, backtr_value_vectorized
 from src.experiments.qc_sample_density_axis import ndmax_capping
 from src.experiments.sample_density_axis import (
     ALL_AXIS_LEVELS,
@@ -141,11 +130,6 @@ N_NULL_SEEDS = 300
 # correlation is exp(-1.5) = 0.223, not 0.05 -- so the cutoff must always be
 # stated alongside the converted value.
 CORRELATION_CUTOFF = 0.05
-
-# k values for BACKTR_ZMIN/ZMAX = POR_MEAN -+ k * POR_STDEV. The production
-# value in src/experiments/kriging.py is 4.
-TAIL_BOUND_SIGMAS = (2, 4, 6)
-PRODUCTION_TAIL_BOUND_SIGMA = 4
 
 # Point-estimate array each method's MSE is computed from -- identical to the
 # choice made in src/experiments/evaluate_sample_density_axis.py.
@@ -357,99 +341,6 @@ def gp_fitted_hyperparameters(source_runs: dict) -> pd.DataFrame:
     return pd.DataFrame(rows)
 
 
-def kriging_tail_sensitivity(truth: np.ndarray, source_runs: dict) -> pd.DataFrame:
-    """Table 4: kriging's 95%-interval width and CRPS recomputed under
-    several back-transform tail bounds, with the three bound-independent
-    methods' recorded values alongside."""
-    # interval_width_p95 / crps moved OUT of metrics.csv on 2026-09-15 when the
-    # sharpness family was parked (EMIT_SHARPNESS_METRICS=False in
-    # evaluate_sample_density_axis.py); their values were preserved verbatim in
-    # metrics_parked_sharpness.csv. Read both and concatenate so this diagnostic
-    # keeps working whichever side of that flag the axis is currently on --
-    # otherwise this function raises IndexError on a parked axis.
-    recorded = pd.read_csv(PROCESSED_DIR / "metrics.csv")
-    parked_path = PROCESSED_DIR / "metrics_parked_sharpness.csv"
-    if parked_path.exists():
-        parked = pd.read_csv(parked_path, comment="#")
-        recorded = pd.concat([recorded, parked], ignore_index=True)
-    recorded["axis_level"] = recorded["axis_level"].astype(str)
-
-    def _rec(level, method, metric):
-        return float(
-            recorded[
-                (recorded["axis_level"] == level)
-                & (recorded["method"] == method)
-                & (recorded["metric"] == metric)
-            ]["value"].iloc[0]
-        )
-
-    rows = []
-    for level in ALL_AXIS_LEVELS:
-        samples = get_conditioning_samples(
-            truth, sample_seed=SAMPLE_SEED, n_samples=SAMPLE_COUNTS[level]
-        )
-        mask = conditioning_cell_mask(samples, NX, NY, XMN, YMN, XSIZ, YSIZ)
-        truth_masked = truth[mask]
-
-        kdir = _REPO_ROOT / source_runs[level]["kriging"]
-        kmap_ns = np.load(kdir / "kmap_ns.npy")[mask]
-        std_ns = np.sqrt(
-            np.clip(np.load(kdir / "kriging_var_map_ns.npy")[mask], 0.0, None)
-        )
-        table = pd.read_csv(kdir / "nscore_transform_table.csv")
-        vr, vrg = table["vr"].values, table["vrg"].values
-
-        for k in TAIL_BOUND_SIGMAS:
-            zmin = POR_MEAN - k * POR_STDEV
-            zmax = POR_MEAN + k * POR_STDEV
-            # LTPAR/UTPAR follow the bound, exactly as kriging.py sets them.
-            args = (
-                vr, vrg, zmin, zmax, LTAIL, zmin, UTAIL, zmax, backtr_value_vectorized,
-            )
-            width_p95 = float(
-                kriging_interval_widths(
-                    kmap_ns, std_ns, *args,
-                    p_levels=np.array([INTERVAL_WIDTH_HEADLINE_P]),
-                )[0]
-            )
-            crps = float(kriging_crps(truth_masked, kmap_ns, std_ns, *args))
-
-            row = {
-                "axis_level": level,
-                "n_samples_actual": len(samples),
-                "backtr_bound_sigmas": k,
-                "is_production_bound": k == PRODUCTION_TAIL_BOUND_SIGMA,
-                "backtr_zmin": zmin,
-                "backtr_zmax": zmax,
-                "kriging_interval_width_p95": width_p95,
-                "kriging_crps": crps,
-            }
-            for other in ("sgs", "rbf_bootstrap", "gp_mle"):
-                # Physical-unit Gaussian predictives: independent of the
-                # back-transform bound, repeated here only for ranking.
-                row[f"{other}_interval_width_p95"] = _rec(
-                    level, other, "interval_width_p95"
-                )
-                row[f"{other}_crps"] = _rec(level, other, "crps")
-            rows.append(row)
-
-    out = pd.DataFrame(rows)
-
-    # The production rows must reproduce metrics.csv exactly.
-    for level in ALL_AXIS_LEVELS:
-        prod = out[(out["axis_level"] == level) & out["is_production_bound"]].iloc[0]
-        for col, metric in (
-            ("kriging_interval_width_p95", "interval_width_p95"),
-            ("kriging_crps", "crps"),
-        ):
-            if not np.isclose(prod[col], _rec(level, "kriging", metric), rtol=1e-9, atol=0.0):
-                raise ValueError(
-                    f"{level}%: kriging {metric} recomputed at the production bound "
-                    f"({prod[col]}) != metrics.csv ({_rec(level, 'kriging', metric)})."
-                )
-    return out
-
-
 def main():
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     source_runs = json.loads(
@@ -504,22 +395,6 @@ def main():
         ].to_string(index=False)
     )
 
-    tail_df = kriging_tail_sensitivity(truth, source_runs)
-    tail_path = PROCESSED_DIR / "kriging_backtransform_tail_sensitivity.csv"
-    tail_df.to_csv(tail_path, index=False)
-    print("\n--- 4. Kriging back-transform tail-bound sensitivity ---")
-    print(
-        tail_df[
-            [
-                "axis_level", "backtr_bound_sigmas", "is_production_bound",
-                "backtr_zmin", "backtr_zmax", "kriging_interval_width_p95",
-                "sgs_interval_width_p95", "gp_mle_interval_width_p95",
-                "rbf_bootstrap_interval_width_p95",
-                "kriging_crps", "gp_mle_crps",
-            ]
-        ].to_string(index=False)
-    )
-
     ndmax_df = ndmax_binding_by_level(truth)
     ndmax_path = PROCESSED_DIR / "ndmax_binding_by_level.csv"
     ndmax_df.to_csv(ndmax_path, index=False)
@@ -535,11 +410,10 @@ def main():
     print(f"\nconditioning_sample_bias.csv: {bias_path}")
     print(f"mse_bias_variance_decomposition.csv: {decomp_path}")
     print(f"gp_hyperparameter_scale_conversion.csv: {gp_path}")
-    print(f"kriging_backtransform_tail_sensitivity.csv: {tail_path}")
     print(f"ndmax_binding_by_level.csv: {ndmax_path}")
     print(f"gp_fitted_hyperparameters_by_level.csv: {gp_hp_path}")
 
-    return bias_df, decomp_df, gp_df, tail_df
+    return bias_df, decomp_df, gp_df
 
 
 if __name__ == "__main__":

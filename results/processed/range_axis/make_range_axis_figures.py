@@ -1,11 +1,12 @@
 """Build the range-axis figures (docs/experiment_context.md deliverable 2),
 over the 8 axis levels range = 100, 200, ..., 800 m.
 
-(a) MAIN FIGURE -- a 4-panel metric-vs-range plot (MSE / UMG / mean interval
-    width / CRPS), one line per method. This is the report's headline
-    figure: it puts accuracy, coverage calibration, sharpness and the proper
-    scoring rule side by side, which is the only way to tell "well
-    calibrated" apart from "calibrated because the intervals were widened".
+(a) MAIN FIGURE -- a 2-panel metric-vs-range plot (MSE / UMG), one line per
+    method (accuracy_calibration_vs_range.png). The former 4-panel
+    metrics_vs_range.png (which added mean interval width and CRPS) and the
+    companion interval_width_p95_vs_range.png were removed on 2026-10-05
+    together with the sharpness metrics themselves (user decision: no longer
+    computed or stored).
 (b) Calibration (accuracy-plot) curves for all 8 levels in one 2x4 grid.
 (c) Per-range "truth & predictions" QC figures for all 8 levels, reusing the
     panel-layout/shared-colorbar logic of
@@ -74,101 +75,25 @@ METHOD_MARKERS = {"kriging": "o", "sgs": "s", "rbf_bootstrap": "^", "gp_mle": "D
 MAIN_PANELS = [
     ("mse", "Accuracy: MSE vs. range", "MSE (Porosity %$^2$, lower better)"),
     ("umg", "Calibration: UMG vs. range", "UMG (1.0 = perfectly calibrated)"),
-    (
-        "interval_width_mean_nominal",
-        "Sharpness: mean interval width vs. range",
-        "Mean interval width (Porosity %)",
-    ),
-    ("crps", "Proper score: CRPS vs. range", "CRPS (Porosity %, lower better)"),
 ]
 
 
 # ---------------------------------------------------------------------------
-# (a) Main 4-panel metric-vs-range figure
-# ---------------------------------------------------------------------------
-def make_metric_vs_range_figure():
-    metrics_df = pd.read_csv(PROCESSED_DIR / "metrics.csv")
-    metrics_df["axis_level_numeric"] = metrics_df["axis_level"].astype(float)
-
-    fig, axes = plt.subplots(2, 2, figsize=(14, 11))
-    for ax, (metric_name, title, ylabel) in zip(axes.ravel(), MAIN_PANELS):
-        sub = metrics_df[metrics_df["metric"] == metric_name]
-        for method in METHODS:
-            m_sub = sub[sub["method"] == method].sort_values("axis_level_numeric")
-            ax.plot(
-                m_sub["axis_level_numeric"], m_sub["value"],
-                marker=METHOD_MARKERS[method], color=METHOD_COLORS[method],
-                label=method, linewidth=2,
-            )
-        ax.set_xticks(RANGE_VALUES)
-        ax.set_xlabel("Ground-truth variogram range (m)")
-        ax.set_ylabel(ylabel)
-        ax.set_title(title)
-        ax.grid(alpha=0.3)
-        if metric_name == "umg":
-            ax.axhline(1.0, color="gray", linestyle="--", linewidth=1, label="ideal (UMG=1.0)")
-        ax.legend(fontsize=9)
-
-    plt.suptitle(
-        "Range axis: accuracy (MSE) vs. uncertainty quality (UMG / interval width / CRPS)\n"
-        "one ground-truth realization per level (TRUTH_SEED=101), identical sample "
-        "locations across methods",
-        fontsize=12,
-    )
-    plt.subplots_adjust(left=0.08, bottom=0.07, right=0.98, top=0.90, wspace=0.25, hspace=0.30)
-    FIGURES_DIR.mkdir(parents=True, exist_ok=True)
-    out = FIGURES_DIR / "metrics_vs_range.png"
-    plt.savefig(out, dpi=MAIN_FIG_DPI, bbox_inches="tight")
-    plt.close(fig)
-    print(f"metrics_vs_range.png: {out} ({out.stat().st_size} bytes)")
-
-    # Companion: the 95% interval width alone, which is the most directly
-    # interpretable sharpness number (mean width of the central 95% interval).
-    fig, ax = plt.subplots(figsize=(8, 6))
-    sub = metrics_df[metrics_df["metric"] == "interval_width_p95"]
-    for method in METHODS:
-        m_sub = sub[sub["method"] == method].sort_values("axis_level_numeric")
-        ax.plot(
-            m_sub["axis_level_numeric"], m_sub["value"],
-            marker=METHOD_MARKERS[method], color=METHOD_COLORS[method], label=method, linewidth=2,
-        )
-    ax.set_xticks(RANGE_VALUES)
-    ax.set_xlabel("Ground-truth variogram range (m)")
-    ax.set_ylabel("Mean width of central 95% prediction interval (Porosity %)")
-    ax.set_title("Range axis: 95% prediction-interval width vs. range")
-    ax.grid(alpha=0.3)
-    ax.legend(fontsize=9)
-    plt.subplots_adjust(left=0.13, bottom=0.1, right=0.97, top=0.93)
-    out95 = FIGURES_DIR / "interval_width_p95_vs_range.png"
-    plt.savefig(out95, dpi=MAIN_FIG_DPI, bbox_inches="tight")
-    plt.close(fig)
-    print(f"interval_width_p95_vs_range.png: {out95} ({out95.stat().st_size} bytes)")
-
-    return [out, out95]
-
-
-# ---------------------------------------------------------------------------
-# (a2) Accuracy + calibration ONLY (MSE, UMG) -- 2-panel companion for the
-# published Range Axis Experiment artifact.
+# (a) Accuracy + calibration (MSE, UMG) -- 2-panel main figure.
 #
-# WHY THIS EXISTS (orchestrator decision, 2026-09-22): the artifact stopped
-# displaying interval width / CRPS ("sharpness" metrics), mirroring the
-# 2026-09-15 decision already applied to the sample-density axis
-# (docs/progress.md "보류(TODO)" section) -- extended here to the range-axis
-# ARTIFACT specifically. This is a DISPLAY-ONLY change: width/CRPS are still
-# computed and stored in metrics.csv (this script's own MAIN_PANELS list and
-# make_metric_vs_range_figure()/interval_width_p95_vs_range.png are UNCHANGED
-# and keep producing the full 4-panel figure), so nothing here removes data,
-# it only adds a 2-panel SUBSET for the page that no longer shows the other
-# two panels. Same METHODS/METHOD_COLORS/METHOD_MARKERS, same source
-# (metrics.csv), same x-axis (RANGE_VALUES) as make_metric_vs_range_figure().
+# History: this started (2026-09-22) as a display-only 2-panel SUBSET of a
+# 4-panel metrics_vs_range.png that also showed interval width / CRPS. On
+# 2026-10-05 the sharpness metrics were removed entirely (user decision: no
+# longer computed or stored), so the 4-panel figure and
+# interval_width_p95_vs_range.png were deleted and this is the only
+# metric-vs-range figure.
 # ---------------------------------------------------------------------------
 def make_accuracy_calibration_figure():
     metrics_df = pd.read_csv(PROCESSED_DIR / "metrics.csv")
     metrics_df["axis_level_numeric"] = metrics_df["axis_level"].astype(float)
 
     fig, axes = plt.subplots(1, 2, figsize=(14, 6))
-    for ax, (metric_name, title, ylabel) in zip(axes.ravel(), MAIN_PANELS[:2]):
+    for ax, (metric_name, title, ylabel) in zip(axes.ravel(), MAIN_PANELS):
         sub = metrics_df[metrics_df["metric"] == metric_name]
         for method in METHODS:
             m_sub = sub[sub["method"] == method].sort_values("axis_level_numeric")
@@ -189,8 +114,7 @@ def make_accuracy_calibration_figure():
     plt.suptitle(
         "Range axis: accuracy (MSE) vs. calibration (UMG)\n"
         "one ground-truth realization per level (TRUTH_SEED=101), identical sample "
-        "locations across methods -- sharpness (interval width) and CRPS are computed "
-        "and archived in metrics.csv but not shown on this panel (2026-09-22)",
+        "locations across methods",
         fontsize=12,
     )
     plt.subplots_adjust(left=0.07, bottom=0.13, right=0.98, top=0.83, wspace=0.25)
@@ -417,7 +341,6 @@ def make_truth_predictions_figure_set(hmaj1: float, run_dirs: dict, out_dir: Pat
 
 def main():
     saved_files = []
-    saved_files.extend(make_metric_vs_range_figure())
     saved_files.append(make_accuracy_calibration_figure())
     saved_files.append(make_calibration_grid_figure())
 

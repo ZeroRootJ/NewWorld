@@ -164,8 +164,9 @@ SOURCE_RUNS_PATH = PROCESSED_DIR / "source_runs.json"
 CASE = "sample_replicate_axis"
 AXIS = "sample_seed_replicate"
 
-# Metrics emitted by THIS experiment only -- variance_sum, interval widths and
-# CRPS are out of scope here (see module docstring).
+# Metrics emitted by THIS experiment only -- variance_sum is out of scope here
+# (see module docstring). Sharpness metrics (interval width, CRPS) were removed
+# project-wide on 2026-10-05 per user decision.
 METRICS = ("mse", "umg", "variance_mean")
 
 # Per-method source array for variance_mean. Kriging's is a Monte Carlo

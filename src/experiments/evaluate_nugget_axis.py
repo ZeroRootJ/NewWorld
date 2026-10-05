@@ -2,13 +2,12 @@
 bootstrap / GP-MLE) over the 6 axis levels normalized nugget = 0.0, 0.1,
 0.2, 0.3, 0.4, 0.5 (docs/experiment_context.md deliverable 3).
 
-METRICS -- WHICH ARE HEADLINE AND WHICH ARE ARCHIVE
----------------------------------------------------
+METRICS
+-------
 Accuracy and uncertainty quality are reported SEPARATELY and are never
 combined into one number (CLAUDE.md: showing that they can diverge IS the
 paper's argument).
 
-HEADLINE (plotted, reported):
   accuracy
     - ``mse``            (Porosity %^2, lower better)
   uncertainty quality
@@ -26,20 +25,12 @@ HEADLINE (plotted, reported):
                           comparable across axes rather than being a new,
                           subtly-different quantity.
 
-ARCHIVE (computed and stored in metrics.csv, but NOT plotted or reported --
-user decision, see docs/progress.md "보류(TODO)"; the sharpness family was
-judged not to express what this study currently needs to show, but the
-values are preserved rather than discarded so re-enabling them is a
-plotting change only):
-    - ``interval_width_mean_nominal``  (Porosity %, mean width averaged over
-                                        the 19 finite UMG nominal levels)
-    - ``interval_width_p95``           (Porosity %, mean width of the central
-                                        95% prediction interval)
-    - ``crps``                         (Porosity %, proper scoring rule)
-
-Note this differs from evaluate_sample_density_axis.py, which switches its
-sharpness metrics OFF entirely via EMIT_SHARPNESS_METRICS: here they are
-always computed and written, and only the FIGURE scripts leave them out.
+Sharpness metrics (interval_width_mean_nominal, interval_width_p95, crps),
+which used to be computed and stored here as "archive" metrics, and their
+diagnostics (crps_convergence.csv, the CRPS-vs-analytic and
+backtr_value_vectorized-validation columns of evaluation_diagnostics.csv)
+were removed on 2026-10-05 per user decision: they are no longer computed or
+stored.
 
 NO BASE-CASE REUSE (unlike the range and sample-density axes)
 -------------------------------------------------------------
@@ -87,20 +78,11 @@ import pandas as pd
 
 matplotlib.use("Agg")
 
-import geostatspy.geostats as geostats
-
 from src.evaluation import (
-    CRPS_DEFAULT_N_TAU,
-    INTERVAL_WIDTH_HEADLINE_P,
     accuracy_plot_fraction_in,
     calc_umg,
     conditioning_cell_mask,
-    crps_gaussian_analytic,
-    gaussian_crps,
-    gaussian_interval_widths,
-    kriging_crps,
     kriging_fraction_in,
-    kriging_interval_widths,
     mse,
 )
 from src.experiments.base_case import NX, NY, XMN, YMN, XSIZ, YSIZ
@@ -118,7 +100,6 @@ from src.experiments.kriging import (
     LTPAR,
     UTAIL,
     UTPAR,
-    backtr_value_vectorized,
 )
 from src.experiments.nugget_axis import (
     ALL_NUGGET_VALUES,
@@ -136,9 +117,7 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 PROCESSED_DIR = _REPO_ROOT / "results" / "processed" / "nugget_axis"
 SOURCE_RUNS_PATH = PROCESSED_DIR / "source_runs.json"
 
-HEADLINE_METRICS = ("mse", "umg", "variance_mean")
-ARCHIVE_METRICS = ("interval_width_mean_nominal", "interval_width_p95", "crps")
-ALL_METRICS = HEADLINE_METRICS + ARCHIVE_METRICS
+ALL_METRICS = ("mse", "umg", "variance_mean")
 
 # Per-method source array for variance_mean. All four are in physical units
 # (Porosity %^2), BUT kriging's is a Monte Carlo back-transform approximation
@@ -160,13 +139,6 @@ VARIANCE_SOURCE_IS_MC_BACKTRANSFORM = {
 # Same tolerance convention as evaluate_base_case.py / evaluate_range_axis.py
 # / evaluate_sample_density_axis.py.
 VARIANCE_CLIP_TOLERANCE = 1e-6
-
-# n_tau values for the CRPS quadrature convergence check. First entry is the
-# production value.
-CRPS_CONVERGENCE_N_TAUS = (CRPS_DEFAULT_N_TAU, 99, 499, 999)
-
-BACKTR_VALIDATION_SEED = 86
-N_BACKTR_VALIDATION_SAMPLES = 500
 
 
 def safe_sqrt_variance(var_map: np.ndarray, name: str) -> np.ndarray:
@@ -202,34 +174,6 @@ def safe_sqrt_variance(var_map: np.ndarray, name: str) -> np.ndarray:
     return np.sqrt(np.clip(var_map, 0.0, None))
 
 
-def validate_backtr_vectorized(kmap_ns: np.ndarray, vr, vrg) -> float:
-    """Check backtr_value_vectorized against the scalar geostats.backtr_value
-    on values drawn from this run's own kmap_ns. Raises on mismatch."""
-    rng = np.random.default_rng(BACKTR_VALIDATION_SEED)
-    vals = rng.choice(kmap_ns.ravel(), size=N_BACKTR_VALIDATION_SAMPLES, replace=True)
-    reference = np.array(
-        [
-            geostats.backtr_value(
-                v, vr, vrg, zmin=BACKTR_ZMIN, zmax=BACKTR_ZMAX,
-                ltail=LTAIL, ltpar=LTPAR, utail=UTAIL, utpar=UTPAR,
-            )
-            for v in vals
-        ]
-    )
-    vectorized = backtr_value_vectorized(
-        vals, vr, vrg, BACKTR_ZMIN, BACKTR_ZMAX, LTAIL, LTPAR, UTAIL, UTPAR
-    )
-    max_abs_diff = float(np.max(np.abs(reference - vectorized)))
-    if not np.allclose(reference, vectorized, rtol=1e-8, atol=1e-8):
-        raise RuntimeError(
-            "backtr_value_vectorized disagrees with the scalar reference "
-            f"geostats.backtr_value (max abs diff = {max_abs_diff}) -- refusing to "
-            "compute kriging interval width / CRPS through an unvalidated "
-            "back-transform."
-        )
-    return max_abs_diff
-
-
 def _level_data(nug: float):
     """Regenerate this level's truth + conditioning samples and return
     (truth, samples_df, mask). Truth DIFFERS per level (the nugget goes into
@@ -245,7 +189,7 @@ def _level_data(nug: float):
 
 
 def evaluate_one_level(nug: float, run_dirs: dict):
-    """Compute all 6 metrics for all 4 methods at one nugget level.
+    """Compute all 3 metrics for all 4 methods at one nugget level.
 
     Returns (metrics, curves, diagnostics, variance_sources).
     """
@@ -290,9 +234,8 @@ def evaluate_one_level(nug: float, run_dirs: dict):
     }
 
     # ------------------------------------------------------------------
-    # Kriging: MSE from kmap_physical; every uncertainty metric from
-    # kmap_ns + vmap_ns via exact quantile back-transform (never a variance
-    # back-transform).
+    # Kriging: MSE from kmap_physical; UMG from kmap_ns + vmap_ns via exact
+    # quantile back-transform (never a variance back-transform).
     # ------------------------------------------------------------------
     kdir = _REPO_ROOT / run_dirs["kriging"]
     kmap_physical = np.load(kdir / "kriging_mean_map_physical.npy")
@@ -300,10 +243,6 @@ def evaluate_one_level(nug: float, run_dirs: dict):
     vmap_ns = np.load(kdir / "kriging_var_map_ns.npy")
     transform_table = pd.read_csv(kdir / "nscore_transform_table.csv")
     vr, vrg = transform_table["vr"].values, transform_table["vrg"].values
-
-    diagnostics["backtr_vectorized_max_abs_diff_vs_reference"] = validate_backtr_vectorized(
-        kmap_ns, vr, vrg
-    )
 
     # Negative-variance bookkeeping for the whole kb2d output AND for the
     # evaluated subset -- at nug=0 kb2d returns tiny negatives at conditioning
@@ -327,20 +266,6 @@ def evaluate_one_level(nug: float, run_dirs: dict):
     metrics["kriging"]["umg"] = calc_umg(kriging_p, kriging_frac_in)
     curves["kriging"] = (kriging_p, kriging_frac_in)
     print(f"  kriging UMG (scalar back-transform path) took {time.time() - t0:.1f}s")
-
-    k_backtr_args = (vr, vrg, BACKTR_ZMIN, BACKTR_ZMAX, LTAIL, LTPAR, UTAIL, UTPAR,
-                     backtr_value_vectorized)
-    k_widths = kriging_interval_widths(kmap_ns[mask], std_ns_masked, *k_backtr_args)
-    metrics["kriging"]["interval_width_mean_nominal"] = float(np.mean(k_widths))
-    metrics["kriging"]["interval_width_p95"] = float(
-        kriging_interval_widths(
-            kmap_ns[mask], std_ns_masked, *k_backtr_args,
-            p_levels=np.array([INTERVAL_WIDTH_HEADLINE_P]),
-        )[0]
-    )
-    metrics["kriging"]["crps"] = kriging_crps(
-        truth_masked, kmap_ns[mask], std_ns_masked, *k_backtr_args
-    )
 
     # ------------------------------------------------------------------
     # The three physical-unit Gaussian-predictive methods. Source arrays per
@@ -381,24 +306,6 @@ def evaluate_one_level(nug: float, run_dirs: dict):
         metrics[method]["umg"] = calc_umg(p, frac_in)
         curves[method] = (p, frac_in)
 
-        widths = gaussian_interval_widths(mean_masked, std_masked)
-        metrics[method]["interval_width_mean_nominal"] = float(np.mean(widths))
-        metrics[method]["interval_width_p95"] = float(
-            gaussian_interval_widths(
-                mean_masked, std_masked, p_levels=np.array([INTERVAL_WIDTH_HEADLINE_P])
-            )[0]
-        )
-        metrics[method]["crps"] = gaussian_crps(truth_masked, mean_masked, std_masked)
-
-        # Independent validation of the quantile/pinball CRPS path against the
-        # closed-form Gaussian CRPS (exact for these three methods; kriging has
-        # no closed form after the back-transform, hence the separate
-        # grid-refinement check below).
-        exact = crps_gaussian_analytic(truth_masked, mean_masked, std_masked)
-        diagnostics[f"crps_vs_analytic_rel_err_{method}"] = abs(
-            metrics[method]["crps"] - exact
-        ) / abs(exact)
-
     # ------------------------------------------------------------------
     # variance_mean, all 4 methods, over the SAME evaluated cells as every
     # other metric at this level. Definition lifted verbatim from
@@ -431,69 +338,6 @@ def evaluate_one_level(nug: float, run_dirs: dict):
         )
 
     return metrics, curves, diagnostics, variance_sources
-
-
-def crps_convergence_check(nug: float, run_dirs: dict) -> pd.DataFrame:
-    """Recompute CRPS at several quadrature resolutions n_tau for all 4
-    methods, so the reported production value is demonstrably converged
-    rather than assumed to be. (CRPS is an ARCHIVE metric here, but the
-    convergence evidence is produced anyway so the stored value is not an
-    unvalidated number sitting in metrics.csv.)"""
-    axis_level = level_key(nug)
-    truth, _, mask = _level_data(nug)
-    truth_masked = truth[mask]
-
-    kdir = _REPO_ROOT / run_dirs["kriging"]
-    kmap_ns = np.load(kdir / "kmap_ns.npy")
-    vmap_ns = np.load(kdir / "kriging_var_map_ns.npy")
-    tt = pd.read_csv(kdir / "nscore_transform_table.csv")
-    vr, vrg = tt["vr"].values, tt["vrg"].values
-    std_ns_masked = safe_sqrt_variance(vmap_ns[mask], "kriging vmap_ns")
-    k_backtr_args = (vr, vrg, BACKTR_ZMIN, BACKTR_ZMAX, LTAIL, LTPAR, UTAIL, UTPAR,
-                     backtr_value_vectorized)
-
-    sdir = _REPO_ROOT / run_dirs["sgs"]
-    rdir = _REPO_ROOT / run_dirs["rbf_bootstrap"]
-    gdir = _REPO_ROOT / run_dirs["gp_mle"]
-    gaussian_specs = {
-        "sgs": (np.load(sdir / "sgs_mean_map.npy"), np.load(sdir / "sgs_var_map.npy")),
-        "rbf_bootstrap": (
-            np.load(rdir / "bootstrap_mean_map.npy"),
-            np.load(rdir / "bootstrap_var_map.npy"),
-        ),
-        "gp_mle": (
-            np.load(gdir / "posterior_mean_map.npy"),
-            np.load(gdir / "posterior_var_map.npy"),
-        ),
-    }
-
-    rows = []
-    for n_tau in CRPS_CONVERGENCE_N_TAUS:
-        rows.append(
-            {
-                "axis_level": axis_level,
-                "method": "kriging",
-                "n_tau": n_tau,
-                "crps": kriging_crps(
-                    truth_masked, kmap_ns[mask], std_ns_masked, *k_backtr_args, n_tau=n_tau
-                ),
-                "crps_analytic_gaussian": np.nan,  # no closed form after back-transform
-            }
-        )
-        for method, (mean_map, var_map) in gaussian_specs.items():
-            std_masked = safe_sqrt_variance(var_map[mask], f"{method} variance map")
-            rows.append(
-                {
-                    "axis_level": axis_level,
-                    "method": method,
-                    "n_tau": n_tau,
-                    "crps": gaussian_crps(truth_masked, mean_map[mask], std_masked, n_tau=n_tau),
-                    "crps_analytic_gaussian": crps_gaussian_analytic(
-                        truth_masked, mean_map[mask], std_masked
-                    ),
-                }
-            )
-    return pd.DataFrame(rows)
 
 
 def main():
@@ -611,15 +455,6 @@ def main():
     variance_sources_csv = PROCESSED_DIR / "variance_metric_sources.csv"
     variance_sources_df.to_csv(variance_sources_csv, index=False)
 
-    # --- CRPS quadrature convergence check (archive metric, still validated) --
-    conv_frames = [
-        crps_convergence_check(n, source_runs[level_key(n)])
-        for n in (ALL_NUGGET_VALUES[0], ALL_NUGGET_VALUES[-1])
-    ]
-    convergence_df = pd.concat(conv_frames, ignore_index=True)
-    convergence_csv = PROCESSED_DIR / "crps_convergence.csv"
-    convergence_df.to_csv(convergence_csv, index=False)
-
     # --- Wide summary table for reporting ---------------------------------
     wide = metrics_df.pivot_table(
         index=["axis_level", "method"], columns="metric", values="value"
@@ -632,24 +467,17 @@ def main():
     pd.set_option("display.width", 250)
     pd.set_option("display.max_columns", 100)
 
-    print("\nNugget axis HEADLINE metrics (6 levels x 4 methods):")
-    print(
-        wide[["axis_level", "method", *HEADLINE_METRICS]].to_string(index=False)
-    )
-    print("\nNugget axis ARCHIVE metrics (computed and stored, not plotted/reported):")
-    print(wide[["axis_level", "method", *ARCHIVE_METRICS]].to_string(index=False))
-    print("\nCRPS quadrature convergence (n_tau refinement; analytic reference where it exists):")
-    print(convergence_df.to_string(index=False))
+    print("\nNugget axis metrics (6 levels x 4 methods):")
+    print(wide[["axis_level", "method", *ALL_METRICS]].to_string(index=False))
     print("\nEvaluation diagnostics:")
     print(diagnostics_df.to_string(index=False))
     print(f"\nmetrics.csv: {metrics_csv}")
     print(f"metrics_wide.csv: {wide_csv}")
     print(f"accuracy_plot_curves.csv: {curves_csv}")
-    print(f"crps_convergence.csv: {convergence_csv}")
     print(f"evaluation_diagnostics.csv: {diagnostics_csv}")
     print(f"variance_metric_sources.csv: {variance_sources_csv}")
 
-    return metrics_df, curves_df, convergence_df
+    return metrics_df, curves_df
 
 
 if __name__ == "__main__":

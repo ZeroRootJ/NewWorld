@@ -15,10 +15,10 @@ breaks something rather than that a long range does:
 1. Normal-score transform table size. At n=25 the kriging back-transform
    table has only 25 points, so tail extrapolation matters much more. We
    report the table's vrg range, how many evaluated cells have their point
-   estimate / their 95%-interval endpoints / their CRPS-integral EXTREME
-   quantiles (tau = 0.5/n_tau and 1 - 0.5/n_tau at the production n_tau=199)
-   in the linear-tail-extrapolation region, and how many saturate at
-   BACKTR_ZMIN/ZMAX.
+   estimate / their 95%-interval endpoints in the linear-tail-extrapolation
+   region, and how many saturate at BACKTR_ZMIN/ZMAX. (The former
+   CRPS-integral extreme-quantile columns were removed on 2026-10-05 together
+   with the CRPS metric itself, per user decision.)
 2. RBF CV fold size. 5-fold CV on n=25 means 5 points per fold; the per-fold
    train/test sizes are reported alongside the selected hyperparameters so
    the reader can judge whether CV_FOLDS is excessive at this N. Also
@@ -54,7 +54,7 @@ from scipy.stats import norm
 
 import geostatspy.geostats as geostats
 
-from src.evaluation import CRPS_DEFAULT_N_TAU, conditioning_cell_mask, crps_tau_grid
+from src.evaluation import conditioning_cell_mask
 from src.experiments.base_case import NX, NY, XMN, YMN, XSIZ, YSIZ
 from src.experiments.base_case_conditioning import (
     SAMPLE_SEED,
@@ -155,7 +155,7 @@ def ndmax_capping(samples_df: pd.DataFrame) -> dict:
 def kriging_tail_usage(rel_run_dir: str, mask: np.ndarray) -> dict:
     """How much of kriging's output relies on the linear tail extrapolation
     of the normal-score back-transform, at the evaluated (non-conditioning)
-    cells -- including at the EXTREME quantiles the CRPS integral touches."""
+    cells (point estimate and 95%-interval endpoints)."""
     run_dir = _REPO_ROOT / rel_run_dir
     kmap_ns = np.load(run_dir / "kmap_ns.npy")[mask]
     vmap_ns = np.load(run_dir / "kriging_var_map_ns.npy")[mask]
@@ -201,31 +201,6 @@ def kriging_tail_usage(rel_run_dir: str, mask: np.ndarray) -> dict:
         }
     )
 
-    # --- CRPS-integral EXTREME quantiles (tau = 0.5/n_tau, 1 - 0.5/n_tau) --
-    taus = crps_tau_grid(CRPS_DEFAULT_N_TAU)
-    tau_lo, tau_hi = float(taus[0]), float(taus[-1])
-    z_lo, z_hi = norm.ppf(tau_lo), norm.ppf(tau_hi)
-    ns_qlo, ns_qhi = kmap_ns + z_lo * std_ns, kmap_ns + z_hi * std_ns
-    crps_endpoints_in_tail = int(np.sum((ns_qlo <= vrg[0]) | (ns_qhi >= vrg[-1])))
-    q_lo = backtr_value_vectorized(ns_qlo, *args)
-    q_hi = backtr_value_vectorized(ns_qhi, *args)
-    out.update(
-        {
-            "crps_n_tau": CRPS_DEFAULT_N_TAU,
-            "crps_tau_min": tau_lo,
-            "crps_tau_max": tau_hi,
-            "kriging_n_cells_crps_extreme_quantile_in_tail": crps_endpoints_in_tail,
-            "kriging_frac_cells_crps_extreme_quantile_in_tail": crps_endpoints_in_tail / n_cells,
-            "kriging_n_cells_crps_extreme_saturated_at_backtr_bound": int(
-                np.sum(
-                    (q_lo <= BACKTR_ZMIN + SATURATION_TOL)
-                    | (q_hi >= BACKTR_ZMAX - SATURATION_TOL)
-                )
-            ),
-            "kriging_crps_extreme_phys_lo_min": float(q_lo.min()),
-            "kriging_crps_extreme_phys_hi_max": float(q_hi.max()),
-        }
-    )
     return out
 
 
@@ -364,9 +339,7 @@ def main():
                 "kriging_nscore_table_vr_min", "kriging_nscore_table_vr_max",
                 "kriging_n_cells_point_estimate_in_tail",
                 "kriging_frac_cells_p95_endpoint_in_tail",
-                "kriging_frac_cells_crps_extreme_quantile_in_tail",
                 "kriging_n_cells_p95_saturated_at_backtr_bound",
-                "kriging_n_cells_crps_extreme_saturated_at_backtr_bound",
                 "kriging_mean_var_ns", "kriging_max_var_ns",
             ]
         ].to_string(index=False)

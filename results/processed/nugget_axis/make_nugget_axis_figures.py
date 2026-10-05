@@ -2,12 +2,9 @@
 over the 6 axis levels normalized nugget = 0.0, 0.1, 0.2, 0.3, 0.4, 0.5.
 
 (a) MAIN FIGURE -- a 3-panel metric-vs-nugget plot (MSE / UMG /
-    variance_mean), one line per method. These are the axis's HEADLINE
-    metrics. The sharpness family (interval width, CRPS) IS computed and
-    stored in metrics.csv by evaluate_nugget_axis.py but is deliberately NOT
-    plotted, continuing the user decision recorded in docs/progress.md
-    "보류(TODO)" and already applied to the sample-density axis and the
-    range-axis artifact. This is a DISPLAY choice only -- no data is dropped.
+    variance_mean), one line per method. The sharpness family (interval
+    width, CRPS) is not plotted: it was removed project-wide on 2026-10-05
+    (user decision: no longer computed or stored).
 (b) Calibration (accuracy-plot) curves for all 6 levels in one 2x3 grid.
 (c) Per-level "truth & predictions" QC figures for all 6 levels, reusing the
     panel-layout/shared-colorbar logic of
@@ -103,8 +100,7 @@ METHOD_MARKERS = {"kriging": "o", "sgs": "s", "rbf_bootstrap": "^", "gp_mle": "D
 NUGGET_LEVELS = [float(n) for n in ALL_NUGGET_VALUES]
 TOTAL_SILL_REAL = POR_STDEV ** 2
 
-# (metric key in metrics.csv, panel title, y-axis label). HEADLINE ONLY --
-# see module docstring for why interval width / CRPS are not here.
+# (metric key in metrics.csv, panel title, y-axis label).
 MAIN_PANELS = [
     ("mse", "Accuracy: MSE vs. nugget", "MSE (Porosity %$^2$, lower better)"),
     ("umg", "Calibration: UMG vs. nugget", "UMG (1.0 = perfectly calibrated)"),
@@ -187,9 +183,7 @@ def make_metric_vs_nugget_figure():
         0.5, 0.005, textwrap.fill(
             "Bottom x-axis: normalized nugget (fraction of the unit sill on standard-normal "
             f"space). Top x-axis: the same levels in physical units, nug * POR_STDEV^2, against "
-            f"a total sill of {TOTAL_SILL_REAL:g} Porosity %^2. Sharpness metrics (interval width, "
-            "CRPS) are computed and stored in metrics.csv but are not displayed here (user "
-            "decision, docs/progress.md \"보류(TODO)\"). kriging and SGS are handed the TRUE "
+            f"a total sill of {TOTAL_SILL_REAL:g} Porosity %^2. kriging and SGS are handed the TRUE "
             "nugget as their input variogram (they are the reference baselines); GP-MLE learns "
             "its own noise variance by marginal likelihood and RBF+bootstrap has no nugget "
             "parameter at all.",
