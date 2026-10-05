@@ -1,0 +1,277 @@
+<title>SGS vs ALLUVSIM Truths</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,600&display=swap">
+<style>
+/* Layout: one reading column; maps grid → distribution → variograms → stats table */
+:root {
+  --bg: #f7f8f7; --surface: #ffffff; --fg: #15191c; --fg-2: #4f575c; --muted: #7d858a;
+  --rule: #dfe3e2; --grid: #eceeed;
+  --sgs: #2a78d6; --obm: #eb6834;
+  --display: "Source Serif 4", Georgia, serif;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #141716; --surface: #1c201f; --fg: #eef1f0; --fg-2: #b9c0bd; --muted: #8a928f;
+  --rule: #313735; --grid: #262b29; --sgs: #3987e5; --obm: #d95926; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #141716; --surface: #1c201f; --fg: #eef1f0; --fg-2: #b9c0bd; --muted: #8a928f;
+  --rule: #313735; --grid: #262b29; --sgs: #3987e5; --obm: #d95926; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font: 15px/1.55 var(--body); }
+.wrap { max-width: 1040px; margin: 0 auto; padding-inline: 20px; padding-block: 36px 56px; display: grid; gap: 40px; }
+h1 { font: 600 clamp(26px, 4vw, 34px)/1.15 var(--display); margin: 0 0 8px; text-wrap: balance; }
+h2 { font: 600 20px/1.25 var(--display); margin: 0 0 4px; text-wrap: balance; }
+.lede { color: var(--fg-2); max-width: 68ch; margin: 0; }
+.cap { color: var(--muted); font-size: 13px; margin: 0 0 14px; max-width: 72ch; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 14px; font: 12px var(--mono); color: var(--muted); }
+.meta b { color: var(--fg-2); font-weight: 500; }
+section { min-width: 0; }
+.legend { display: flex; flex-wrap: wrap; gap: 16px; font-size: 13px; color: var(--fg-2); margin-bottom: 10px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.sw { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+.maprow { display: grid; grid-template-columns: 130px repeat(3, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.maprow + .maprow { margin-top: 14px; }
+.rowlab { font-size: 13px; color: var(--fg-2); padding-top: 4px; }
+.rowlab strong { display: block; color: var(--fg); font-weight: 600; }
+.rowlab .tag { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; }
+figure { margin: 0; min-width: 0; }
+canvas.map { width: 100%; aspect-ratio: 1; max-width: 100%; image-rendering: pixelated; display: block; border-radius: 3px; }
+figcaption { font: 12px var(--mono); color: var(--muted); margin-top: 4px; }
+.controls { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin-bottom: 14px; }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.seg button { font: 500 13px var(--body); color: var(--fg-2); background: var(--surface); border: 0; padding: 6px 12px; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+.seg button:focus-visible { outline: 2px solid var(--sgs); outline-offset: -2px; }
+.scale { display: flex; align-items: center; gap: 8px; font: 12px var(--mono); color: var(--muted); }
+.scale canvas { width: 180px; height: 10px; border-radius: 2px; }
+.flegend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12px; color: var(--fg-2); }
+.flegend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
+.charts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.chart { background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 12px 12px 6px; min-width: 0; position: relative; }
+.chart h3 { font: 600 13px var(--body); margin: 0 0 4px; color: var(--fg); }
+.chart svg { width: 100%; height: auto; display: block; overflow: visible; }
+.tip { position: absolute; pointer-events: none; background: var(--fg); color: var(--bg); font: 12px/1.4 var(--mono); padding: 6px 8px; border-radius: 4px; white-space: nowrap; z-index: 2; }
+.tblwrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13px; font-variant-numeric: tabular-nums; }
+th, td { padding: 7px 10px; text-align: right; border-bottom: 1px solid var(--rule); white-space: nowrap; }
+th:first-child, td:first-child { text-align: left; }
+thead th { font-weight: 600; color: var(--fg-2); font-size: 12px; letter-spacing: .03em; }
+td .rng { color: var(--muted); font-family: var(--mono); font-size: 12px; margin-left: 6px; }
+td.na { color: var(--muted); }
+svg text { fill: var(--muted); font: 11px var(--mono); }
+@media (max-width: 720px) {
+  .charts { grid-template-columns: 1fr; }
+  .maprow { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .rowlab { grid-column: 1 / -1; }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>SGS vs ALLUVSIM Truths</h1>
+    <p class="lede">The existing Gaussian-simulation ground truths next to the new event-based fluvial realizations (ResMill <code>ChannelLayer</code>, CB_JIGSAW preset). Both families sit on the same 50 × 50 grid with 20 m cells and are affine-scaled to porosity mean 15 % and standard deviation 3 %.</p>
+    <div class="meta" id="meta"></div>
+  </header>
+
+  <section>
+    <h2>Example fields</h2>
+    <p class="cap">Three seeds per family on one shared colour scale. ALLUVSIM fields are the fixed mid-depth slice (k = 8 of 16) of each 3D realization.</p>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="ALLUVSIM row shows">
+        <button type="button" id="btn-poro" aria-pressed="true">Porosity</button>
+        <button type="button" id="btn-fac" aria-pressed="false">Facies</button>
+      </div>
+      <div class="scale" id="scale"><span id="smin"></span><canvas id="scalebar" width="180" height="1"></canvas><span id="smax"></span><span>porosity %</span></div>
+      <div class="flegend" id="flegend" hidden></div>
+    </div>
+    <div class="maprow" id="row-sgs"></div>
+    <div class="maprow" id="row-obm"></div>
+  </section>
+
+  <section>
+    <h2>Porosity distribution</h2>
+    <p class="cap">Density pooled over all seeds of each family, 0.5 % bins.</p>
+    <div class="legend" id="leg1"></div>
+    <div class="chart"><svg id="hist" viewBox="0 0 960 300" role="img" aria-label="Porosity histogram for both families"></svg></div>
+  </section>
+
+  <section>
+    <h2>Experimental variograms</h2>
+    <p class="cap">Grid semivariogram along x and y, divided by each field's variance (sill = 1). Line is the mean over seeds; band spans min to max.</p>
+    <div class="legend" id="leg2"></div>
+    <div class="charts">
+      <div class="chart"><h3>x direction (east–west)</h3><svg id="vx" viewBox="0 0 470 300" role="img" aria-label="Variogram along x"></svg></div>
+      <div class="chart"><h3>y direction (north–south)</h3><svg id="vy" viewBox="0 0 470 300" role="img" aria-label="Variogram along y"></svg></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Summary statistics</h2>
+    <p class="cap">Mean over seeds, with min – max across seeds. Porosity in %. Net-to-gross is the fraction of slice cells with facies code ≥ 1.</p>
+    <div class="tblwrap"><table id="stats"></table></div>
+  </section>
+</div>
+
+<script>
+const D = /*__DATA__*/null;
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const FAM = { sgs: "SGS", obm: "ALLUVSIM" };
+
+// ---- meta line
+document.getElementById("meta").innerHTML =
+  `<span><b>SGS</b> n = ${D.n_seeds.sgs} (seeds 101–105)</span>` +
+  `<span><b>ALLUVSIM</b> n = ${D.n_seeds.obm} (seeds 0–29)</span>` +
+  `<span><b>ResMill</b> ${D.resmill_commit.slice(0, 7)}</span>` +
+  `<span><b>run</b> ${D.obm_manifest.split("/").slice(-2, -1)[0]}</span>`;
+
+// ---- colour ramps
+const RAMP = ["#cde2fb","#9ec5f4","#6da7ec","#3987e5","#256abf","#184f95","#0d366b"];
+const hex = h => [1,3,5].map(i => parseInt(h.slice(i, i + 2), 16));
+const RAMP_RGB = RAMP.map(hex);
+function rampAt(t) {
+  t = Math.min(1, Math.max(0, t)) * (RAMP_RGB.length - 1);
+  const i = Math.min(RAMP_RGB.length - 2, Math.floor(t)), f = t - i;
+  return RAMP_RGB[i].map((c, k) => Math.round(c + (RAMP_RGB[i + 1][k] - c) * f));
+}
+const FACIES = { "-1": "#c9c6bd", "0": "#6b5bc4", "1": "#eda100", "2": "#1baf7a", "3": "#2a78d6", "4": "#e34948" };
+
+const allVals = [];
+for (const fam of ["sgs", "obm"]) for (const s in D.fields[fam]) D.fields[fam][s].truth.forEach(r => allVals.push(...r));
+const VMIN = Math.floor(Math.min(...allVals)), VMAX = Math.ceil(Math.max(...allVals));
+document.getElementById("smin").textContent = VMIN;
+document.getElementById("smax").textContent = VMAX;
+(() => { const c = document.getElementById("scalebar"), x = c.getContext("2d"), im = x.createImageData(180, 1);
+  for (let i = 0; i < 180; i++) { const [r, g, b] = rampAt(i / 179); im.data.set([r, g, b, 255], i * 4); } x.putImageData(im, 0, 0); })();
+document.getElementById("flegend").innerHTML = Object.entries(D.fields.facies_codes)
+  .map(([k, v]) => `<span><i style="background:${FACIES[k]}"></i>${v}</span>`).join("");
+
+function drawMap(cv, arr, mode) {
+  const ny = arr.length, nx = arr[0].length; cv.width = nx; cv.height = ny;
+  const x = cv.getContext("2d"), im = x.createImageData(nx, ny);
+  for (let r = 0; r < ny; r++) for (let c = 0; c < nx; c++) {
+    const v = arr[r][c];
+    const rgb = mode === "fac" ? hex(FACIES[String(v)]) : rampAt((v - VMIN) / (VMAX - VMIN));
+    im.data.set([...rgb, 255], (r * nx + c) * 4);
+  }
+  x.putImageData(im, 0, 0);
+}
+function buildRow(id, fam, label, sub) {
+  const row = document.getElementById(id);
+  row.innerHTML = `<div class="rowlab"><span class="tag" style="background:var(--${fam})"></span><strong>${label}</strong>${sub}</div>`;
+  for (const s of Object.keys(D.fields[fam])) {
+    const f = document.createElement("figure");
+    f.innerHTML = `<canvas class="map" data-fam="${fam}" data-seed="${s}" aria-label="${label} seed ${s}"></canvas><figcaption>seed ${s}</figcaption>`;
+    row.appendChild(f);
+  }
+}
+buildRow("row-sgs", "sgs", "SGS", "Gaussian, isotropic variogram");
+buildRow("row-obm", "obm", "ALLUVSIM", "Channelized, CB_JIGSAW");
+let obmMode = "poro";
+function renderMaps() {
+  document.querySelectorAll("canvas.map").forEach(cv => {
+    const fam = cv.dataset.fam, f = D.fields[fam][cv.dataset.seed];
+    const mode = fam === "obm" && obmMode === "fac" ? "fac" : "poro";
+    drawMap(cv, mode === "fac" ? f.facies : f.truth, mode);
+  });
+  document.getElementById("flegend").hidden = obmMode !== "fac";
+}
+for (const [id, m] of [["btn-poro", "poro"], ["btn-fac", "fac"]])
+  document.getElementById(id).addEventListener("click", () => {
+    obmMode = m;
+    document.getElementById("btn-poro").setAttribute("aria-pressed", m === "poro");
+    document.getElementById("btn-fac").setAttribute("aria-pressed", m === "fac");
+    renderMaps();
+  });
+renderMaps();
+
+// ---- legends
+const legHTML = `<span><i class="sw" style="background:var(--sgs)"></i>SGS (n = ${D.n_seeds.sgs})</span><span><i class="sw" style="background:var(--obm)"></i>ALLUVSIM (n = ${D.n_seeds.obm})</span>`;
+document.getElementById("leg1").innerHTML = legHTML;
+document.getElementById("leg2").innerHTML = legHTML;
+
+// ---- svg helpers
+const NS = "http://www.w3.org/2000/svg";
+function el(tag, attrs, parent) { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); parent && parent.appendChild(e); return e; }
+function ticks(lo, hi, n) { const step = Math.pow(10, Math.floor(Math.log10((hi - lo) / n))); const m = [1, 2, 5, 10].find(m => (hi - lo) / (step * m) <= n) * step; const out = []; for (let v = Math.ceil(lo / m) * m; v <= hi + 1e-9; v += m) out.push(+v.toFixed(6)); return out; }
+function axes(svg, W, H, M, xs, ys, xt, yt, xl, yl) {
+  const g = el("g", {}, svg);
+  for (const t of yt) { el("line", { x1: M.l, x2: W - M.r, y1: ys(t), y2: ys(t), stroke: "var(--grid)", "stroke-width": 1 }, g); const tx = el("text", { x: M.l - 6, y: ys(t) + 4, "text-anchor": "end" }, g); tx.textContent = t; }
+  for (const t of xt) { const tx = el("text", { x: xs(t), y: H - M.b + 16, "text-anchor": "middle" }, g); tx.textContent = t; }
+  el("line", { x1: M.l, x2: W - M.r, y1: H - M.b, y2: H - M.b, stroke: "var(--rule)", "stroke-width": 1 }, g);
+  const a = el("text", { x: (M.l + W - M.r) / 2, y: H - 4, "text-anchor": "middle" }, g); a.textContent = xl;
+  const b = el("text", { x: 12, y: M.t + (H - M.t - M.b) / 2, "text-anchor": "middle", transform: `rotate(-90 12 ${M.t + (H - M.t - M.b) / 2})` }, g); b.textContent = yl;
+}
+function tooltip(svg, html, px, py) {
+  const box = svg.parentElement; let t = box.querySelector(".tip");
+  if (!t) { t = document.createElement("div"); t.className = "tip"; box.appendChild(t); }
+  if (html == null) { t.hidden = true; return; }
+  t.hidden = false; t.innerHTML = html;
+  const r = svg.getBoundingClientRect(), br = box.getBoundingClientRect(), sc = r.width / svg.viewBox.baseVal.width;
+  let left = r.left - br.left + px * sc + 12; if (left + t.offsetWidth > br.width) left -= t.offsetWidth + 24;
+  t.style.left = left + "px"; t.style.top = (r.top - br.top + py * sc - 10) + "px";
+}
+
+// ---- histogram: step lines
+(() => {
+  const svg = document.getElementById("hist"), W = 960, H = 300, M = { l: 56, r: 16, t: 12, b: 40 };
+  const all = [...D.hist.sgs, ...D.hist.obm];
+  const x0 = Math.min(...all.map(b => b[0])), x1 = Math.max(...all.map(b => b[1]));
+  const ymax = Math.max(...all.map(b => b[2])) * 1.05;
+  const xs = v => M.l + (v - x0) / (x1 - x0) * (W - M.l - M.r), ys = v => H - M.b - v / ymax * (H - M.t - M.b);
+  axes(svg, W, H, M, xs, ys, ticks(x0, x1, 10), ticks(0, ymax, 5), "porosity (%)", "density");
+  for (const fam of ["sgs", "obm"]) {
+    const bins = D.hist[fam]; let d = `M${xs(bins[0][0])},${ys(0)}`;
+    for (const [l, r, v] of bins) d += `L${xs(l)},${ys(v)}L${xs(r)},${ys(v)}`;
+    d += `L${xs(bins[bins.length - 1][1])},${ys(0)}`;
+    el("path", { d, fill: `var(--${fam})`, "fill-opacity": 0.12, stroke: `var(--${fam})`, "stroke-width": 2, "stroke-linejoin": "round" }, svg);
+  }
+  const hl = el("line", { y1: M.t, y2: H - M.b, stroke: "var(--fg-2)", "stroke-width": 1, "stroke-dasharray": "3 3", visibility: "hidden" }, svg);
+  const hit = el("rect", { x: M.l, y: M.t, width: W - M.l - M.r, height: H - M.t - M.b, fill: "transparent" }, svg);
+  const find = (fam, v) => D.hist[fam].find(b => v >= b[0] && v < b[1]);
+  hit.addEventListener("pointermove", e => {
+    const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; const q = p.matrixTransform(svg.getScreenCTM().inverse());
+    const v = x0 + (q.x - M.l) / (W - M.l - M.r) * (x1 - x0); const bs = find("sgs", v), bo = find("obm", v);
+    hl.setAttribute("x1", q.x); hl.setAttribute("x2", q.x); hl.setAttribute("visibility", "visible");
+    const b = bs || bo; if (!b) return tooltip(svg, null);
+    tooltip(svg, `${b[0].toFixed(1)}–${b[1].toFixed(1)} %<br>SGS ${(bs ? bs[2] : 0).toFixed(4)}<br>ALLUVSIM ${(bo ? bo[2] : 0).toFixed(4)}`, q.x, q.y);
+  });
+  hit.addEventListener("pointerleave", () => { tooltip(svg, null); hl.setAttribute("visibility", "hidden"); });
+})();
+
+// ---- variograms
+const VMAXG = Math.max(...["sgs", "obm"].flatMap(f => ["x", "y"].flatMap(d => D.vario[f][d].map(r => r[3])))) * 1.05;
+function vario(id, dir) {
+  const svg = document.getElementById(id), W = 470, H = 300, M = { l: 48, r: 14, t: 12, b: 40 };
+  const lags = D.vario.sgs[dir].map(r => r[0]), x1 = Math.max(...lags);
+  const xs = v => M.l + v / x1 * (W - M.l - M.r), ys = v => H - M.b - v / VMAXG * (H - M.t - M.b);
+  axes(svg, W, H, M, xs, ys, ticks(0, x1, 5), ticks(0, VMAXG, 5), "lag (m)", "γ / variance");
+  el("line", { x1: M.l, x2: W - M.r, y1: ys(1), y2: ys(1), stroke: "var(--fg-2)", "stroke-width": 1, "stroke-dasharray": "2 4" }, svg);
+  for (const fam of ["sgs", "obm"]) {
+    const r = D.vario[fam][dir];
+    const band = r.map(p => `${xs(p[0])},${ys(p[3])}`).join(" ") + " " + r.slice().reverse().map(p => `${xs(p[0])},${ys(p[2])}`).join(" ");
+    el("polygon", { points: band, fill: `var(--${fam})`, "fill-opacity": 0.14, stroke: "none" }, svg);
+    el("polyline", { points: r.map(p => `${xs(p[0])},${ys(p[1])}`).join(" "), fill: "none", stroke: `var(--${fam})`, "stroke-width": 2, "stroke-linejoin": "round" }, svg);
+  }
+  const hl = el("line", { y1: M.t, y2: H - M.b, stroke: "var(--fg-2)", "stroke-width": 1, "stroke-dasharray": "3 3", visibility: "hidden" }, svg);
+  const dots = ["sgs", "obm"].map(f => el("circle", { r: 4, fill: `var(--${f})`, stroke: "var(--surface)", "stroke-width": 2, visibility: "hidden" }, svg));
+  const hit = el("rect", { x: M.l, y: M.t, width: W - M.l - M.r, height: H - M.t - M.b, fill: "transparent" }, svg);
+  hit.addEventListener("pointermove", e => {
+    const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; const q = p.matrixTransform(svg.getScreenCTM().inverse());
+    const lag = (q.x - M.l) / (W - M.l - M.r) * x1;
+    const i = lags.reduce((bi, l, k) => Math.abs(l - lag) < Math.abs(lags[bi] - lag) ? k : bi, 0);
+    const X = xs(lags[i]); hl.setAttribute("x1", X); hl.setAttribute("x2", X); hl.setAttribute("visibility", "visible");
+    const rows = ["sgs", "obm"].map((f, k) => { const r = D.vario[f][dir][i]; dots[k].setAttribute("cx", X); dots[k].setAttribute("cy", ys(r[1])); dots[k].setAttribute("visibility", "visible");
+      return `${FAM[f]} ${r[1].toFixed(3)} <span style="opacity:.7">(${r[2].toFixed(2)}–${r[3].toFixed(2)})</span>`; });
+    tooltip(svg, `lag ${lags[i]} m<br>${rows.join("<br>")}`, X, q.y);
+  });
+  hit.addEventListener("pointerleave", () => { tooltip(svg, null); hl.setAttribute("visibility", "hidden"); dots.forEach(d => d.setAttribute("visibility", "hidden")); });
+}
+vario("vx", "x"); vario("vy", "y");
+
+// ---- stats table
+const LABEL = { min: "Minimum", p10: "P10", p50: "P50 (median)", p90: "P90", max: "Maximum", skewness: "Skewness", excess_kurtosis: "Excess kurtosis", net_to_gross: "Net-to-gross" };
+const cell = v => v ? `<td>${v[0].toFixed(2)}<span class="rng">${v[1].toFixed(2)} – ${v[2].toFixed(2)}</span></td>` : `<td class="na">—</td>`;
+document.getElementById("stats").innerHTML =
+  `<thead><tr><th>Statistic</th><th>SGS (n = ${D.n_seeds.sgs})</th><th>ALLUVSIM (n = ${D.n_seeds.obm})</th></tr></thead><tbody>` +
+  D.stats.map(r => `<tr><td>${LABEL[r.statistic] || r.statistic}</td>${cell(r.sgs)}${cell(r.obm)}</tr>`).join("") + `</tbody>`;
+</script>
