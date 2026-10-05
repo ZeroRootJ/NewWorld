@@ -203,6 +203,7 @@ from results.processed.sample_replicate_axis.make_length_case_study_figures impo
     compute_conditional_expectation,
     compute_map_variogram,
     conditional_expectation_rows,
+    mean_abs_conditional_bias,
     make_block_axes,
     plot_conditional_expectation,
     spherical_semivariance,
@@ -585,11 +586,12 @@ def make_fixed_range_figure(method, truth, source_runs, metrics_df, truth_vario,
     ce_bins, ce_slope = compute_conditional_expectation(
         rd["truth_masked"], rd["point_estimate_masked"]
     )
+    ce_macb = mean_abs_conditional_bias(ce_bins)
     plot_conditional_expectation(
         ax_cond_exp, ce_bins, ce_slope, crossplot_lims, color, rd["point_estimate_label"], tag,
     )
     ce_rows = conditional_expectation_rows(
-        method, rd["replicate_id"], CONDITIONAL_EXPECTATION_ROLE, ce_bins, ce_slope
+        method, rd["replicate_id"], CONDITIONAL_EXPECTATION_ROLE, ce_bins, ce_slope, ce_macb
     )
 
     # ---- 8. Variogram reproduction ----
@@ -697,7 +699,7 @@ def make_fixed_range_figure(method, truth, source_runs, metrics_df, truth_vario,
     )
     print(
         f"    conditional expectation: slope (OLS truth on estimate, all "
-        f"{rd['n_evaluated_cells']} evaluated cells)={ce_slope:.6f}; {len(ce_bins)} bins, "
+        f"{rd['n_evaluated_cells']} evaluated cells)={ce_slope:.6f}; MACB={ce_macb:.6f} %; {len(ce_bins)} bins, "
         f"n_cells sum={int(ce_bins['n_cells'].sum())}, bin sizes "
         f"{int(ce_bins['n_cells'].min())}-{int(ce_bins['n_cells'].max())}"
     )
@@ -756,7 +758,10 @@ def make_fixed_range_figure(method, truth, source_runs, metrics_df, truth_vario,
         "each marker is (mean Z*, mean truth Z) in a bin, i.e. a binned E[Z | Z*], with the same "
         "1:1 line and axis limits as the crossplot (axes swapped: estimate on x); the title slope "
         "is the OLS slope of truth regressed on the point estimate over ALL evaluated cells (1.0 = "
-        "no conditional bias); binned values in results/processed/sample_replicate_axis/"
+        "no conditional bias); mean absolute conditional bias (MACB) = n_cells-weighted mean over "
+        "the bins of |mean truth - mean Z*| (average vertical distance of the markers from the 1:1 "
+        f"line; 0 = no conditional bias) = {ce_macb:.3f} % porosity; binned values (and MACB) in "
+        "results/processed/sample_replicate_axis/"
         "case_study_conditional_expectation.csv. VARIOGRAM panel: "
         "experimental variogram of the truth and of the plotted map(s), plus the truth's "
         f"theoretical spherical model (nugget={NUG * POR_STDEV ** 2:g}, structured "

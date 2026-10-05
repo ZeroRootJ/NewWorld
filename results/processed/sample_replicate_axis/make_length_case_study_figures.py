@@ -111,7 +111,10 @@ until panel 7 was inserted on 2026-10-05; see their own sections below).
      = conditionally unbiased. The title's slope is the OLS slope of Z
      regressed on Z* over ALL evaluated cells (not the binned means) -- the
      standard conditional-bias slope, 1.0 = no conditional bias. The
-     binning / slope / sanity-check code is ONE helper,
+     caption also reports the mean absolute conditional bias (MACB,
+     ``mean_abs_conditional_bias``): the n_cells-weighted mean over the
+     bins of |mean Z - mean Z*| (porosity %, 0 = conditionally unbiased).
+     The binning / slope / sanity-check code is ONE helper,
      ``compute_conditional_expectation`` (reused by
      make_fixed_range_case_study_figures.py), and the binned values of all
      boards are written to case_study_conditional_expectation.csv (tidy;
@@ -322,7 +325,7 @@ CONDITIONAL_EXPECTATION_CSV = (
 )
 CONDITIONAL_EXPECTATION_COLUMNS = [
     "method", "level", "replicate_id", "role", "bin", "n_cells",
-    "estimate_mean", "truth_mean", "slope",
+    "estimate_mean", "truth_mean", "slope", "mean_abs_cond_bias",
 ]
 
 EXTENT = [XMIN, XMAX, YMIN, YMAX]
@@ -520,6 +523,17 @@ def compute_conditional_expectation(truth_masked, estimate_masked, n_bins=COND_E
     return bins_df, slope
 
 
+def mean_abs_conditional_bias(bins_df) -> float:
+    """Mean absolute conditional bias (MACB) of one board's panel 7, in
+    porosity %: the n_cells-weighted mean over the equal-count bins of
+    |mean Z in the bin - mean Z* in the bin|, i.e. the average vertical
+    distance of the binned E[Z | Z*] markers from the 1:1 line. 0 = no
+    conditional bias. Computed from exactly the bins_df the panel plots."""
+    gap = np.abs(bins_df["truth_mean"].values - bins_df["estimate_mean"].values)
+    w = bins_df["n_cells"].values.astype(float)
+    return float(np.sum(gap * w) / np.sum(w))
+
+
 def plot_conditional_expectation(ax, bins_df, slope, lims, color, point_estimate_label, tag):
     """Draw panel 7 (conditional expectation) on ``ax``: binned E[truth |
     estimate] as a line with markers plus the same 1:1 dashed gray line and
@@ -540,7 +554,7 @@ def plot_conditional_expectation(ax, bins_df, slope, lims, color, point_estimate
     ax.set_aspect("equal", adjustable="box")
 
 
-def conditional_expectation_rows(method, replicate_id, role, bins_df, slope) -> pd.DataFrame:
+def conditional_expectation_rows(method, replicate_id, role, bins_df, slope, macb) -> pd.DataFrame:
     """Tidy rows (CONDITIONAL_EXPECTATION_COLUMNS) for one board's panel 7."""
     df = bins_df.copy()
     df.insert(0, "role", role)
@@ -548,6 +562,7 @@ def conditional_expectation_rows(method, replicate_id, role, bins_df, slope) -> 
     df.insert(0, "level", AXIS_LEVEL)
     df.insert(0, "method", method)
     df["slope"] = slope
+    df["mean_abs_cond_bias"] = macb
     return df[CONDITIONAL_EXPECTATION_COLUMNS]
 
 
@@ -953,14 +968,16 @@ def make_case_study_figure(
         ce_bins, ce_slope = compute_conditional_expectation(
             row_data["truth_masked"], row_data["point_estimate_masked"]
         )
+        ce_macb = mean_abs_conditional_bias(ce_bins)
         row_data["cond_exp_slope"] = ce_slope
+        row_data["cond_exp_macb"] = ce_macb
         row_data["cond_exp_bins"] = ce_bins
         plot_conditional_expectation(
             ax_cond_exp, ce_bins, ce_slope, crossplot_lims, method_color,
             point_estimate_label, f"[{row_data['role']}]",
         )
         ce_rows.append(conditional_expectation_rows(
-            method, row_data["replicate_id"], row_data["role"], ce_bins, ce_slope
+            method, row_data["replicate_id"], row_data["role"], ce_bins, ce_slope, ce_macb
         ))
 
         # ---- 8. Variogram reproduction --------------------------------
@@ -1076,7 +1093,7 @@ def make_case_study_figure(
         print(
             f"    conditional expectation: slope (OLS truth on estimate, all "
             f"{row_data['n_evaluated_cells']} evaluated cells)={ce_slope:.6f}; "
-            f"{len(ce_bins)} bins, n_cells sum={int(ce_bins['n_cells'].sum())}, "
+            f"MACB={ce_macb:.6f} %; {len(ce_bins)} bins, n_cells sum={int(ce_bins['n_cells'].sum())}, "
             f"bin sizes {int(ce_bins['n_cells'].min())}-{int(ce_bins['n_cells'].max())}"
         )
         print(
@@ -1134,7 +1151,11 @@ def make_case_study_figure(
         "the bin), i.e. a binned E[Z | Z*]; same 1:1 line and axis limits as the crossplot "
         "(note the axes are swapped relative to the crossplot: estimate on x). The slope in the "
         "title is the OLS slope of truth regressed on the point estimate over ALL evaluated cells "
-        "(not the binned means); 1.0 = no conditional bias. Binned values are written to "
+        "(not the binned means); 1.0 = no conditional bias. Mean absolute conditional bias "
+        "(MACB) = n_cells-weighted mean over the bins of |mean truth - mean Z*| (average vertical "
+        "distance of the markers from the 1:1 line; 0 = no conditional bias): "
+        f"MIN block {min_row['cond_exp_macb']:.3f} %, MAX block {max_row['cond_exp_macb']:.3f} % "
+        "porosity. Binned values (and MACB) are written to "
         "results/processed/sample_replicate_axis/case_study_conditional_expectation.csv. "
         "VARIOGRAM panel: the experimental variogram of the truth field, of the SAME example "
         "realization/draw shown in the example panel, and of the SAME prediction mean shown in "
