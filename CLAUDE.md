@@ -22,6 +22,7 @@
 ## 코딩 컨벤션
 - **패키지**: kriging/SGS는 [geostatspy](https://github.com/GeostatsGuy/GeostatsPy)를 사용한다 (RBF 비교군은 `scipy`, GPR은 `scikit-learn`).
 - **스타일 기준**: [`docs/geostatspy_conventions.md`](docs/geostatspy_conventions.md) — Michael Pyrcz의 *GeostatsPy Demos Book*(https://geostatsguy.github.io/GeostatsPyDemos_Book/intro.html)에서 정리한 컨벤션. geostatspy 관련 코드를 쓰거나 검수할 때 항상 이 문서를 기준으로 한다. 새로운 패턴이 필요하면 임의로 만들지 말고 먼저 원본 book에서 해당 챕터를 확인한다.
+- **Figure 기준**: [`docs/figure_guidelines.md`](docs/figure_guidelines.md) — Elsevier 스타일 figure 가이드라인(사용자 제공, 원본은 workspace 루트 `FIGURE_GUIDELINES`). 논문용·보고용 figure를 만들거나 수정할 때 항상 이 문서를 따른다: 최종 폭(90 mm 단일 / 190 mm 다중 패널) 기준으로 캔버스 설정, Arial 7 pt, 주요 선 ~1 pt(최소 0.25 pt), 패널 라벨 A/B/C, 벡터 PDF(폰트 임베드) 우선 + 필요 시 고해상도 래스터, 도메인/기존 색상 매핑 보존(임의 팔레트 금지), 캡션은 그림 밖에. 대상 저널 미정이면 저널별 확인이 남았음을 명시한다.
 - 의존성은 `requirements.txt`에 고정한다 (`.venv` 기준, Python 3.8).
 
 ## 팀 구조

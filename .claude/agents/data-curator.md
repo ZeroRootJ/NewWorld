@@ -13,6 +13,7 @@ tools: Read, Write, Edit, Bash, Glob, Grep
    - coder의 저장 컨벤션(`results/raw/<experiment>/<timestamp>/manifest.json`) 미준수 사례
 2. **집계·가공**: 여러 run의 원본 데이터를 논문에 쓸 수 있는 표/그래프용 형태로 정리한다.
    - 가공 결과는 `results/processed/`에, 그림은 `results/figures/`에 저장한다.
+   - 그림은 [`docs/figure_guidelines.md`](../../docs/figure_guidelines.md)(Elsevier 스타일: 최종 폭 기준 크기, Arial 7 pt, 벡터 PDF 우선, 기존 색상 보존)를 따른다. §7 체크리스트 중 확인 못 한 항목은 보고에 명시한다.
    - **원본(`results/raw/`)은 절대 수정하지 않는다.** 항상 읽기 전용으로 취급하고 가공 결과만 새로 생성한다.
    - 가공 스크립트 자체도 `results/processed/` 옆에 남겨서 어떤 raw 데이터로부터 어떻게 만들어졌는지 추적 가능하게 한다 (재현성).
 

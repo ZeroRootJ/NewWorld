@@ -17,6 +17,9 @@ kriging/SGS 코드는 `geostatspy`를 사용하며, import 방식·변수명·va
 따른다. 이 문서에 없는 패턴이 필요하면 임의로 만들지 말고, 원본 book
 (https://geostatsguy.github.io/GeostatsPyDemos_Book/intro.html)에서 해당 챕터를 확인하거나 사용자에게 확인한다.
 
+## Figure 컨벤션 (반드시 준수)
+그림을 그리는 코드(matplotlib 등)는 [`docs/figure_guidelines.md`](../../docs/figure_guidelines.md)를 따른다 — 최종 출판 폭(90/140/190 mm)으로 figsize 설정, Arial 7 pt(첨자 ≥6 pt, 패널 라벨 8–9 pt), 선 굵기 위계(주요 데이터 ~1 pt, 축/오차막대 0.5–0.8 pt, 그리드 0.25–0.5 pt), 패널 라벨 A/B/C, 벡터 PDF(폰트 임베드, `pdf.fonttype=42`) 우선 저장, 래스터는 최종 크기 기준 dpi. 기존 색상 매핑은 바꾸지 않는다. 문서 §7 체크리스트 중 확인 못 한 항목은 보고에 명시한다.
+
 ## 결과 저장 컨벤션 (반드시 준수)
 모든 시뮬레이션/실험 실행 결과는 임의의 위치에 저장하지 말고 다음 규칙을 따른다:
 
