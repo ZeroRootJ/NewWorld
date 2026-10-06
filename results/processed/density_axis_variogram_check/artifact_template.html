@@ -1,0 +1,196 @@
+<title>Density Axis Variogram Check</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Source+Serif+4:opsz,wght@8..60,600&display=swap">
+<style>
+/* Layout: one reading column; by-level small multiples, then by-realization small multiples */
+:root {
+  --bg: #f7f8f7; --surface: #fcfcfb; --fg: #15191c; --fg-2: #4f575c; --muted: #7d858a;
+  --rule: #dfe3e2; --grid: #e9ebea; --hi: #eb6834; --ghost: #b4bab8;
+  --l0: #104281; --l1: #1c5cab; --l2: #2a78d6; --l3: #5598e7; --l4: #86b6ef;
+  --display: "Source Serif 4", Georgia, serif;
+  --body: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #141716; --surface: #1a1a19; --fg: #eef1f0; --fg-2: #b9c0bd; --muted: #8a928f;
+  --rule: #313735; --grid: #2a2e2c; --hi: #d95926; --ghost: #4c5351;
+  --l0: #cde2fb; --l1: #9ec5f4; --l2: #6da7ec; --l3: #3987e5; --l4: #256abf; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #141716; --surface: #1a1a19; --fg: #eef1f0; --fg-2: #b9c0bd; --muted: #8a928f;
+  --rule: #313735; --grid: #2a2e2c; --hi: #d95926; --ghost: #4c5351;
+  --l0: #cde2fb; --l1: #9ec5f4; --l2: #6da7ec; --l3: #3987e5; --l4: #256abf; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font: 15px/1.55 var(--body); }
+.wrap { max-width: 1120px; margin: 0 auto; padding-inline: 20px; padding-block: 36px 56px; display: grid; gap: 44px; }
+h1 { font: 600 clamp(26px, 4vw, 34px)/1.15 var(--display); margin: 0 0 8px; text-wrap: balance; }
+h2 { font: 600 20px/1.25 var(--display); margin: 0 0 4px; text-wrap: balance; }
+.lede { color: var(--fg-2); max-width: 70ch; margin: 0; }
+.cap { color: var(--muted); font-size: 13px; margin: 0 0 14px; max-width: 76ch; }
+.meta { display: flex; flex-wrap: wrap; gap: 6px 18px; margin-top: 14px; font: 12px var(--mono); color: var(--muted); }
+.meta b { color: var(--fg-2); font-weight: 500; }
+section { min-width: 0; }
+.controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; margin-bottom: 12px; font-size: 13px; color: var(--fg-2); }
+.seg { display: inline-flex; border: 1px solid var(--rule); border-radius: 6px; overflow: hidden; }
+.seg button { font: 500 13px var(--mono); color: var(--fg-2); background: var(--surface); border: 0; padding: 5px 11px; cursor: pointer; font-variant-numeric: tabular-nums; }
+.seg button + button { border-left: 1px solid var(--rule); }
+.seg button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+.seg button:focus-visible, input:focus-visible { outline: 2px solid var(--hi); outline-offset: -2px; }
+label.chk { display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--fg-2); margin-bottom: 12px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; font-variant-numeric: tabular-nums; }
+.sw { width: 16px; height: 0; border-top: 2px solid; display: inline-block; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 330px), 1fr)); gap: 18px 16px; }
+figure { margin: 0; min-width: 0; background: var(--surface); border: 1px solid var(--rule); border-radius: 6px; padding: 10px 10px 6px; }
+figcaption { font: 500 13px var(--body); color: var(--fg); margin: 0 0 2px 4px; display: flex; justify-content: space-between; gap: 8px; }
+figcaption small { font: 12px var(--mono); color: var(--muted); }
+svg { display: block; width: 100%; height: auto; overflow: visible; }
+svg text { font: 11px var(--mono); fill: var(--muted); }
+.tip { position: fixed; pointer-events: none; z-index: 10; background: var(--fg); color: var(--bg); font: 12px/1.45 var(--mono); padding: 6px 9px; border-radius: 5px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+@media (prefers-reduced-motion: no-preference) { .ln { transition: opacity .15s; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Density Axis Variogram Check</h1>
+    <p class="lede">Kriging과 SGS에 입력된 variogram 모델(데이터 생성에 쓴 값)과, 각 realization에서 sample density axis와 같은 방식으로 뽑은 샘플의 experimental variogram 비교. 모두 normal-score 공간.</p>
+    <div class="meta" id="meta"></div>
+  </header>
+
+  <section>
+    <h2>Density level별</h2>
+    <p class="cap">패널 = density level. 굵은 선 = 입력 모델, 회색 선 = realization별 샘플 experimental variogram, 강조 선 = 선택한 realization. Seed 101이 실제 실험에 쓰인 truth.</p>
+    <div class="controls">
+      <span>강조 realization</span>
+      <div class="seg" id="seedSeg" role="group" aria-label="Highlighted realization"></div>
+      <label class="chk"><input type="checkbox" id="showExh" checked> 강조 realization의 exhaustive variogram</label>
+    </div>
+    <div class="legend" id="legA"></div>
+    <div class="grid" id="gridA"></div>
+  </section>
+
+  <section>
+    <h2>Realization별</h2>
+    <p class="cap">패널 = truth realization. 색 = density level (진할수록 샘플 많음). 점선 = 해당 realization 전체 2500셀의 exhaustive variogram (x·y 방향 평균).</p>
+    <div class="legend" id="legB"></div>
+    <div class="grid" id="gridB"></div>
+  </section>
+</div>
+<div class="tip" id="tip" hidden></div>
+
+<script>
+const D = __DATA__;
+const NS = "http://www.w3.org/2000/svg";
+const W = 360, H = 250, M = { l: 38, r: 10, t: 10, b: 30 };
+const XMAX = 600, YMAX = D.ymax;
+const sx = h => M.l + (h / XMAX) * (W - M.l - M.r);
+const sy = g => H - M.b - (g / YMAX) * (H - M.t - M.b);
+const LV_VAR = ["--l0", "--l1", "--l2", "--l3", "--l4"];
+const tip = document.getElementById("tip");
+let hiSeed = D.seeds[0];
+
+function el(tag, attrs, parent) {
+  const e = document.createElementNS(NS, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(e);
+  return e;
+}
+function path(pts) { return pts.map((p, i) => (i ? "L" : "M") + sx(p[0]).toFixed(1) + "," + sy(p[1]).toFixed(1)).join(""); }
+function modelAt(h) { const r = Math.min(h / D.range, 1); return h > 0 ? D.nug + (1 - D.nug) * (1.5 * r - 0.5 * r ** 3) : 0; }
+
+function axes(svg) {
+  for (let g = 0; g <= YMAX + 1e-9; g += 0.5) {
+    el("line", { x1: M.l, x2: W - M.r, y1: sy(g), y2: sy(g), stroke: "var(--grid)", "stroke-width": 1 }, svg);
+    el("text", { x: M.l - 6, y: sy(g) + 4, "text-anchor": "end" }, svg).textContent = g.toFixed(1);
+  }
+  for (let h = 0; h <= XMAX; h += 100) {
+    el("text", { x: sx(h), y: H - M.b + 15, "text-anchor": "middle" }, svg).textContent = h;
+  }
+  el("line", { x1: M.l, x2: W - M.r, y1: sy(0), y2: sy(0), stroke: "var(--muted)", "stroke-width": 1 }, svg);
+  el("text", { x: W - M.r, y: H - 2, "text-anchor": "end" }, svg).textContent = "lag (m)";
+  el("text", { x: 2, y: M.t + 2, "text-anchor": "start" }, svg).textContent = "γ";
+}
+function modelLine(svg) {
+  el("path", { d: path(D.model), fill: "none", stroke: "var(--fg)", "stroke-width": 2.25 }, svg);
+}
+function exhLine(svg, seed, color, cls) {
+  const pts = D.exh[seed].map(p => [p[0], p[1]]);
+  return el("path", { d: path(pts), fill: "none", stroke: color, "stroke-width": 1.5, "stroke-dasharray": "4 3", class: cls || "" }, svg);
+}
+function sampleLine(svg, pts, color, width, dots, info) {
+  const g = el("g", { class: "ln" }, svg);
+  el("path", { d: path(pts), fill: "none", stroke: color, "stroke-width": width, "stroke-linejoin": "round" }, g);
+  if (dots) for (const p of pts) {
+    el("circle", { cx: sx(p[0]), cy: sy(p[1]), r: 3.2, fill: color, stroke: "var(--surface)", "stroke-width": 1.5 }, g);
+    const hit = el("circle", { cx: sx(p[0]), cy: sy(p[1]), r: 9, fill: "transparent" }, g);
+    hit.addEventListener("pointerenter", e => showTip(e, info, p));
+    hit.addEventListener("pointermove", moveTip);
+    hit.addEventListener("pointerleave", () => tip.hidden = true);
+  }
+  return g;
+}
+function showTip(e, info, p) {
+  tip.innerHTML = `seed ${info.seed} · ${info.lv}% (n=${info.n})<br>lag ${p[0].toFixed(0)} m · γ ${p[1].toFixed(3)}<br>model γ ${modelAt(p[0]).toFixed(3)} · pairs ${p[2]}`;
+  tip.hidden = false; moveTip(e);
+}
+function moveTip(e) {
+  const r = tip.getBoundingClientRect();
+  let x = e.clientX + 14, y = e.clientY + 14;
+  if (x + r.width > innerWidth - 8) x = e.clientX - r.width - 14;
+  if (y + r.height > innerHeight - 8) y = e.clientY - r.height - 14;
+  tip.style.left = x + "px"; tip.style.top = y + "px";
+}
+function panel(grid, title, sub) {
+  const f = document.createElement("figure");
+  f.innerHTML = `<figcaption><span>${title}</span><small>${sub}</small></figcaption>`;
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": title }, null);
+  f.appendChild(svg); grid.appendChild(f);
+  axes(svg); return svg;
+}
+
+// meta
+document.getElementById("meta").innerHTML = D.meta.map(([k, v]) => `<span><b>${k}</b> ${v}</span>`).join("");
+
+// ---- Section A: by level
+const seedSeg = document.getElementById("seedSeg");
+D.seeds.forEach(s => {
+  const b = document.createElement("button");
+  b.id = "seed-" + s; b.textContent = s; b.setAttribute("aria-pressed", s === hiSeed);
+  b.onclick = () => { hiSeed = s; renderA(); };
+  seedSeg.appendChild(b);
+});
+document.getElementById("showExh").onchange = renderA;
+document.getElementById("legA").innerHTML =
+  `<span><i class="sw" style="border-color:var(--fg);border-top-width:3px"></i>입력 모델 (nug ${D.nug} + sph, a=${D.range} m)</span>` +
+  `<span><i class="sw" style="border-color:var(--ghost)"></i>다른 realizations (샘플)</span>` +
+  `<span><i class="sw" style="border-color:var(--hi)"></i>강조 realization (샘플)</span>` +
+  `<span><i class="sw" style="border-color:var(--hi);border-top-style:dashed"></i>강조 realization (exhaustive)</span>`;
+function renderA() {
+  seedSeg.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", b.textContent == hiSeed));
+  const grid = document.getElementById("gridA"); grid.innerHTML = "";
+  D.levels.forEach(L => {
+    const svg = panel(grid, `${L.lv}% density`, `n = ${L.n}`);
+    modelLine(svg);
+    D.seeds.filter(s => s !== hiSeed).forEach(s =>
+      sampleLine(svg, D.samples[s][L.lv], "var(--ghost)", 1.25, true, { seed: s, lv: L.lv, n: L.n }));
+    if (document.getElementById("showExh").checked) exhLine(svg, hiSeed, "var(--hi)");
+    modelLine(svg);
+    sampleLine(svg, D.samples[hiSeed][L.lv], "var(--hi)", 2, true, { seed: hiSeed, lv: L.lv, n: L.n });
+  });
+}
+renderA();
+
+// ---- Section B: by realization
+document.getElementById("legB").innerHTML =
+  `<span><i class="sw" style="border-color:var(--fg);border-top-width:3px"></i>입력 모델</span>` +
+  `<span><i class="sw" style="border-color:var(--muted);border-top-style:dashed"></i>exhaustive</span>` +
+  D.levels.map((L, i) => `<span><i class="sw" style="border-color:var(${LV_VAR[i]})"></i>${L.lv}% (n=${L.n})</span>`).join("");
+const gridB = document.getElementById("gridB");
+D.seeds.forEach(s => {
+  const svg = panel(gridB, `Seed ${s}`, s === D.seeds[0] ? "실험에 사용된 truth" : "");
+  exhLine(svg, s, "var(--muted)");
+  D.levels.slice().reverse().forEach(L => {
+    const i = D.levels.indexOf(L);
+    sampleLine(svg, D.samples[s][L.lv], `var(${LV_VAR[i]})`, 1.5, true, { seed: s, lv: L.lv, n: L.n });
+  });
+  modelLine(svg);
+});
+</script>
