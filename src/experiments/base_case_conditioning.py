@@ -115,7 +115,10 @@ if abs((NUG + CC1) - 1.0) > 1e-12:
 
 
 def build_vario(
-    hmaj1: float = HMAJ1, hmin1: float = HMIN1, nug: float = NUG
+    hmaj1: float = HMAJ1,
+    hmin1: float = HMIN1,
+    nug: float = NUG,
+    azi1: float = AZI1,
 ) -> Dict[str, Any]:
     """Build the (single, reused) base-case variogram dict.
 
@@ -125,7 +128,9 @@ def build_vario(
     axis (deliverable 2, docs/experiment_context.md) varies the variogram
     range; passing a different ``nug`` is how the nugget axis (deliverable 3)
     varies the nugget -- in both cases one-factor-at-a-time, with every other
-    parameter fixed.
+    parameter fixed. Passing ``hmaj1 != hmin1`` together with ``azi1`` (GSLIB
+    convention: degrees clockwise from north) is how the anisotropy axis
+    (deliverable 4) builds a geometrically anisotropic variogram.
 
     WHY THERE IS NO ``cc1`` ARGUMENT (deliberate, do not "fix" this by adding
     one): the sill on standard-normal space is 1.0 by this project's
@@ -149,7 +154,7 @@ def build_vario(
         )
     cc1 = 1.0 - nug
     return GSLIB.make_variogram(
-        nug=nug, nst=1, it1=IT1, cc1=cc1, azi1=AZI1, hmaj1=hmaj1, hmin1=hmin1
+        nug=nug, nst=1, it1=IT1, cc1=cc1, azi1=azi1, hmaj1=hmaj1, hmin1=hmin1
     )
 
 
@@ -158,6 +163,7 @@ def get_base_case_truth(
     hmaj1: float = HMAJ1,
     hmin1: float = HMIN1,
     nug: float = NUG,
+    azi1: float = AZI1,
 ) -> "pd.DataFrame":
     """Regenerate a base-case-style ground-truth field.
 
@@ -176,7 +182,7 @@ def get_base_case_truth(
     np.ndarray of shape (NY, NX), same convention as
     src.truth_model.make_porosity_truth (row 0 = max-y row).
     """
-    vario = build_vario(hmaj1=hmaj1, hmin1=hmin1, nug=nug)
+    vario = build_vario(hmaj1=hmaj1, hmin1=hmin1, nug=nug, azi1=azi1)
     truth = make_porosity_truth(
         nx=NX,
         ny=NY,
