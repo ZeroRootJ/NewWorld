@@ -104,6 +104,8 @@ function axes(svg) {
   for (let h = 0; h <= XMAX; h += 100) {
     el("text", { x: sx(h), y: H - M.b + 15, "text-anchor": "middle" }, svg).textContent = h;
   }
+  el("line", { x1: sx(D.range), x2: sx(D.range), y1: M.t, y2: sy(0), stroke: "var(--muted)", "stroke-width": 1, "stroke-dasharray": "2 3" }, svg);
+  el("text", { x: sx(D.range) + 4, y: M.t + 8, "text-anchor": "start" }, svg).textContent = "a = " + D.range + " m";
   el("line", { x1: M.l, x2: W - M.r, y1: sy(0), y2: sy(0), stroke: "var(--muted)", "stroke-width": 1 }, svg);
   el("text", { x: W - M.r, y: H - 2, "text-anchor": "end" }, svg).textContent = "lag (m)";
   el("text", { x: 2, y: M.t + 2, "text-anchor": "start" }, svg).textContent = "γ";
