@@ -26,6 +26,15 @@ shapes are directly comparable. Truth is drawn as a neutral black step
 outline; the point estimate is drawn as a semi-transparent fill in the
 method's project-wide color.
 
+Each panel also reports the 1-D Wasserstein distance (a.k.a. Earth Mover's
+Distance, scipy.stats.wasserstein_distance) between truth_masked and
+point_estimate_masked, in a bottom-right text box ("W1 = ..."), using the
+same box style as make_conditional_expectation_scatter_board.py's slope box.
+Per 2026-10-16 user instruction, this quantifies the by-eye impression that
+some methods' estimate distributions are closer to the truth distribution
+than others. Values are also written to the CSV output's
+wasserstein_distance column.
+
 Data loading -- NOTHING new is implemented here
 ------------------------------------------------
 Exactly the same loaders as make_conditional_expectation_scatter_board.py,
@@ -54,6 +63,7 @@ from pathlib import Path
 import matplotlib
 import numpy as np
 import pandas as pd
+from scipy.stats import wasserstein_distance
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -78,6 +88,7 @@ OUTPUT_FIG = FIGURES_DIR / "truth_vs_estimate_distribution_board.png"
 OUTPUT_COLUMNS = [
     "panel", "method", "role", "replicate_id", "length_or_range_m",
     "truth_mean", "truth_std", "estimate_mean", "estimate_std", "n_cells",
+    "wasserstein_distance",
 ]
 
 PANEL_LABELS = ("A", "B", "C", "D", "E", "F")
@@ -109,6 +120,7 @@ def build_panel(method: str, role: str, row_data: dict) -> dict:
         "estimate_mean": float(np.mean(estimate_masked)),
         "estimate_std": float(np.std(estimate_masked)),
         "n_cells": n_cells,
+        "wasserstein_distance": float(wasserstein_distance(truth_masked, estimate_masked)),
     }
 
 
@@ -140,6 +152,11 @@ def plot_panel(ax, panel: dict, color: str, title: str, letter: str) -> None:
     ax.grid(alpha=0.3)
     ax.legend(loc="upper left", fontsize=7.5, framealpha=0.85)
 
+    ax.text(
+        0.97, 0.04, f"W1 = {panel['wasserstein_distance']:.3f} (porosity %)",
+        transform=ax.transAxes, ha="right", va="bottom", fontsize=9.5,
+        bbox=dict(boxstyle="round", facecolor="white", edgecolor="0.6", alpha=0.88, linewidth=0.5),
+    )
     ax.text(
         -0.16, 1.12, letter, transform=ax.transAxes, ha="left", va="top",
         fontsize=16, fontweight="bold", clip_on=False,
@@ -249,7 +266,7 @@ def main():
             f"  panel {letter} [{p['method']:<13s} {p['role']:<12s} {p['replicate_id']}] "
             f"truth: mean={p['truth_mean']:.3f} std={p['truth_std']:.3f}  |  "
             f"estimate: mean={p['estimate_mean']:.3f} std={p['estimate_std']:.3f}  |  "
-            f"n_cells={p['n_cells']}"
+            f"n_cells={p['n_cells']}  |  wasserstein_distance={p['wasserstein_distance']:.4f}"
         )
         rows.append({
             "panel": letter,
@@ -262,6 +279,7 @@ def main():
             "estimate_mean": p["estimate_mean"],
             "estimate_std": p["estimate_std"],
             "n_cells": p["n_cells"],
+            "wasserstein_distance": p["wasserstein_distance"],
         })
 
     out_df = pd.DataFrame(rows, columns=OUTPUT_COLUMNS)
