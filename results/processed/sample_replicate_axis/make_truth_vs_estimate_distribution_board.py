@@ -63,7 +63,7 @@ from pathlib import Path
 import matplotlib
 import numpy as np
 import pandas as pd
-from scipy.stats import wasserstein_distance
+from scipy.stats import ks_2samp, wasserstein_distance
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -88,7 +88,7 @@ OUTPUT_FIG = FIGURES_DIR / "truth_vs_estimate_distribution_board.png"
 OUTPUT_COLUMNS = [
     "panel", "method", "role", "replicate_id", "length_or_range_m",
     "truth_mean", "truth_std", "estimate_mean", "estimate_std", "n_cells",
-    "wasserstein_distance",
+    "wasserstein_distance", "ks_statistic", "ks_pvalue",
 ]
 
 PANEL_LABELS = ("A", "B", "C", "D", "E", "F")
@@ -109,6 +109,7 @@ def build_panel(method: str, role: str, row_data: dict) -> dict:
     truth_masked = np.asarray(row_data["truth_masked"], dtype=float)
     estimate_masked = np.asarray(row_data["point_estimate_masked"], dtype=float)
     n_cells = int(truth_masked.size)
+    ks_result = ks_2samp(truth_masked, estimate_masked)
     return {
         "method": method,
         "role": role,
@@ -121,19 +122,38 @@ def build_panel(method: str, role: str, row_data: dict) -> dict:
         "estimate_std": float(np.std(estimate_masked)),
         "n_cells": n_cells,
         "wasserstein_distance": float(wasserstein_distance(truth_masked, estimate_masked)),
+        "ks_statistic": float(ks_result.statistic),
+        "ks_pvalue": float(ks_result.pvalue),
     }
 
 
-def plot_panel(ax, panel: dict, color: str, title: str, letter: str) -> None:
+def compute_bin_edges(panel: dict) -> np.ndarray:
+    """Shared bin edges for one panel's overlaid histograms, built from the
+    pooled [truth, estimate] range (same recipe used inside plot_panel)."""
+    pooled = np.concatenate([panel["truth_masked"], panel["estimate_masked"]])
+    return np.histogram_bin_edges(pooled, bins=N_HIST_BINS)
+
+
+def compute_panel_max_density(panel: dict) -> float:
+    """Max density value across both (truth, estimate) histograms of one
+    panel, using the exact same bin edges plot_panel will draw with -- used
+    to find the single y-axis upper limit shared by all 6 panels."""
+    bin_edges = compute_bin_edges(panel)
+    truth_density, _ = np.histogram(panel["truth_masked"], bins=bin_edges, density=True)
+    estimate_density, _ = np.histogram(panel["estimate_masked"], bins=bin_edges, density=True)
+    return float(max(truth_density.max(), estimate_density.max()))
+
+
+def plot_panel(ax, panel: dict, color: str, title: str, letter: str, shared_ylim: float) -> None:
     """Draw one of the 6 panels: overlaid Truth-vs-Estimate histograms on
-    shared bin edges, density-normalized y-axis, legend with mean/std, and
-    the same panel-letter convention as make_conditional_expectation_scatter_
-    board.py."""
+    shared bin edges, density-normalized y-axis (upper limit shared by ALL
+    6 panels, via shared_ylim, so panel shapes are directly comparable),
+    legend with mean/std, and the same panel-letter convention as
+    make_conditional_expectation_scatter_board.py."""
     truth = panel["truth_masked"]
     estimate = panel["estimate_masked"]
 
-    pooled = np.concatenate([truth, estimate])
-    bin_edges = np.histogram_bin_edges(pooled, bins=N_HIST_BINS)
+    bin_edges = compute_bin_edges(panel)
 
     ax.hist(
         truth, bins=bin_edges, density=True, histtype="step", color="black",
@@ -151,9 +171,12 @@ def plot_panel(ax, panel: dict, color: str, title: str, letter: str) -> None:
     ax.set_title(title, fontsize=10)
     ax.grid(alpha=0.3)
     ax.legend(loc="upper left", fontsize=7.5, framealpha=0.85)
+    ax.set_ylim(0, shared_ylim)
 
     ax.text(
-        0.97, 0.04, f"W1 = {panel['wasserstein_distance']:.3f} (porosity %)",
+        0.97, 0.04,
+        f"W1 = {panel['wasserstein_distance']:.3f} (porosity %)\n"
+        f"KS = {panel['ks_statistic']:.3f}",
         transform=ax.transAxes, ha="right", va="bottom", fontsize=9.5,
         bbox=dict(boxstyle="round", facecolor="white", edgecolor="0.6", alpha=0.88, linewidth=0.5),
     )
@@ -240,9 +263,16 @@ def main():
         "C": float(rbf_min_row["length_scale_m"]), "F": float(rbf_max_row["length_scale_m"]),
     }
 
+    # Shared y-axis upper limit across ALL 6 panels (dynamic, not hardcoded):
+    # the max density over every panel's truth/estimate histograms, padded by
+    # 8% so the tallest bar is never clipped.
+    max_density = max(compute_panel_max_density(panels[letter]) for letter in PANEL_LABELS)
+    shared_ylim = max_density * 1.08
+    print(f"\nShared y-axis upper limit (max density * 1.08 padding): {shared_ylim:.4f}")
+
     fig, axes = plt.subplots(2, 3, figsize=(15.0, 10.2))
     for ax, letter in zip(axes.ravel(), PANEL_LABELS):
-        plot_panel(ax, panels[letter], colors[letter], titles[letter], letter)
+        plot_panel(ax, panels[letter], colors[letter], titles[letter], letter, shared_ylim)
 
     fig.suptitle(
         "DIAGNOSTIC (not a paper figure): Truth vs. point-estimate distribution comparison "
@@ -266,7 +296,8 @@ def main():
             f"  panel {letter} [{p['method']:<13s} {p['role']:<12s} {p['replicate_id']}] "
             f"truth: mean={p['truth_mean']:.3f} std={p['truth_std']:.3f}  |  "
             f"estimate: mean={p['estimate_mean']:.3f} std={p['estimate_std']:.3f}  |  "
-            f"n_cells={p['n_cells']}  |  wasserstein_distance={p['wasserstein_distance']:.4f}"
+            f"n_cells={p['n_cells']}  |  wasserstein_distance={p['wasserstein_distance']:.4f}  |  "
+            f"ks_statistic={p['ks_statistic']:.4f}  ks_pvalue={p['ks_pvalue']:.4g}"
         )
         rows.append({
             "panel": letter,
@@ -280,6 +311,8 @@ def main():
             "estimate_std": p["estimate_std"],
             "n_cells": p["n_cells"],
             "wasserstein_distance": p["wasserstein_distance"],
+            "ks_statistic": p["ks_statistic"],
+            "ks_pvalue": p["ks_pvalue"],
         })
 
     out_df = pd.DataFrame(rows, columns=OUTPUT_COLUMNS)
