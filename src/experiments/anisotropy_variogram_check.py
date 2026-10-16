@@ -14,6 +14,17 @@ the model (vmodel) curve. kriging.py / sgs.py / rbf_bootstrap.py / gp_mle.py
 are not touched by this script.
 
 Run with: .venv/Scripts/python.exe -m src.experiments.anisotropy_variogram_check
+(5% density, the original/default level; bit-identical to every prior run of
+this script). Add ``--density 10`` for the 10% level (250 requested samples,
+reusing sample_density_axis.SAMPLE_COUNTS["10"]; added 2026-10-16 per user
+request that the 5% experimental variogram looked too erratic -- see
+DENSITY_SAMPLE_COUNTS / density_processed_dir / density_figures_dir below).
+The 10% level's outputs are written to separate paths
+(results/processed/anisotropy_variogram_check/density_10/,
+results/figures/anisotropy_variogram_check/density_10/, and a fresh
+results/raw/anisotropy_variogram_check/<timestamp>/ run dir) -- the 5%
+level's already-reviewed files at the un-suffixed paths are never
+overwritten by a ``--density 10`` run, and vice versa.
 
 Design (user-confirmed 2026-10-16, do not re-litigate here)
 -------------------------------------------------------------
@@ -218,6 +229,7 @@ from src.experiments.base_case_conditioning import (
     get_base_case_truth,
     get_conditioning_samples,
 )
+from src.experiments.sample_density_axis import SAMPLE_COUNTS
 from src.experiments.sample_replicate_axis import SAMPLE_SEED_REPLICATES
 from src.io import make_run_dir, save_result
 from src.nscore import nscore as nscore_corrected
@@ -228,6 +240,22 @@ FIGURES_DIR = _REPO_ROOT / "results" / "figures" / "anisotropy_variogram_check"
 
 EXPERIMENT_NAME = "anisotropy_variogram_check"
 CODE_ENTRYPOINT = "src/experiments/anisotropy_variogram_check.py"
+
+
+def density_processed_dir(density_label: str) -> Path:
+    """results/processed/anisotropy_variogram_check/ for the "5" (default)
+    density level, unchanged so past 5% output paths/files are never touched;
+    a density_<label>/ subdirectory for any other level (e.g. "10")."""
+    if density_label == DEFAULT_DENSITY_LABEL:
+        return PROCESSED_DIR
+    return PROCESSED_DIR / f"density_{density_label}"
+
+
+def density_figures_dir(density_label: str) -> Path:
+    """Figures analogue of density_processed_dir -- see its docstring."""
+    if density_label == DEFAULT_DENSITY_LABEL:
+        return FIGURES_DIR
+    return FIGURES_DIR / f"density_{density_label}"
 
 # --- Variogram parameters for THIS axis's checks (NOT base_case.NUG/CC1) --
 # nugget=0.1 (cc1=0.9) is a LOCAL constant for the anisotropy axis, held
@@ -280,11 +308,18 @@ if _seed_collision:
         "silently reuse/overwrite an existing pinned draw's seed."
     )
 
-# Sample density: 5% level, imported (not redeclared) from
-# base_case_conditioning -- single source of truth for the project's "5%"
-# sample count. MARGIN_FRAC is likewise imported and used implicitly inside
-# get_conditioning_samples.
-N_SAMPLES_ANISO = N_SAMPLES
+# Sample density. "5" (N_SAMPLES=125, imported not redeclared -- single
+# source of truth for the project's "5%" level) is the DEFAULT and matches
+# every past run of this script bit-for-bit. "10" (N_SAMPLES=250) was added
+# 2026-10-16 (user request: the 5% experimental variogram looked too erratic)
+# and reuses sample_density_axis.SAMPLE_COUNTS["10"] rather than re-deciding
+# the count locally -- see that module's "Extension 2026-09-21" docstring
+# section for where 250 (10% of the 2500-cell grid) was originally pinned.
+# MARGIN_FRAC is imported and used implicitly inside get_conditioning_samples,
+# unaffected by density.
+DENSITY_SAMPLE_COUNTS = {"5": N_SAMPLES, "10": SAMPLE_COUNTS["10"]}
+DEFAULT_DENSITY_LABEL = "5"
+N_SAMPLES_ANISO = DENSITY_SAMPLE_COUNTS[DEFAULT_DENSITY_LABEL]  # back-compat default (==125)
 
 # --- gamv / vmodel lag parameters (see module docstring for rationale) ----
 GAMV_TMIN, GAMV_TMAX = -9999.0, 9999.0  # no value trimming
@@ -392,7 +427,14 @@ def experimental_variogram_rows(
     return rows
 
 
-def build_params(nscore_corrections_by_combo: dict) -> dict:
+def build_params(
+    nscore_corrections_by_combo: dict,
+    density_label: str = DEFAULT_DENSITY_LABEL,
+    n_samples_requested: int = None,
+    n_samples_actual_by_combo: dict = None,
+) -> dict:
+    if n_samples_requested is None:
+        n_samples_requested = DENSITY_SAMPLE_COUNTS[density_label]
     return {
         "grid": {
             "nx": NX,
@@ -422,7 +464,9 @@ def build_params(nscore_corrections_by_combo: dict) -> dict:
         },
         "truth_seeds": TRUTH_SEEDS,
         "sample_seed_draws": dict(zip(DRAW_LABELS, SAMPLE_SEED_DRAWS)),
-        "n_samples_requested": N_SAMPLES_ANISO,
+        "density_label": density_label,
+        "n_samples_requested": n_samples_requested,
+        "n_samples_actual_by_combo": n_samples_actual_by_combo or {},
         "margin_frac": MARGIN_FRAC,
         "directions": {"major_azi": MAJOR_AZI, "minor_azi": MINOR_AZI},
         "gamv_params": {
@@ -447,14 +491,17 @@ def build_params(nscore_corrections_by_combo: dict) -> dict:
     }
 
 
-def make_figures(comparison_df: pd.DataFrame) -> list:
+def make_figures(comparison_df: pd.DataFrame, figures_dir: Path = FIGURES_DIR) -> list:
     """One 2-panel (major, minor) figure per ratio level: the single model
     curve (bold) vs. all 20 experimental curves (alpha~0.3). Vector PDF,
     styled per the project's FIGURE_GUIDELINES file (Arial, 7pt text,
     embedded TrueType fonts -- docs/figure_guidelines.md does not exist yet
     in this repo, so this follows the repo-root FIGURE_GUIDELINES file,
-    which this user's standing preference applies to all figures)."""
-    FIGURES_DIR.mkdir(parents=True, exist_ok=True)
+    which this user's standing preference applies to all figures).
+    ``figures_dir`` defaults to the 5%-level FIGURES_DIR (back-compat); other
+    density levels pass their own density_figures_dir(label) subdirectory so
+    outputs never collide with the already-reviewed 5% figures."""
+    figures_dir.mkdir(parents=True, exist_ok=True)
 
     matplotlib.rcParams.update(
         {
@@ -534,18 +581,32 @@ def make_figures(comparison_df: pd.DataFrame) -> list:
             f"hmin1={info['hmin1']:g} m, nug={NUG_ANISO:g}"
         )
         fig.tight_layout(rect=(0.0, 0.06, 1.0, 1.0))
-        out_path = FIGURES_DIR / f"variogram_qc_{info['filename_label']}.pdf"
+        out_path = figures_dir / f"variogram_qc_{info['filename_label']}.pdf"
         fig.savefig(out_path, dpi=600, bbox_inches="tight")
         plt.close(fig)
         paths.append(out_path)
     return paths
 
 
-def main():
+def main(density_label: str = DEFAULT_DENSITY_LABEL):
+    """``density_label`` selects the sample count via DENSITY_SAMPLE_COUNTS
+    ("5" -> 125, the original/default level, bit-identical to every past run
+    of this script; "10" -> 250, added 2026-10-16 per user request). Output
+    paths are routed through density_processed_dir/density_figures_dir so the
+    "5" level's already-reviewed files are never touched by any other level."""
+    if density_label not in DENSITY_SAMPLE_COUNTS:
+        raise ValueError(
+            f"density_label={density_label!r} not in {sorted(DENSITY_SAMPLE_COUNTS)}"
+        )
+    n_samples = DENSITY_SAMPLE_COUNTS[density_label]
+    processed_dir = density_processed_dir(density_label)
+    figures_dir = density_figures_dir(density_label)
+
     run_dir = make_run_dir(EXPERIMENT_NAME)
     output_files = []
     all_rows = []
     nscore_corrections_by_combo = {}
+    n_samples_actual_by_combo = {}
 
     print("Model variogram curves (3 ratios x 2 directions)...")
     for ratio_label in RATIO_ORDER:
@@ -566,7 +627,7 @@ def main():
 
             for draw_label, draw_seed in zip(DRAW_LABELS, SAMPLE_SEED_DRAWS):
                 samples = get_conditioning_samples(
-                    truth, sample_seed=draw_seed, n_samples=N_SAMPLES_ANISO
+                    truth, sample_seed=draw_seed, n_samples=n_samples
                 )
                 ns, _vr, _vrg, corrections = nscore_corrected(samples, VCOL, verbose=False)
                 samples = samples.copy()
@@ -574,6 +635,7 @@ def main():
 
                 combo_key = f"{ratio_label}|truth_seed={truth_seed}|{draw_label}"
                 nscore_corrections_by_combo[combo_key] = corrections
+                n_samples_actual_by_combo[combo_key] = int(len(samples))
 
                 samples_fname = f"samples_{fname_label}_seed{truth_seed}_{draw_label}.csv"
                 samples.to_csv(run_dir / samples_fname, index=False)
@@ -589,13 +651,26 @@ def main():
 
     comparison_df = pd.DataFrame(all_rows)[COMPARISON_COLUMNS]
 
-    PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
-    processed_path = PROCESSED_DIR / "variogram_comparison.csv"
+    processed_dir.mkdir(parents=True, exist_ok=True)
+    processed_path = processed_dir / "variogram_comparison.csv"
     comparison_df.to_csv(processed_path, index=False)
+
+    actual_counts = sorted(set(n_samples_actual_by_combo.values()))
+    print(
+        f"n_samples_requested={n_samples} ('{density_label}' density level); "
+        f"n_samples_actual observed across all {len(n_samples_actual_by_combo)} combos: "
+        f"{actual_counts} (duplicate-cell removal in random_interior_samples can make "
+        "this < requested)"
+    )
 
     manifest_path = save_result(
         experiment=EXPERIMENT_NAME,
-        params=build_params(nscore_corrections_by_combo),
+        params=build_params(
+            nscore_corrections_by_combo,
+            density_label=density_label,
+            n_samples_requested=n_samples,
+            n_samples_actual_by_combo=n_samples_actual_by_combo,
+        ),
         seed_or_seeds=sorted(_NEW_SEEDS),
         run_dir=run_dir,
         code_entrypoint=CODE_ENTRYPOINT,
@@ -614,7 +689,7 @@ def main():
         f"(ratio, truth_seed, draw) combos: {n_corrected_total} total"
     )
 
-    figure_paths = make_figures(comparison_df)
+    figure_paths = make_figures(comparison_df, figures_dir=figures_dir)
     for p in figure_paths:
         print(f"Figure: {p}")
 
@@ -622,4 +697,17 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+
+    _ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    _ap.add_argument(
+        "--density",
+        default=DEFAULT_DENSITY_LABEL,
+        choices=sorted(DENSITY_SAMPLE_COUNTS),
+        help=(
+            "Sample density level label ('5' -> 125 requested, default/original; "
+            "'10' -> 250 requested, added 2026-10-16)."
+        ),
+    )
+    _args = _ap.parse_args()
+    main(density_label=_args.density)
