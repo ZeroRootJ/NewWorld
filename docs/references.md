@@ -193,3 +193,72 @@
 - **관련 축/주장**: 평가지표(calibration) — **부정 사례 + coverage 지표의 한계에 대한 최근 인식 사례**
 - **관련성 판단**: **판단 필요(사용자 확인)** — "coverage 계열 지표만으로는 부족하다"는 최근 분야 인식을 보여주는 인용거리가 될 수 있으나, 도메인(토양 분광 + 딥러닝)이 우리와 멀어 인용 적합성은 사용자 판단 필요. 본문(HTML) 직접 확인함.
 - **추가한 날짜**: 2026-09-14
+
+---
+
+## Distribution reproduction / histogram-matching metrics (2026-10-16 조사)
+
+> 조사 배경: 사용자가 GT(ground truth) vs Z*(점추정값) 히스토그램 진단 그림을 보고 "SGS의 분포가
+> 가장 GT에 가까워 보인다"고 관찰했고, 이를 **정량적으로** 뒷받침/반박할 선행연구를 요청함. 이 섹션은
+> 개별 셀 단위 predictive uncertainty(coverage/CRPS — 위 섹션에서 이미 다룸)와는 다른 층위,
+> 즉 **"전체 필드의 추정값 분포(히스토그램/cdf) 모양이 GT 분포와 얼마나 가까운가"**를 재는 지표·방법론에
+> 집중했다. 모든 서지정보는 WebSearch/WebFetch로 교차 확인했으나, 원문 전체 본문(PDF)까지 읽은 항목은
+> 명시적으로 표시했다 — 그 외는 초록/2차 출처 수준 확인임.
+
+### [GSLIB: Geostatistical Software Library and User's Guide (2nd ed.)](https://www.google.com/search?q=GSLIB+Geostatistical+Software+Library+and+User%27s+Guide+Deutsch+Journel+1998)
+- **저자/연도**: Deutsch, C.V. and Journel, A.G., 1998, Oxford University Press (Applied Geostatistics Series), 2nd ed. (1판은 1992년)
+- **한줄 요약**: SGS(`sgsim`)를 포함한 지구통계 알고리즘의 공개 Fortran 구현과 이론을 정리한 정본 교과서. SGS는 데이터를 normal-score 변환(ecdf 기반)한 뒤 Gaussian 공간에서 순차적으로 시뮬레이션하고 다시 역변환하는 구조이며, 이 설계 자체가 (에르고딕 변동 범위 내에서) **입력 histogram을 재현하도록 보장**하는 메커니즘으로 널리 설명됨. (이번 조사에서는 원문 PDF 본문을 직접 열어 "histogram reproduction"이라는 문구·수식을 확인하지는 못했고, 복수의 2차 문헌 — 예: Robertson et al. 2006, SPE71323 — 이 이 교과서/SGS 설계를 그렇게 설명하는 것으로 확인함.)
+- **관련 축/주장**: 기준선 방법론(kriging·SGS) — "SGS가 histogram을 가장 잘 재현한다"는 관찰의 **이론적 설계 원리** 출처 후보
+- **관련성 판단**: 판단 필요(사용자 확인) — 이 교과서가 "SGS = histogram 보존 설계"라는 설명의 원전으로 가장 흔히 인용되지만, 이번 조사에서 원문 해당 구절을 직접 확인하지 못했다. 논문에 "SGS는 설계상 histogram을 보존한다"는 주장을 넣을 경우, 이 교과서를 원전으로 쓸지, 혹은 아래 Robertson et al.(2006)/Isaaks & Srivastava(이미 등재됨) 같은 2차 설명을 함께 쓸지는 사용자 판단 필요. 또한 "재현 보장"이 **정확한 보장**이 아니라 "normal-score 공간에서의 근사적 보장(ergodic fluctuation 있음)"이라는 뉘앙스 차이를 어떻게 서술할지도 판단 필요.
+- **추가한 날짜**: 2026-10-16
+
+### [Correcting the smoothing effect of estimators: A spectral postprocessor](https://ktisis.cut.ac.cy/handle/20.500.14279/14391)
+- **저자/연도**: Journel, A.G., Kyriakidis, P.C., Mao, S., 2000, *Mathematical Geology*, 32(7), 787–812 (일부 2차 문헌은 787–813로 표기). DOI: 10.1023/A:1007544406740
+- **한줄 요약**: kriging(및 일반 추정 알고리즘)이 생성한 맵이 **목표 공분산/분산을 체계적으로 과소재현**한다는 "smoothing effect"를 정식으로 다루고, Yao의 spectral postprocessor로 사후 보정하는 방법을 제안. 핵심 결론: (1) covariance 모델을 전역적으로 맞추면 global accuracy는 좋아지지만 **local accuracy는 희생되고 conditional bias가 증가**한다, (2) 한 지점만 볼 때는 kriging이 최소제곱 의미에서 여전히 최적 추정량이지만, kriging 맵은 "지도"가 아니라 "목록(table)"로만 써야 한다는 취지의 경고.
+- **관련 축/주장**: Claim 1/2 배경 (kriging/추정량의 체계적 variance 과소추정) + 분포 재현(히스토그램/분산) 지표의 정량화 선례
+- **관련성 판단**: 명확히 관련 있음 — "kriging 추정값의 분포(특히 분산)가 GT보다 체계적으로 좁다"는 우리가 관찰한 현상을 정식으로 규명·정량화한 원전급 문헌이며, "GT 대비 추정값 histogram이 smoothing으로 좁아진다"는 사용자의 관찰과 메커니즘이 거의 동일함. 다만 (a) 이 논문은 주로 kriging(및 유사 추정량)을 다루고 SGS/RBF/GPR을 직접 비교하지는 않으며, (b) 보정 방법(spectral postprocessor) 자체는 우리 연구 범위 밖(우리는 보정이 아니라 비교/진단이 목적)이므로, 이 논문을 "현상 규명의 원전"으로만 인용할지, 보정 기법까지 언급할지는 사용자 판단 필요. 서지정보는 복수 2차 출처(CUT 리포지토리, Springer 레퍼런스 리스트)에서 교차 확인했고, 페이지 범위(787–812 vs 787–813)는 출처 간 불일치가 있어 원문 확인 권장.
+- **추가한 날짜**: 2026-10-16
+
+### [Statistical tests for validating geostatistical simulation algorithms](https://repositorio.uchile.cl/handle/2250/125158)
+- **저자/연도**: Emery, X., 2008, *Computers & Geosciences*, 34(11), 1610–1620. DOI: 10.1016/j.cageo.2007.12.012
+- **한줄 요약**: 지구통계 시뮬레이션 알고리즘이 "의도한 모델"을 실제로 재현하는지 검증하는 **공식 통계 검정**을 제안. 시뮬레이션된 realization들의 표본 통계량(공간 평균, 분산, regional semivariogram)과 이론값의 차이가, 해당 random field 모델과 도메인 크기를 고려했을 때 우연히 설명 가능한 범위인지를 가설검정으로 판단. 실용 알고리즘은 근사적이라 이런 검증이 필요하다는 motivation.
+- **관련 축/주장**: 평가지표(분포/통계량 재현의 정량적 검정) + 기준선 방법론(SGS)
+- **관련성 판단**: 명확히 관련 있음 — "분포(평균·분산) 재현"을 **가설검정 수준으로 정량화**한 지구통계 분야 내 선례로, 우리가 찾던 "분포 전체의 모양을 비교하는 지표" 요청에 가장 직접적으로 부합. 다만 (a) 이 검정은 **분산/semivariogram** 수준의 moment 비교이고 KS/Wasserstein 같은 전체 분포 거리(shape 전체)는 아니며, (b) "차이가 모델/도메인 크기로 설명 가능한가"를 보는 유의성 검정이라 우리 4개 방법을 **상대 순위화**하는 용도로 바로 쓰기엔 변형이 필요할 수 있음. 저자가 제공한 코드(논문에 포함)를 실제로 쓸지, 아니면 개념만 인용할지는 사용자 판단 필요. 원문 전체 본문은 확인하지 못함(초록/서지정보 수준).
+- **추가한 날짜**: 2026-10-16
+
+### [Direct sequential simulation with histogram reproduction: A comparison of algorithms](https://doi.org/10.1016/j.cageo.2005.07.002)
+- **저자/연도**: Robertson, R.K., Mueller, U.A., Bloom, L.M., 2006, *Computers & Geosciences*, 32(3), 382–395. DOI: 10.1016/j.cageo.2005.07.002
+- **한줄 요약**: Direct sequential simulation(normal-score 변환 없이 원값으로 직접 시뮬레이션)은 설계상 histogram 재현이 보장되지 않는다는 문제를 다루며, 두 가지 비모수적 보정 방법(제약조건 하 목적함수 최소화, Gaussian 변환 기반 lookup table)을 비교. 두 방법 모두 "통계적 변동 범위 내에서" histogram과 semivariogram을 재현한다고 보고.
+- **관련 축/주장**: 기준선 방법론(SGS 계열) — "normal-score 변환이 histogram 재현을 보장하는 메커니즘"이라는 설명을 **반대 사례(그 변환이 없으면 보장 안 됨)**를 통해 간접 입증
+- **관련성 판단**: 명확히 관련 있음(간접적) — SGS가 normal-score 변환을 쓰기 때문에 histogram을 잘 재현한다는 설명을 뒷받침하는 대조군(normal-score 없는 direct simulation은 재현이 안 됨 → 보정이 필요)으로 읽을 수 있음. 다만 이 논문 자체는 우리 비교 대상(kriging/SGS/RBF+bootstrap/GPR)에 속하지 않는 변형 알고리즘(direct sequential simulation)을 다루므로, "SGS 일반에 대한 근거"로 일반화해도 되는지, 아니면 "normal-score 변환의 역할을 보여주는 방법론적 배경"으로만 좁게 쓸지는 사용자 판단 필요.
+- **추가한 날짜**: 2026-10-16
+
+### [Comparing stochastic simulation algorithms by measures of local accuracy and precision](https://purl.stanford.edu/sv516tq4696) (Master's thesis, 원문 미확인)
+- **저자/연도**: Mo, Yexiang, 1997, Stanford University, Department of Petroleum Engineering, M.S. thesis (지도교수: Clayton V. Deutsch)
+- **한줄 요약**: 메타데이터(제목·지도교수·주제 태그: geostatistical analysis, reservoir modeling, simulation, permeability) 기준으로, 서로 다른 stochastic simulation 알고리즘을 **local accuracy와 precision 지표로 비교**하는 석사 논문으로 추정됨. 본문은 확인하지 못했고, Stanford Digital Repository의 메타데이터 페이지만 확인함.
+- **관련 축/주장**: 평가지표(여러 시뮬레이션 방법을 accuracy/precision 축으로 비교) + 기준선 방법론(SGS) — 프레이밍 유사성
+- **관련성 판단**: **판단 필요(사용자 확인) — 본문 미확인이라 신뢰도 낮음**. "여러 시뮬레이션 알고리즘을 accuracy·precision으로 비교"한다는 제목/프레임이 우리 연구(4개 방법을 accuracy와 uncertainty quality로 분리 비교)와 구조적으로 유사해 보이지만: (a) 출판되지 않은 석사 논문(동료심사 없음)이라 인용 강도가 약하고, (b) 본문을 확인하지 못해 실제로 "histogram/분포 재현"을 다루는지, 아니면 다른 의미의 accuracy/precision(예: Deutsch 1997 goodness/precision 계열)을 다루는지 불명확함. 원문 PDF 접근이 가능하면 먼저 확인 후 인용 여부를 정할 것을 권장. 인용하지 않는 선택도 합리적.
+- **추가한 날짜**: 2026-10-16
+
+### [Short communication: The Wasserstein distance as a dissimilarity metric for comparing detrital age spectra and other geological distributions](https://doi.org/10.5194/gchron-5-263-2023)
+- **저자/연도**: Lipp, A.G. and Vermeesch, P., 2023, *Geochronology*, 5, 263–270. DOI: 10.5194/gchron-5-263-2023 (open access)
+- **한줄 요약**: 지질학적 경험분포(쇄설성 연대 스펙트럼 등)를 비교할 때 전통적으로 쓰이는 Kolmogorov–Smirnov(KS) 통계량과 Wasserstein-2(W2, = Earth Mover's Distance류) 거리를 비교. KS는 두 누적분포함수(cdf) 간 **최대 수직 거리**로, 분포의 mode 차이에는 민감하지만 **꼬리(tail) 차이에는 둔감**하다는 한계를 지적. W2는 **수평 거리**(값 자체의 차이)를 측정하므로, 관측값의 절대적 차이가 지질학적으로 의미 있는 상황에서 더 적합하다고 주장. IsoplotR 패키지에 W2 구현을 추가.
+- **관련 축/주장**: 평가지표(분포 비교 거리/검정) — 사용자가 요청한 KS/Wasserstein 계열 지표의 **일반 방법론적 배경**
+- **관련성 판단**: 판단 필요(사용자 확인) — 이 논문은 **지구통계학(공간 예측)이 아니라 지질연대학(detrital geochronology)** 분야의 분포 비교 논문이다. "두 경험분포를 비교하는 지표로 KS보다 Wasserstein이 특정 상황에서 더 적합하다"는 일반론은 우리가 GT-histogram vs Z*-histogram 비교에 쓸 지표(KS 또는 Wasserstein)를 선택하는 데 **방법론적 근거**로 쓸 수 있으나, 공간통계/지구통계 응용 사례는 아니므로 "같은 분야 선례"로 인용할지 "인접 분야의 일반 통계 방법론 근거"로만 인용할지는 사용자 판단 필요. 이번 조사에서는 지구통계 분야 내에서 KS/Wasserstein을 histogram reproduction 평가에 명시적으로 쓴 논문은 찾지 못했다 (아래 "조사 요약" 참고).
+- **추가한 날짜**: 2026-10-16
+
+### [Multiple Point Metrics to Assess Categorical Variable Models (CCG Report 10, Paper 112, 2008)](https://www.ccgalberta.com/ccgresources/report10/2008-112_metrics_for_model_assessment.pdf)
+- **저자/연도**: Boisvert, J., Pyrcz, M.J., Deutsch, C.V., 2008, Centre for Computational Geostatistics (CCG) Annual Report 10, Paper 112, University of Alberta.
+- **한줄 요약**: 범주형(categorical) 변수의 multiple-point 지구통계 시뮬레이션 모델을 검증할 때, 기존 관행이 1·2차 통계량(histogram, variogram)까지만 입력값과 비교하고 **고차 통계량(multiple-point)은 거의 검증하지 않는다**는 문제를 지적하며, 고차 통계량 비교 지표를 제안. "histogram과 variogram을 input parameter와 비교하는 것이 (범주형 모델 검증의) 최소 관행"이라는 서술이 포함됨.
+- **관련 축/주장**: 평가지표(분포 재현 — 다만 범주형/고차통계 중심) — 분포 재현 검증이 지구통계 분야의 "표준 관행"이라는 점에 대한 정황적 근거
+- **관련성 판단**: 판단 필요(사용자 확인) — 이 리포트는 **범주형(facies) + multiple-point statistics** 맥락이라 우리의 **연속형(porosity 류) histogram 비교**와 변수 유형이 다르다. 다만 "histogram/variogram을 input과 비교하는 것이 지구통계 모델 검증의 기본 관행"이라는 서술은, "histogram reproduction을 보는 것 자체가 분야의 표준 관행"이라는 배경 주장을 보강하는 데는 쓸 수 있음. 직접 인용 가치가 있는지, 혹은 범주형이라 관련성이 낮아 빼는 게 나을지는 사용자 판단 필요. 전체 본문은 첫 부분만 확인했고 구체적 지표 수식은 미확인.
+- **추가한 날짜**: 2026-10-16
+
+### [Swath Plots (vendor documentation, Seequent/GEOVIA)](https://help.seequent.com/Geo/2025.3/en-GB/Content/estimation/swath-plots.htm)
+- **저자/연도**: Seequent (Leapfrog Geo 도움말 문서), 발행연도 불명(현재 버전 2025.3 기준, 유사 문서가 2021.1 버전부터 존재); 유사 설명은 GEOVIA(3DS) 블로그에도 있음(https://blog.3ds.com/brands/geovia/swath-plot-validation-with-gems/).
+- **한줄 요약**: Swath plot은 광업 지구통계 실무에서 **블록모델(추정값)과 샘플 데이터를 공간 슬라이스(swath)별로 평균을 비교**하여 국소적 편향(bias)과 smoothing을 점검하는 표준 QC 도구. 주 용도는 "추정값 vs 샘플"의 **국소** 비교이며, 전체 histogram(분포 모양) 비교나 시뮬레이션 realization 간 재현성 검증이 주목적은 아님.
+- **관련 축/주장**: 평가지표(QC 관행) — 지구통계 실무에서 "분포/통계량 재현을 시각적으로 점검하는 문화"의 한 사례이나, 사용자가 요청한 "전체 histogram 비교"와는 초점이 다름
+- **관련성 판단**: 판단 필요(사용자 확인) — Swath plot은 엄밀히는 **estimation(kriging) 결과의 국소 편향 점검** 도구이고, "전체 필드의 histogram이 GT와 얼마나 가까운가"를 재는 지표는 아니다(이 조사에서 확인한 바로는 simulation의 histogram/분포 재현 검증에는 주로 Q-Q plot/CDF plot이 쓰이고, swath plot은 별개 용도). 이 문헌을 "지구통계 QC 관행의 배경 설명"으로 가볍게만 언급할지, 아예 제외할지는 사용자 판단 필요. 정식 학술 문헌이 아니라 소프트웨어 벤더 문서라는 점도 인용 격식상 고려 필요.
+- **추가한 날짜**: 2026-10-16
+
+> **조사 요약(메모)**: 이번 조사에서 "지구통계학 분야 내에서 KS statistic, Wasserstein distance, Cramér-von Mises, Anderson-Darling, energy distance, KL/JS divergence를 **SGS/kriging histogram reproduction 평가에 명시적으로 사용한 논문**"은 찾지 못했다. 가장 근접한 것은 (1) Emery(2008)의 평균/분산/semivariogram 가설검정, (2) 지구통계 실무에서 관행적으로 쓰이는 Q-Q plot/CDF plot(정성적·반정량적, 공식 통계량 생성 없이 시각 비교), (3) 인접 분야(지질연대학)의 KS vs Wasserstein 방법론 논쟁(Lipp & Vermeesch 2023)이다. "GT histogram vs Z* histogram의 거리를 KS/Wasserstein으로 정량화"하는 접근 자체는 **지구통계 선행연구에서 직접 가져온 사례가 아니라, 일반 통계학(분포 비교) 방법론을 이 문제에 새로 적용하는 것**으로 보인다 — 이것이 우리 연구의 작은 방법론적 기여로 프레이밍될 수 있는지, 혹은 추가 검색이 필요한지는 사용자 판단 필요.
