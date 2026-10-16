@@ -17,14 +17,42 @@ would use. The analytic TRUE practical range at every azimuth (which the
 human is not shown when making that call) is computed and saved to a
 SEPARATE file, for post-hoc grading of that human judgement only.
 
-Design (user-confirmed 2026-10-16, do not re-litigate here)
+Design (user-confirmed 2026-10-16, do not re-litigate here; RATIO_LEVELS
+values corrected 2026-10-16 -- see "RATIO_LEVELS correction" below)
 -------------------------------------------------------------
-- Ground-truth parameters are UNCHANGED from anisotropy_variogram_check.py:
-  the same 3 (hmaj1, hmin1) ratio levels ("1:1"/"2:1"/"3:1", imported as
-  RATIO_LEVELS/RATIO_ORDER, NOT redeclared), the same NUG_ANISO=0.1/
-  CC1_ANISO=0.9, the same AZI1_ANISO=0.0 (axis-aligned truth), same nst=1/
-  it1=1 (spherical), same grid/distribution (via base_case/
-  base_case_conditioning, reused exactly as that script reuses them).
+- NUG_ANISO=0.1/CC1_ANISO=0.9, AZI1_ANISO=0.0 (axis-aligned truth), nst=1/
+  it1=1 (spherical), and grid/distribution (via base_case/
+  base_case_conditioning) are UNCHANGED from anisotropy_variogram_check.py
+  and are still imported from it, not redeclared.
+- RATIO_LEVELS, however, is now a LOCAL constant of THIS script (see
+  "RATIO_LEVELS correction" below) -- it is deliberately NOT imported from
+  anisotropy_variogram_check.py anymore. Only the 3 ratio LABELS ("1:1"/
+  "2:1"/"3:1") are shared with that script (for CSV-schema/picker-artifact
+  compatibility); the (hmaj1, hmin1) values each label maps to are this
+  script's own design and differ from that script's.
+
+RATIO_LEVELS correction (2026-10-16)
+---------------------------------------------------------------------------
+This script originally imported RATIO_LEVELS from
+anisotropy_variogram_check.py, which maps "1:1"/"2:1"/"3:1" to
+(hmaj1, hmin1) = (300,300)/(600,300)/(900,300) (minor range held fixed at
+300 m, major range scaled by the ratio) -- that mapping is correct for THAT
+script's own design (known-direction major/minor check) but was NEVER the
+design this azimuth-sweep script was supposed to use. The user's actual
+decision for this script was to hold hmaj1 fixed at 300 m and instead vary
+hmin1 = 150/300/600 m across the 3 levels:
+    "1:1" -> hmaj1=300, hmin1=300  (isotropic)
+    "2:1" -> hmaj1=300, hmin1=150
+    "3:1" -> hmaj1=300, hmin1=600
+A prior run of this script (results/raw/anisotropy_azimuth_sweep/
+20261016T220140959559Z/) used the wrong, imported (300,300)/(600,300)/
+(900,300) mapping -- that run is left untouched (raw outputs are never
+modified/deleted per project convention) but is no longer referenced by
+this script or its processed outputs. The LABELS "1:1"/"2:1"/"3:1" are kept
+unchanged (so CSV schema / picker artifacts built against the old file
+still parse), but as of this correction they map to the (hmaj1, hmin1)
+values above, declared locally below (RATIO_LEVELS/RATIO_ORDER), not
+imported from anisotropy_variogram_check.py.
 - 5 NEW truth realizations (TRUTH_SEEDS_SWEEP, not the earlier script's 10)
   x 5 NEW sample draws per realization (SAMPLE_SEED_DRAWS_SWEEP, reused
   across every truth_seed and every ratio -- the project's standard "same
@@ -190,11 +218,8 @@ from src.experiments.anisotropy_variogram_check import (
     GAMV_NLAG,
     GAMV_TMAX,
     GAMV_TMIN,
-    MINOR_RANGE_M,
     NSCOL,
     NUG_ANISO,
-    RATIO_LEVELS,
-    RATIO_ORDER,
     SAMPLE_SEED_DRAWS as ANISO_CHECK_SAMPLE_SEED_DRAWS,
     TRUTH_SEEDS as ANISO_CHECK_TRUTH_SEEDS,
 )
@@ -216,6 +241,22 @@ PROCESSED_DIR = _REPO_ROOT / "results" / "processed" / "anisotropy_azimuth_sweep
 
 EXPERIMENT_NAME = "anisotropy_azimuth_sweep"
 CODE_ENTRYPOINT = "src/experiments/anisotropy_azimuth_sweep.py"
+
+# --- Ground-truth (hmaj1, hmin1) per ratio level -- LOCAL to this script ---
+# (corrected 2026-10-16; see module docstring "RATIO_LEVELS correction").
+# Unlike anisotropy_variogram_check.py (minor range fixed at 300, major
+# scaled by the ratio), THIS script holds the MAJOR range fixed at 300 m and
+# varies the MINOR range (150/300/600 m) across the 3 levels. Labels
+# ("1:1"/"2:1"/"3:1") are kept identical to anisotropy_variogram_check.py for
+# CSV-schema/picker-artifact compatibility; the (hmaj1, hmin1) values they
+# map to are NOT the same.
+MAJOR_RANGE_M = 300.0
+RATIO_ORDER = ["1:1", "2:1", "3:1"]
+RATIO_LEVELS = {
+    "1:1": {"hmaj1": MAJOR_RANGE_M, "hmin1": 300.0, "filename_label": "1to1"},
+    "2:1": {"hmaj1": MAJOR_RANGE_M, "hmin1": 150.0, "filename_label": "2to1"},
+    "3:1": {"hmaj1": MAJOR_RANGE_M, "hmin1": 600.0, "filename_label": "3to1"},
+}
 
 # --- Density: 10% only (imported, not redeclared) --------------------------
 DENSITY_LABEL = "10"
@@ -389,14 +430,31 @@ def build_params(
             "it1": 1,
             "cc1": CC1_ANISO,
             "azi1": AZI1_ANISO,
-            "minor_range_m": MINOR_RANGE_M,
+            "major_range_m": MAJOR_RANGE_M,
             "ratio_levels": RATIO_LEVELS,
             "note": (
-                "Ground-truth parameters reused unchanged from "
-                "anisotropy_variogram_check.py's RATIO_LEVELS/NUG_ANISO/CC1_ANISO/"
-                "AZI1_ANISO -- see that module's docstring."
+                "NUG_ANISO/CC1_ANISO/AZI1_ANISO are reused unchanged from "
+                "anisotropy_variogram_check.py, but RATIO_LEVELS is a LOCAL "
+                "constant of this script (major range held fixed at 300 m, minor "
+                "range = 150/300/600 m across the 3 levels) -- NOT imported from "
+                "that module. See this module's docstring 'RATIO_LEVELS "
+                "correction' section: a 2026-10-16 fix of a bug where this "
+                "script incorrectly imported and used that module's own "
+                "RATIO_LEVELS (minor range fixed at 300 m, major range = "
+                "300/600/900 m instead)."
             ),
         },
+        "rerun_note": (
+            "This run corrects a 2026-10-16 bug: an earlier run of this script "
+            "(results/raw/anisotropy_azimuth_sweep/20261016T220140959559Z/) used "
+            "anisotropy_variogram_check.RATIO_LEVELS's (hmaj1, hmin1) = "
+            "(300,300)/(600,300)/(900,300) by mistaken import, instead of this "
+            "script's own intended (300,300)/(300,150)/(300,600) design (major "
+            "range fixed at 300 m, minor range varied). That earlier run and its "
+            "processed CSVs are no longer referenced; this run/CSV pair "
+            "supersedes them with the corrected RATIO_LEVELS mapping (labels "
+            "'1:1'/'2:1'/'3:1' unchanged, only the (hmaj1, hmin1) values fixed)."
+        ),
         "truth_seeds_sweep": TRUTH_SEEDS_SWEEP,
         "sample_seed_draws_sweep": dict(zip(DRAW_LABELS_SWEEP, SAMPLE_SEED_DRAWS_SWEEP)),
         "density_label": DENSITY_LABEL,
