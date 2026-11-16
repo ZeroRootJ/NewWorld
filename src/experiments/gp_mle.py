@@ -167,6 +167,7 @@ def main(
     hmin1: float = _COND_HMIN1,
     n_samples: int = N_SAMPLES,
     nug: float = _COND_NUG,
+    output_dir: str = "results/raw",
 ):
     """Run the GP-MLE base-case pipeline.
 
@@ -284,7 +285,10 @@ def main(
     length_scale = fitted_hyperparameters["length_scale_m"]
 
     # --- Save outputs --------------------------------------------------
-    run_dir = make_run_dir(EXPERIMENT_NAME)
+    # output_dir (added 2026-11-16, multi_truth_axes task): base directory for
+    # the run folder; default "results/raw" -> unchanged behavior. Only smoke
+    # tests pass a scratch directory so they never write into results/raw.
+    run_dir = make_run_dir(EXPERIMENT_NAME, output_dir)
     output_files = []
 
     samples_csv = "samples.csv"

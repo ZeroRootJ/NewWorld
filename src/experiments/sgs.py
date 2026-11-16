@@ -43,6 +43,9 @@ Pipeline
 Run with: .venv/Scripts/python.exe -m src.experiments.sgs
 """
 
+import contextlib
+import io
+import sys
 import time
 from typing import Optional
 
@@ -230,6 +233,18 @@ QC_ATOL = 90.0  # omnidirectional-ish tolerance, isotropic base-case variogram
 QC_BANDH = 9999.0
 QC_ISILL = 1
 
+# --- sgsim console-warning count (added 2026-11-16, reviewer J4 /
+# coordinator decision (c), multi_truth_axes task) -------------------------
+# geostats.sgsim prints "WARNING: grid node location: ix,iy" (geostats.py
+# ~L4073) whenever a node's conditional mean/stdev or simulated value is "far
+# out" (|cmean| > 5, |cstdev| > 5 or |sim| > 6 in normal-score units) -- the
+# symptom of the near-singular kriging solves the SGS_JITTER_* workaround
+# above exists to prevent. The sgsim call's stdout is captured, re-emitted
+# unchanged right after the call, and the number of such warnings is
+# recorded in the manifest (params.sgsim_warnings). Capturing stdout does not
+# touch any RNG or array, so realizations are bit-identical to before.
+SGSIM_NODE_WARNING_PREFIX = "WARNING: grid node location"
+
 
 def main(
     truth_seed: int = TRUTH_SEED,
@@ -240,6 +255,7 @@ def main(
     nug: float = _COND_NUG,
     n_ensemble: Optional[int] = None,
     sgs_seed: int = SGS_SEED,
+    output_dir: str = "results/raw",
 ):
     """Run the SGS base-case pipeline.
 
@@ -290,46 +306,69 @@ def main(
     )
 
     t_sgsim_start = time.time()
-    sim = geostats.sgsim(
-        sgsim_input_df,
-        "X",
-        "Y",
-        VCOL,
-        wcol=-1,
-        scol=-1,
-        tmin=-9999,
-        tmax=9999,
-        itrans=1,
-        ismooth=0,
-        dftrans=0,
-        tcol=0,
-        twtcol=0,
-        zmin=SGSIM_ZMIN,
-        zmax=SGSIM_ZMAX,
-        ltail=SGSIM_LTAIL,
-        ltpar=SGSIM_LTPAR,
-        utail=SGSIM_UTAIL,
-        utpar=SGSIM_UTPAR,
-        nsim=n_realizations,
-        nx=NX,
-        xmn=XMN,
-        xsiz=XSIZ,
-        ny=NY,
-        ymn=YMN,
-        ysiz=YSIZ,
-        seed=sgs_seed,
-        ndmin=NDMIN,
-        ndmax=NDMAX,
-        nodmax=NODMAX,
-        mults=MULTS,
-        nmult=NMULT,
-        noct=NOCT,
-        ktype=KTYPE,
-        colocorr=COLOCORR,
-        sec_map=SEC_MAP,
-        vario=vario,
-    )
+    _sgsim_stdout = io.StringIO()
+    try:
+        with contextlib.redirect_stdout(_sgsim_stdout):
+            sim = geostats.sgsim(
+                sgsim_input_df,
+                "X",
+                "Y",
+                VCOL,
+                wcol=-1,
+                scol=-1,
+                tmin=-9999,
+                tmax=9999,
+                itrans=1,
+                ismooth=0,
+                dftrans=0,
+                tcol=0,
+                twtcol=0,
+                zmin=SGSIM_ZMIN,
+                zmax=SGSIM_ZMAX,
+                ltail=SGSIM_LTAIL,
+                ltpar=SGSIM_LTPAR,
+                utail=SGSIM_UTAIL,
+                utpar=SGSIM_UTPAR,
+                nsim=n_realizations,
+                nx=NX,
+                xmn=XMN,
+                xsiz=XSIZ,
+                ny=NY,
+                ymn=YMN,
+                ysiz=YSIZ,
+                seed=sgs_seed,
+                ndmin=NDMIN,
+                ndmax=NDMAX,
+                nodmax=NODMAX,
+                mults=MULTS,
+                nmult=NMULT,
+                noct=NOCT,
+                ktype=KTYPE,
+                colocorr=COLOCORR,
+                sec_map=SEC_MAP,
+                vario=vario,
+            )
+    except BaseException:
+        # re-emit the captured sgsim log so a failed run keeps its diagnostics
+        sys.stdout.write(_sgsim_stdout.getvalue())
+        raise
     sgsim_seconds = time.time() - t_sgsim_start
+    _sgsim_log = _sgsim_stdout.getvalue()
+    sys.stdout.write(_sgsim_log)  # re-emit unchanged (console/log output as before)
+    sgsim_warnings = {
+        "n_grid_node_warnings": sum(
+            1 for line in _sgsim_log.splitlines() if line.strip().startswith(SGSIM_NODE_WARNING_PREFIX)
+        ),
+        "n_lines_containing_WARNING": sum(1 for line in _sgsim_log.splitlines() if "WARNING" in line),
+        "definition": (
+            "count of geostats.sgsim stdout lines starting with "
+            f"'{SGSIM_NODE_WARNING_PREFIX}' (far-out conditional mean/stdev or simulated "
+            "value: |cmean|>5 or |cstdev|>5 or |sim|>6, normal-score units), summed over all "
+            "realizations of this run"
+        ),
+    }
+    if sgsim_warnings["n_grid_node_warnings"] > 0:
+        print(f"NOTE: sgsim emitted {sgsim_warnings['n_grid_node_warnings']} grid-node WARNING(s) in this run.")
 
     # sim indexed by realization: sim[0], sim[1], ... (docs/
     # geostatspy_conventions.md section 5); each is already in physical
@@ -401,7 +440,10 @@ def main(
     )
 
     # --- Save outputs ------------------------------------------------------
-    run_dir = make_run_dir(EXPERIMENT_NAME)
+    # output_dir (added 2026-11-16, multi_truth_axes task): base directory for
+    # the run folder; default "results/raw" -> unchanged behavior. Only smoke
+    # tests pass a scratch directory so they never write into results/raw.
+    run_dir = make_run_dir(EXPERIMENT_NAME, output_dir)
     output_files = []
 
     samples_csv = "samples.csv"
@@ -574,6 +616,7 @@ def main(
             "realization_index": QC_REALIZATION_INDEX,
         },
         "sgsim_seconds": sgsim_seconds,
+        "sgsim_warnings": sgsim_warnings,
         "total_seconds": total_seconds,
     }
 

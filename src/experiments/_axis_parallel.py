@@ -32,7 +32,7 @@ functions/classes are -- hence ``_run_one_method`` below.
 import os
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from pathlib import Path
-from typing import Dict, Optional, Sequence
+from typing import Callable, Dict, Iterable, Optional, Sequence, Tuple
 
 from src.experiments import gp_mle, kriging, rbf_bootstrap, sgs
 
@@ -112,6 +112,9 @@ def run_levels_parallel(
     max_workers: Optional[int] = None,
     n_ensemble: Optional[int] = None,
     method_kwargs: Optional[Dict[str, Dict[str, dict]]] = None,
+    skip: Optional[Iterable[Tuple[str, str]]] = None,
+    on_done: Optional[Callable[[str, str, Path], None]] = None,
+    on_error: Optional[Callable[[str, str, BaseException], None]] = None,
 ) -> Dict[str, Dict[str, Path]]:
     """Run ``methods x level_kwargs`` as one flat pool of independent tasks.
 
@@ -138,6 +141,20 @@ def run_levels_parallel(
         (``sgs_seed`` for sgs, ``bootstrap_seed`` for rbf_bootstrap). Keys
         colliding with ``level_kwargs`` or containing ``n_ensemble`` are
         rejected.
+    skip : optional iterable of ``(level_key, method)`` pairs NOT to submit
+        (added 2026-11-16, multi_truth_axes resume support). Skipped pairs
+        are simply absent from the returned dict. None (default) -> every
+        ``methods x level_kwargs`` pair is run, i.e. unchanged behavior.
+    on_done : optional callback ``on_done(level_key, method, run_dir)``
+        invoked in THIS (parent) process as each task completes (added
+        2026-11-16) -- used to append a resume registry / progress log
+        incrementally. None (default) -> unchanged behavior.
+    on_error : optional callback ``on_error(level_key, method, exception)``
+        (added 2026-11-16). None (default) -> a failing task's exception is
+        re-raised, i.e. unchanged behavior. If given, a failing task is
+        reported through it and the loop CONTINUES (the failed pair is absent
+        from the returned dict), so one failure in a multi-hour pool does not
+        discard the bookkeeping of every task that completes afterwards.
 
     Returns
     -------
@@ -189,10 +206,12 @@ def run_levels_parallel(
     for var in _BLAS_THREAD_ENV_VARS:
         os.environ[var] = "1"
 
+    skip_set = set(skip) if skip is not None else set()
     tasks = [
         (level_key, method, _task_kwargs(level_key, method))
         for level_key in level_kwargs
         for method in methods
+        if (level_key, method) not in skip_set
     ]
 
     results: Dict[str, Dict[str, Path]] = {level_key: {} for level_key in level_kwargs}
@@ -207,11 +226,40 @@ def run_levels_parallel(
                 f"Submitted {len(futures)} independent (level x method) tasks to a "
                 f"{max_workers}-process pool (BLAS threads capped to 1/process)."
             )
-            for future in as_completed(futures):
-                level_key, method = futures[future]
-                _, run_dir = future.result()
-                results[level_key][method] = run_dir
-                print(f"  done: level={level_key} method={method} -> {run_dir}")
+            # Any exception leaving this loop in the PARENT (a re-raised task
+            # error, an exception inside on_done/on_error, KeyboardInterrupt)
+            # would otherwise hit ProcessPoolExecutor.__exit__ ->
+            # shutdown(wait=True), which on Python 3.8 still EXECUTES every
+            # queued work item before re-raising -- i.e. hours of runs whose
+            # completion nobody records (reviewer C1, 2026-11-16). So every
+            # not-yet-started future is cancelled first. Futures the 3.8
+            # executor has already marked running cannot be cancelled and
+            # still run to completion: the ones executing in a worker (<=
+            # max_workers) plus the ones already moved to its internal call
+            # queue (<= max_workers + EXTRA_QUEUED_CALLS(1)), i.e. at most
+            # 2 * max_workers + 1 tasks (measured with a toy: 12 tasks, 2
+            # workers, abort after the 1st completion -> 6 executed, 6
+            # cancelled; without this block all 12 executed).
+            try:
+                for future in as_completed(futures):
+                    level_key, method = futures[future]
+                    try:
+                        _, run_dir = future.result()
+                    except Exception as exc:
+                        if on_error is None:
+                            raise
+                        print(f"  FAILED: level={level_key} method={method}: {exc!r}")
+                        on_error(level_key, method, exc)
+                        continue
+                    results[level_key][method] = run_dir
+                    print(f"  done: level={level_key} method={method} -> {run_dir}")
+                    if on_done is not None:
+                        on_done(level_key, method, run_dir)
+            except BaseException:
+                n_cancelled = sum(1 for f in futures if f.cancel())
+                print(f"  aborting: cancelled {n_cancelled} not-yet-started task(s); "
+                      "already-running tasks will finish before the error propagates.")
+                raise
     finally:
         for var, prev in _prev_env.items():
             if prev is None:
