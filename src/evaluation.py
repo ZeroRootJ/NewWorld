@@ -42,7 +42,7 @@ Sharpness metrics (interval width, CRPS) were removed from this module on
 2026-10-05 per user decision: they are no longer computed or stored.
 """
 
-from typing import Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -63,6 +63,23 @@ DEFAULT_BINS = 20
 # normal use.
 STD_EPS = 1e-12
 
+
+
+
+def _resolve_p_intervals(bins: int, p_intervals: Optional[np.ndarray]) -> np.ndarray:
+    """Default grid np.linspace(0, 1, bins) (the ported reference behavior), or
+    an explicit 1-D array of nominal probabilities in [0, 1].
+
+    UMG (calc_umg) is defined on the DEFAULT grid only: pass calc_umg the
+    np.linspace(0, 1, bins) portion of the curve, never an augmented grid
+    (extra points would re-weight the UMG average)."""
+    if p_intervals is None:
+        return np.linspace(0.0, 1.0, bins)
+    p_intervals = np.atleast_1d(np.asarray(p_intervals, dtype=float))
+    if (p_intervals.ndim != 1 or not np.all(np.isfinite(p_intervals))
+            or np.any(p_intervals < 0.0) or np.any(p_intervals > 1.0)):
+        raise ValueError("p_intervals must be a 1-D array of values in [0, 1].")
+    return p_intervals
 
 
 def mse(truth: np.ndarray, pred: np.ndarray) -> float:
@@ -88,6 +105,7 @@ def accuracy_plot_fraction_in(
     mean: np.ndarray,
     std: np.ndarray,
     bins: int = DEFAULT_BINS,
+    p_intervals: Optional[np.ndarray] = None,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Percentile-based fraction-in-interval curve, ported as-is from
     dashboard.py's get_metrics accuracy-plot block.
@@ -98,10 +116,15 @@ def accuracy_plot_fraction_in(
         conditioning-sample cells already excluded (via
         conditioning_cell_mask) by the caller.
     bins : number of probability-interval steps, np.linspace(0, 1, bins).
+    p_intervals : optional explicit nominal probability intervals (added
+        2026-11-16 for single-p coverage, e.g. p = 0.90). When None (default)
+        the original np.linspace(0, 1, bins) grid is used and the result is
+        bit-identical to the ported reference; when given, ``bins`` is
+        ignored and the SAME per-p test is applied at each supplied p.
 
     Returns
     -------
-    (p_intervals, fraction_in), each shape (bins,).
+    (p_intervals, fraction_in), each shape (bins,) or (len(p_intervals),).
     """
     truth = np.asarray(truth, dtype=float)
     mean = np.asarray(mean, dtype=float)
@@ -122,8 +145,8 @@ def accuracy_plot_fraction_in(
     truth, mean, std = truth[valid], mean[valid], std[valid]
 
     percentiles = norm.cdf(truth, mean, std)
-    p_intervals = np.linspace(0.0, 1.0, bins)
-    fraction_in = np.zeros(bins)
+    p_intervals = _resolve_p_intervals(bins, p_intervals)
+    fraction_in = np.zeros(len(p_intervals))
     for i, p in enumerate(p_intervals):
         test_result = (percentiles > 0.5 - 0.5 * p) & (percentiles < 0.5 + 0.5 * p)
         fraction_in[i] = test_result.sum() / len(truth)
@@ -143,6 +166,7 @@ def kriging_fraction_in(
     utail: int,
     utpar: float,
     bins: int = DEFAULT_BINS,
+    p_intervals: Optional[np.ndarray] = None,
 ) -> Tuple[np.ndarray, np.ndarray]:
     """Kriging-specific accuracy-plot curve via exact quantile
     back-transform (not a variance back-transform approximation): for each
@@ -164,10 +188,13 @@ def kriging_fraction_in(
         src/experiments/kriging.py (BACKTR_ZMIN/ZMAX, LTAIL/LTPAR,
         UTAIL/UTPAR).
     bins : number of probability-interval steps, np.linspace(0, 1, bins).
+    p_intervals : optional explicit nominal probability intervals, same
+        semantics as in ``accuracy_plot_fraction_in`` (None -> original
+        linspace grid, bit-identical).
 
     Returns
     -------
-    (p_intervals, fraction_in), each shape (bins,).
+    (p_intervals, fraction_in), each shape (bins,) or (len(p_intervals),).
 
     Note on p=0: z_lo = z_hi = norm.ppf(0.5) = 0 exactly, so ns_lo == ns_hi
     and phys_lo == phys_hi for every cell; the strict-inequality test
@@ -195,8 +222,8 @@ def kriging_fraction_in(
     std_ns = std_ns[valid]
     n = len(truth_physical)
 
-    p_intervals = np.linspace(0.0, 1.0, bins)
-    fraction_in = np.zeros(bins)
+    p_intervals = _resolve_p_intervals(bins, p_intervals)
+    fraction_in = np.zeros(len(p_intervals))
     for i, p in enumerate(p_intervals):
         z_lo, z_hi = norm.ppf(0.5 - 0.5 * p), norm.ppf(0.5 + 0.5 * p)
         ns_lo = kmap_ns + z_lo * std_ns

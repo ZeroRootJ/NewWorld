@@ -34,8 +34,9 @@ FIGS = {
         stem="F3_gp_vs_sample_density", st=REAL,
         title="밀도에 따른 GP와 kriging",
         body=[
-            "A는 MSE, B는 UMG입니다. kriging과 GP-MLE를 진하게, 나머지 두 방법을 옅게 그렸습니다.",
-            "C는 GP-MLE가 맞춘 practical range를 replicate마다 점 하나로 찍은 것입니다. 점선은 ground-truth range 300 m입니다. 최소 144.6 m, 최대 739.9 m입니다.",
+            "A는 MSE, B는 UMG, C는 90% 구간 coverage입니다. kriging과 GP-MLE를 진하게, 나머지 두 방법을 옅게 그렸습니다. C의 점선은 공칭값 0.90입니다.",
+            "90% coverage는 각 방법이 내놓은 90% 예측 구간 안에 truth가 실제로 들어간 셀의 비율입니다. UMG를 계산하는 accuracy plot에서 p = 0.90인 한 점이고, UMG와 같은 계산 경로를 씁니다(kriging은 normal-score 구간의 back-transform, 나머지는 평균 ± 표준편차의 정규분포).",
+            "D는 GP-MLE가 맞춘 practical range를 replicate마다 점 하나로 찍은 것입니다. 점선은 ground-truth range 300 m입니다. 최소 144.6 m, 최대 739.9 m입니다.",
         ]),
     "F4": dict(
         stem="F4_gp_fitted_vs_truth_hyperparameters", st=REAL,
@@ -82,7 +83,8 @@ CLAIMS = {
     ],
     "F3": [
         "A, B: 평균만 보면 GP-MLE는 모든 밀도에서 kriging과 MSE, UMG가 비슷합니다. 현재 데이터에서는 저밀도에서도 평균 UMG 차이가 작습니다(1 %에서 약 0.90 대 0.91).",
-        "C: GP가 맞춘 range는 밀도가 낮아지면 replicate마다 크게 달라집니다. 17.8 %에서는 168~208 m에 모이고, 1 %에서는 145~740 m로 퍼집니다.",
+        "C: 90% coverage는 밀도가 17.8 %에서 1 %로 줄 때 GP-MLE가 0.90에서 0.85로, kriging이 0.92에서 0.86으로 떨어집니다. 모든 밀도에서 GP-MLE가 kriging보다 낮지만, 둘의 차이는 밀도가 줄어도 커지지 않습니다. 1 %에서 replicate 간 표준편차는 0.07~0.08입니다.",
+        "D: GP가 맞춘 range는 밀도가 낮아지면 replicate마다 크게 달라집니다. 17.8 %에서는 168~208 m에 모이고, 1 %에서는 145~740 m로 퍼집니다.",
         "따라서 이 그림이 뒷받침하는 것은 '저밀도에서 GP의 하이퍼파라미터 추정이 샘플 배치에 따라 불안정해진다'입니다. 'GP의 uncertainty가 fail한다'까지는 현재 평균 UMG로는 보이지 않습니다.",
         "밀도가 충분한 구간(4.8 % 이상)에서도 GP가 맞춘 range는 실제 값 300 m보다 짧은 쪽에 모여 있습니다.",
     ],
@@ -118,7 +120,7 @@ SECTIONS = [
 FLOW = [
     ("1-a", "F1", "MSE와 UMG, 3개 축, 4개 방법", REAL),
     ("1-a", "F2", "Calibration 곡선, 예측 분산", REAL),
-    ("1-b", "F3", "밀도별 GP와 kriging, GP가 맞춘 range", REAL),
+    ("1-b", "F3", "밀도별 GP와 kriging(MSE, UMG, 90% coverage), GP가 맞춘 range", REAL),
     ("1-b", "F4", "GP가 맞춘 range, nugget 대 실제 값", REAL),
     ("1-b", "F6", "파라미터 수와 필요한 데이터 양", PART),
     ("2", "F7", "정확도와 UMG 반응면", NONE),

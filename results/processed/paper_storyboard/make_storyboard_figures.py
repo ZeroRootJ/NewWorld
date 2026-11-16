@@ -11,7 +11,8 @@ a ``.status.txt`` sidecar):
 
   F1 (1-a)  accuracy (MSE) vs calibration (UMG) along range / nugget / density
   F2 (1-a)  base-case accuracy plot + mean predictive variance vs density
-  F3 (1-b)  kriging vs GP-MLE along sample density + GP-MLE fitted range
+  F3 (1-b)  kriging vs GP-MLE along sample density (MSE, UMG, 90% coverage)
+            + GP-MLE fitted range
   F4 (1-b)  GP-MLE fitted range / nugget vs ground truth (10 realizations/level)
   F5 (1-b)  anisotropy: true range vs azimuth, variogram check, PLACEHOLDER metrics
   F6 (1-b)  hyperparameter stability vs density: real (isotropic) + PLACEHOLDER
@@ -71,6 +72,8 @@ REPL_SEEDS = PROCESSED / "sample_replicate_axis" / "replicate_seeds.json"
 REPL_EXTRA = PROCESSED / "sample_replicate_axis" / "extra_density_levels_record.json"
 REPL_LENGTH = PROCESSED / "sample_replicate_axis" / "length_scale_by_replicate.csv"
 REPL_VAR_SOURCES = PROCESSED / "sample_replicate_axis" / "variance_metric_sources.csv"
+REPL_COV90_SUMMARY = PROCESSED / "sample_replicate_axis" / "coverage90_summary.csv"
+REPL_COV90 = PROCESSED / "sample_replicate_axis" / "coverage90.csv"
 BASE_CURVES = PROCESSED / "base_case" / "accuracy_plot_curves.csv"
 RANGE_GP_REAL = PROCESSED / "range_axis" / "gp_hyperparameters_by_realization.csv"
 NUGGET_GP_REAL = PROCESSED / "nugget_axis" / "gp_hyperparameters_by_realization.csv"
@@ -121,9 +124,16 @@ F5_VARIOGRAM_RATIO = "3:1"
 # number of individual points above it is counted and printed in the note).
 F5_VARIOGRAM_YMAX = 2.5
 PLACEHOLDER_SEED = 20261116
+# F3 is 1x4 at 190 mm; plot-area height (mm) and legend columns.
+F3_PLOT_HEIGHT_MM = 50.0
+F3_LEGEND_NCOL = 7
+# wider right margin so panel D's x label is not clipped at 190 mm
+F3_RIGHT_MM = 8.0
 
 MSE_LABEL = "MSE (porosity %²)"
 UMG_LABEL = "UMG (1 = calibrated)"
+COV90_LABEL = "90% interval coverage"
+COV90_NOMINAL = 0.90
 DENSITY_XLABEL = "Sample density (% of grid cells sampled, dense → sparse)"
 DENSITY_XLABEL_SHORT = "Sample density (%, dense → sparse)"
 
@@ -577,6 +587,22 @@ def _load_gp_lengths() -> pd.DataFrame:
     return gp
 
 
+def _load_cov90_summary() -> pd.DataFrame:
+    """coverage90_summary.csv (written by
+    results/processed/sample_replicate_axis/make_coverage90.py) in the same
+    (axis_level, method, metric, mean, std, n_replicates) shape as
+    metrics_summary.csv, so _plot_density_metric can draw it unchanged."""
+    df = pd.read_csv(REPL_COV90_SUMMARY, comment="#")
+    df["axis_level"] = df["axis_level"].astype(str)
+    if set(df["metric"]) != {"coverage90"}:
+        raise ValueError(f"{_rel(REPL_COV90_SUMMARY)}: unexpected metrics {sorted(set(df['metric']))}.")
+    if set(df["axis_level"]) != set(DENSITY_LEVELS) or set(df["method"]) != set(METHODS):
+        raise ValueError(f"{_rel(REPL_COV90_SUMMARY)}: unexpected levels/methods.")
+    if df.groupby(["axis_level", "method"]).size().max() != 1:
+        raise ValueError(f"{_rel(REPL_COV90_SUMMARY)}: duplicate (level, method) rows.")
+    return df
+
+
 def figure_f3(dens, summary):
     stem = "F3_gp_vs_sample_density"
     gp = _load_gp_lengths()
@@ -584,53 +610,73 @@ def figure_f3(dens, summary):
     spread = float(gp["length_scale_m"].max() / gp["length_scale_m"].min())
     use_log = spread >= RATIO_LOG_THRESHOLD
     faded = ("sgs", "rbf_bootstrap")
+    cov = _load_cov90_summary()
+    n_rep_cov = int(cov["n_replicates"].unique().item())
+    if n_rep_cov != n_rep:
+        raise ValueError(f"coverage90 n_replicates {n_rep_cov} != GP length rows per level {n_rep}.")
 
     note = (
         f"1 ground-truth realization (range {dens['truth_range_m']:g} m), {n_rep} sample-location "
-        f"replicates per density level; A, B: mean ±1 std; C: one point per replicate (fitted "
+        f"replicates per density level; A–C: mean ±1 std; C: fraction of evaluated cells inside the "
+        f"central {COV90_NOMINAL:.0%} predictive interval (kriging: normal-score interval back-transformed; "
+        f"SGS, RBF+bootstrap, GP-MLE: Gaussian mean ± z·std interval); D: one point per replicate (fitted "
         f"practical range = RBF-kernel length scale converted at the 0.05 correlation cutoff; max/min "
         f"over all points = {spread:.1f}×, {'log' if use_log else 'linear'} y axis). "
         f"RBF+bootstrap N_BOOTSTRAP = {N_BOOTSTRAP}; SGS N_REALIZATIONS = {N_REALIZATIONS} – to be "
         "re-run at production settings."
     )
-    fig, rect = _new_figure(plot_height_mm=52.0, status_text=note, top_mm=12.0)
-    gs = fig.add_gridspec(1, 3, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3], wspace=0.34)
-    ax_a, ax_b, ax_c = (fig.add_subplot(gs[0, i]) for i in range(3))
+    fig, rect = _new_figure(plot_height_mm=F3_PLOT_HEIGHT_MM, status_text=note, top_mm=14.0,
+                            right_mm=F3_RIGHT_MM)
+    gs = fig.add_gridspec(1, 4, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3], wspace=0.42)
+    ax_a, ax_b, ax_c, ax_d = (fig.add_subplot(gs[0, i]) for i in range(4))
 
     _plot_density_metric(ax_a, summary, dens, "mse", faded=faded)
     _plot_density_metric(ax_b, summary, dens, "umg", faded=faded)
     ax_b.axhline(1.0, color="gray", linestyle="--", linewidth=0.6, zorder=1)
+    _plot_density_metric(ax_c, cov, dens, "coverage90", faded=faded)
+    ax_c.axhline(COV90_NOMINAL, color="gray", linestyle="--", linewidth=0.6, zorder=1)
     ax_a.set_ylabel(MSE_LABEL)
     ax_b.set_ylabel(UMG_LABEL)
+    ax_c.set_ylabel(COV90_LABEL)
 
     # Deterministic (non-random) horizontal spread of the replicate points.
     spread_frac = np.linspace(-0.10, 0.10, n_rep)
     for lvl in DENSITY_LEVELS:
         sub = gp[gp["axis_level"] == lvl].sort_values("replicate")
-        ax_c.scatter(
+        ax_d.scatter(
             dens["pct"][lvl] * (1.0 + spread_frac), sub["length_scale_m"],
             s=9, marker=METHOD_MARKERS["gp_mle"], facecolors=METHOD_COLORS["gp_mle"],
             edgecolors="none", alpha=0.75, zorder=3,
         )
-    ax_c.axhline(dens["truth_range_m"], color="black", linestyle="--", linewidth=0.7, zorder=2)
+    ax_d.axhline(dens["truth_range_m"], color="black", linestyle="--", linewidth=0.7, zorder=2)
     if use_log:
-        ax_c.set_yscale("log")
+        ax_d.set_yscale("log")
     else:
-        ax_c.set_ylim(bottom=0)
-    ax_c.set_ylabel("GP-MLE fitted practical range (m)")
+        ax_d.set_ylim(bottom=0)
+    ax_d.set_ylabel("GP-MLE fitted practical range (m)")
 
-    for ax, letter in zip((ax_a, ax_b, ax_c), "ABC"):
+    for ax, letter in zip((ax_a, ax_b, ax_c, ax_d), "ABCD"):
         _style_density_axis(ax, dens, xlabel=False)
         ax.set_xlabel(DENSITY_XLABEL_SHORT)
         ax.grid(True)
         _panel_label(ax, letter)
 
+    # Panel C y axis is autoscaled (errorbar includes the +-1 std bars); verify
+    # nothing is clipped.
+    cov_lo = float((cov["mean"] - cov["std"]).min())
+    cov_hi = float((cov["mean"] + cov["std"]).max())
+    ylim_c = ax_c.get_ylim()
+    if ylim_c[0] > cov_lo or ylim_c[1] < cov_hi:
+        raise ValueError(f"panel C y range {ylim_c} clips the mean +-1 std range [{cov_lo}, {cov_hi}].")
+
     handles = _method_handles(faded=faded) + [
         Line2D([0], [0], color="gray", linestyle="--", linewidth=0.6, label="Ideal (UMG = 1)"),
+        Line2D([0], [0], color="gray", linestyle="--", linewidth=0.6,
+               label=f"Nominal ({COV90_NOMINAL:.2f})"),
         Line2D([0], [0], color="black", linestyle="--", linewidth=0.7,
                label=f"Ground-truth range ({dens['truth_range_m']:g} m)"),
     ]
-    fig.legend(handles=handles, loc="upper center", ncol=6, bbox_to_anchor=(0.5, 1.0),
+    fig.legend(handles=handles, loc="upper center", ncol=F3_LEGEND_NCOL, bbox_to_anchor=(0.5, 1.0),
                columnspacing=1.4)
 
     per_level = gp.groupby("axis_level")["length_scale_m"].agg(["min", "max"]).loc[DENSITY_LEVELS]
@@ -638,6 +684,9 @@ def figure_f3(dens, summary):
         stem,
         inputs=[
             f"{_rel(REPL_SUMMARY)} (metrics mse, umg; columns mean, std, n_replicates)",
+            f"{_rel(REPL_COV90_SUMMARY)} (read with comment='#'; metric coverage90; columns mean, std, "
+            "n_replicates) - written by results/processed/sample_replicate_axis/make_coverage90.py; "
+            f"per-replicate values in {_rel(REPL_COV90)}",
             f"{_rel(REPL_LENGTH)} (read with comment='#'; rows method == gp_mle; column length_scale_m)",
             f"{_rel(REPL_SEEDS)} + {_rel(REPL_EXTRA)} (n_samples_actual -> x positions; hmaj1 -> truth range)",
             f"src/experiments/rbf_bootstrap.py N_BOOTSTRAP = {N_BOOTSTRAP}; "
@@ -647,18 +696,32 @@ def figure_f3(dens, summary):
             ("A", "REAL DATA - MSE vs density; kriging and GP-MLE at full strength, SGS and RBF+bootstrap "
                   "drawn faded (same data, alpha 0.32)"),
             ("B", "REAL DATA - UMG vs density, same emphasis"),
-            ("C", f"REAL DATA - GP-MLE fitted practical range, one point per replicate ({n_rep} per level), "
+            ("C", f"REAL DATA - 90% interval coverage vs density, same emphasis, mean +-1 std (ddof=1); "
+                  f"dashed gray line = nominal {COV90_NOMINAL:.2f}"),
+            ("D", f"REAL DATA - GP-MLE fitted practical range, one point per replicate ({n_rep} per level), "
                   f"dashed line = ground-truth range {dens['truth_range_m']:g} m"),
         ],
         in_figure_note="DATA STATUS: " + note,
         limits=[
             "length_definition in the CSV: " + str(gp["length_definition"].unique()[0]),
-            f"panel C y-axis rule: log if max/min >= {RATIO_LOG_THRESHOLD:g}x; observed {spread:.2f}x -> "
+            f"panel C coverage90 = accuracy-plot fraction_in evaluated at exactly p = {COV90_NOMINAL:.2f} "
+            "(strict inequality, conditioning-sample cells excluded), computed through the SAME per-method "
+            "path as UMG in src/experiments/evaluate_sample_replicate_axis.py:evaluate_one_cell; "
+            "make_coverage90.py re-derives UMG from the same calls and asserts it equals metrics.csv (atol 1e-12).",
+            "panel C kriging: normal-score central interval back-transformed per cell (kriging_fraction_in, "
+            "same tail parameters as the point back-transform).",
+            "panel C SGS, RBF+bootstrap and GP-MLE: Gaussian percentile method, interval = mean +- z*std from "
+            "(sgs_mean_map, sgs_var_map) / (bootstrap_mean_map, bootstrap_var_map) / (posterior_mean_map, "
+            "posterior_var_map) - NOT empirical quantiles of the SGS realizations or bootstrap replicates.",
+            f"panel C SGS ensemble size N_REALIZATIONS = {N_REALIZATIONS} (src/experiments/sgs.py); "
+            f"RBF+bootstrap N_BOOTSTRAP = {N_BOOTSTRAP}.",
+            "panel C y axis autoscaled to include every mean +-1 std bar (checked at run time; no clipping).",
+            f"panel D y-axis rule: log if max/min >= {RATIO_LOG_THRESHOLD:g}x; observed {spread:.2f}x -> "
             f"{'log' if use_log else 'linear'}.",
-            "panel C per-level min-max (m): " + "; ".join(
+            "panel D per-level min-max (m): " + "; ".join(
                 f"level {lvl}: {per_level.loc[lvl, 'min']:.0f}-{per_level.loc[lvl, 'max']:.0f}"
                 for lvl in DENSITY_LEVELS),
-            "panel C points are spread horizontally by a fixed (non-random) +-10% pattern for visibility only.",
+            "panel D points are spread horizontally by a fixed (non-random) +-10% pattern for visibility only.",
             "single ground-truth realization (truth_seed "
             f"{dens['truth_seed']}); only sample locations vary between replicates.",
             "x positions are the replicate-MEAN actual sample fraction: " + _replicate_n_text(dens) + ".",
