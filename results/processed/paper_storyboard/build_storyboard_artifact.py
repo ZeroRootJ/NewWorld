@@ -68,6 +68,47 @@ FIGS = {
         ]),
 }
 
+CLAIMS = {
+    "F1": [
+        "정확도(MSE)는 4개 방법이 세 축 모두에서 비슷합니다. 정확도만 보면 방법 간 차이가 드러나지 않습니다.",
+        "UMG는 RBF+bootstrap만 크게 낮습니다. range 축 0.29~0.47, nugget 축 0.30~0.47, density 축 0.46~0.53이고, 나머지 세 방법은 0.83 이상입니다.",
+        "이 차이는 ground truth의 range, nugget, 샘플 밀도를 바꿔도 유지됩니다. 특정 조건 하나에서만 나온 결과가 아니라는 근거입니다.",
+        "정확도와 uncertainty 품질은 따로 봐야 한다는 논문의 전제를 한 장으로 보여줍니다.",
+    ],
+    "F2": [
+        "A: RBF+bootstrap의 곡선이 1:1 선 아래로 크게 내려갑니다. 명목 95 % 구간에 참값이 실제로는 48 %만 들어옵니다. 구간이 너무 좁다는 뜻입니다.",
+        "B: 그 원인이 예측 분산의 크기에 있음을 보여줍니다. RBF+bootstrap의 평균 분산은 0.3~1.5로, kriging의 2.3~7.3보다 훨씬 작습니다.",
+        "bootstrap은 샘플셋이 바뀔 때 생기는 변동만 잡고, 샘플이 없는 곳의 공간적 불확실성은 잡지 못한다는 결론 1-a의 근거입니다.",
+    ],
+    "F3": [
+        "A, B: 평균만 보면 GP-MLE는 모든 밀도에서 kriging과 MSE, UMG가 비슷합니다. 현재 데이터에서는 저밀도에서도 평균 UMG 차이가 작습니다(1 %에서 약 0.90 대 0.91).",
+        "C: GP가 맞춘 range는 밀도가 낮아지면 replicate마다 크게 달라집니다. 17.8 %에서는 168~208 m에 모이고, 1 %에서는 145~740 m로 퍼집니다.",
+        "따라서 이 그림이 뒷받침하는 것은 '저밀도에서 GP의 하이퍼파라미터 추정이 샘플 배치에 따라 불안정해진다'입니다. 'GP의 uncertainty가 fail한다'까지는 현재 평균 UMG로는 보이지 않습니다.",
+        "밀도가 충분한 구간(4.8 % 이상)에서도 GP가 맞춘 range는 실제 값 300 m보다 짧은 쪽에 모여 있습니다.",
+    ],
+    "F4": [
+        "A: ground truth의 range가 길어져도 GP가 맞춘 range는 따라가지 못합니다. 실제 값이 100 m에서 800 m로 늘 때 평균은 130 m에서 337 m로만 늡니다.",
+        "B: GP가 맞춘 noise variance는 모든 nugget 레벨에서 실제 nugget보다 평균 1.0~1.5만큼 큽니다. nugget이 0인 경우에도 평균 1.47을 noise로 배정합니다.",
+        "marginal likelihood로 자동 선택한 하이퍼파라미터가 실제 공간 통계량과 체계적으로 어긋난다는 근거입니다. 데이터에서 자동으로 고른 값을 그대로 믿기 어렵다는 결론 1-b의 시사점과 연결됩니다.",
+        "ground-truth realization 10개에서 반복해도 같은 방향이므로, realization 하나의 우연이 아니라는 점도 함께 보여줍니다.",
+    ],
+    "F5": [
+        "A: 이방성 reservoir에서는 방향에 따라 실제 range가 달라집니다. 등방성 모델은 이 구조를 표현할 수 없습니다.",
+        "B: 사람은 실험 variogram을 방향별로 보고 major와 minor range를 따로 모델링할 수 있습니다. conventional 방법이 이방성에 대응하는 방식입니다.",
+        "C (예정): 이방성이 강해질 때 4개 방법의 MSE와 UMG가 어떻게 달라지는지 보일 자리입니다. 실험이 없어 아직 주장할 수 있는 내용이 없습니다.",
+    ],
+    "F6": [
+        "A: 파라미터가 1개(length scale)뿐인 등방성 GP도 밀도가 낮아지면 추정이 흔들립니다. 변동계수가 17.8 %에서 0.07, 1 %에서 0.59입니다.",
+        "가장 단순한 커널도 이 정도 데이터가 필요하므로, 이방성을 표현하려고 파라미터를 늘리면 더 많은 데이터가 필요하다는 논의의 출발점입니다.",
+        "B (예정): 파라미터가 더 많은 커널을 같은 축에 겹쳐 보일 자리입니다. 데이터가 없어 아직 주장할 수 있는 내용이 없습니다.",
+    ],
+    "F7": [
+        "(예정) 정확도(MSE)가 가장 좋은 하이퍼파라미터 조합과 UMG가 가장 좋은 조합이 서로 다른 위치에 있음을 보일 자리입니다.",
+        "(예정) 그렇다면 grid search로 하나의 최적점을 찾는 방식으로는 둘을 동시에 만족시키기 어렵다는 결론 2의 근거가 됩니다.",
+        "실험이 없어 현재는 그림 형식만 있습니다. 두 최적점이 실제로 다른 곳에 있는지는 아직 확인되지 않았습니다.",
+    ],
+}
+
 SECTIONS = [
     ("결론 1-a", "불확실성이 모델에 없는 방법은 bootstrap으로도 평가하지 못한다", ["F1", "F2"]),
     ("결론 1-b", "불확실성이 내재된 GP는 데이터가 희소해지면 흔들린다", ["F3", "F4", "F5", "F6"]),
@@ -147,7 +188,11 @@ details.sec>summary:focus-visible{outline:2px solid var(--accent);outline-offset
 .fig h3 .n{font-family:var(--mono);font-weight:500;color:var(--muted);font-size:14px}
 .plate{background:var(--plate);border:1px solid var(--line);border-radius:4px;padding:6px}
 .plate img{display:block;width:100%;height:auto}
-.fig p{margin:0;max-width:72ch}
+.fig p{margin:6px 0 0;max-width:72ch}
+.claims{margin:0;padding-left:1.2em;max-width:76ch;display:flex;flex-direction:column;gap:6px}
+.how{color:var(--muted);font-size:14px}
+.how>summary{cursor:pointer;font-size:13px}
+.how>summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .file{font-family:var(--mono);font-size:12px;color:var(--muted);overflow-wrap:anywhere}
 </style>
 """
@@ -172,8 +217,8 @@ def main():
             f = FIGS[k]
             h.append('<article class="fig" id="%s"><h3><span class="n">%s</span>%s %s</h3>' % (k.lower(), k, f["title"], chip(f["st"])))
             h.append(img(f["stem"], k + " " + f["title"]))
-            for p in f["body"]:
-                h.append('<p>%s</p>' % p)
+            h.append('<ul class="claims">' + "".join('<li>%s</li>' % c for c in CLAIMS[k]) + '</ul>')
+            h.append('<details class="how"><summary>그림 읽는 법</summary>' + "".join('<p>%s</p>' % p for p in f["body"]) + '</details>')
             h.append('<div class="file">results/figures/paper_storyboard/%s.pdf</div></article>' % f["stem"])
         h.append('</div></details>')
     h.append('<details class="sec" open><summary><span class="tag">TODO</span><span class="claim">그림을 채우는 데 필요한 실험</span></summary>'
