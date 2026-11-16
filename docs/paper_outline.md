@@ -29,7 +29,7 @@ goodness를 동시에 고려하면 두 response surface의 최적점이 서로 �
 | 1-a | F2 | Base case calibration 곡선, 예측 분산 vs density | 실제 데이터 |
 | 1-b | F3 | 밀도별 GP vs kriging, GP fitted range | 실제 데이터 |
 | 1-b | F4 | GP fitted range·nugget vs truth (10 realization) | 실제 데이터 |
-| 1-b | F5 | 이방성 range·variogram(A, B), 4개 방법 비교(C) | C는 placeholder |
+| 1-b | F5 | 이방성 range·variogram(A, B), 4개 방법 비교(C) | **보류 (2026-11-16 사용자 결정, 스토리보드에서 제외)** |
 | 1-b | F6 | 파라미터 수 vs 필요 데이터량 | B는 placeholder |
 | 2 | F7 | Accuracy·UMG response surface | 전부 placeholder |
 
@@ -37,7 +37,7 @@ goodness를 동시에 고려하면 두 response surface의 최적점이 서로 �
 - range/nugget 축 4개 방법을 여러 ground-truth realization으로 재실행 (현재 레벨당 1개)
 - N_BOOTSTRAP / SGS N_REALIZATIONS를 최종 설정으로 재실행 (현재 둘 다 10)
 - density 축 ground-truth realization 확장 (현재 1개, 샘플 배치 replicate만 10)
-- 이방성 축 본편 (F5-C); F5-A(300/600 m)와 F5-B(900/300 m)의 파라미터 세트 통일
+- (보류) 이방성 축 본편 (F5-C); F5-A(300/600 m)와 F5-B(900/300 m)의 파라미터 세트 통일
 - 파라미터 수 vs 데이터량 (F6-B)
 - (range × nugget) 하이퍼파라미터 grid에서 MSE·UMG 동시 평가 (F7)
 

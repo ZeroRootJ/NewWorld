@@ -111,7 +111,7 @@ CLAIMS = {
 
 SECTIONS = [
     ("결론 1-a", "불확실성이 모델에 없는 방법은 bootstrap으로도 평가하지 못한다", ["F1", "F2"]),
-    ("결론 1-b", "불확실성이 내재된 GP는 데이터가 희소해지면 흔들린다", ["F3", "F4", "F5", "F6"]),
+    ("결론 1-b", "불확실성이 내재된 GP는 데이터가 희소해지면 흔들린다", ["F3", "F4", "F6"]),
     ("결론 2", "정확도와 uncertainty goodness의 최적점은 서로 다르다", ["F7"]),
 ]
 
@@ -120,7 +120,6 @@ FLOW = [
     ("1-a", "F2", "Calibration 곡선, 예측 분산", REAL),
     ("1-b", "F3", "밀도별 GP와 kriging, GP가 맞춘 range", REAL),
     ("1-b", "F4", "GP가 맞춘 range, nugget 대 실제 값", REAL),
-    ("1-b", "F5", "이방성 range와 variogram, 4개 방법 비교", PART),
     ("1-b", "F6", "파라미터 수와 필요한 데이터 양", PART),
     ("2", "F7", "정확도와 UMG 반응면", NONE),
 ]
@@ -129,8 +128,6 @@ TODO = [
     ("F1, F2, F3", "range, nugget 축을 여러 ground-truth realization으로 재실행", "현재 레벨당 1개"),
     ("F1, F2, F3", "bootstrap 수와 SGS realization 수를 최종 설정으로 재실행", "현재 둘 다 10"),
     ("F3, F6", "density 축을 여러 ground-truth realization으로 확장", "현재 1개, 샘플 배치만 10회"),
-    ("F5-C", "이방성 축 본편: 4개 방법의 MSE, UMG", "실험 없음"),
-    ("F5-A, B", "두 패널의 이방성 파라미터 세트 통일", "A는 300/600 m, B는 900/300 m"),
     ("F6-B", "파라미터가 더 많은 커널의 적합 안정성", "실험 없음"),
     ("F7", "range × nugget grid에서 MSE와 UMG 동시 평가", "실험 없음"),
 ]
@@ -205,8 +202,8 @@ def chip(st):
 def main():
     h = [CSS, '<div class="wrap">']
     h.append('<header><h1>논문 스토리보드</h1>'
-             '<p class="lede">지금 있는 데이터로 그린 그림 7개입니다. 실험이 없는 패널은 회색 바탕의 가상 그림이고, '
-             '데이터 한계는 각 그림 아래 DATA STATUS 줄에 적혀 있습니다.</p></header>')
+             '<p class="lede">지금 있는 데이터로 그린 그림 %d개입니다(F5 이방성은 보류). 실험이 없는 패널은 회색 바탕의 가상 그림이고, '
+             '데이터 한계는 각 그림 아래 DATA STATUS 줄에 적혀 있습니다.</p></header>' % len(FLOW))
     h.append('<section><h2>흐름</h2><div class="tablebox"><table><thead><tr><th>결론</th><th>그림</th><th>내용</th><th>상태</th></tr></thead><tbody>')
     for c, f, d, st in FLOW:
         h.append('<tr><td class="k">%s</td><td class="k"><a href="#%s">%s</a></td><td>%s</td><td>%s</td></tr>' % (c, f.lower(), f, d, chip(st)))
