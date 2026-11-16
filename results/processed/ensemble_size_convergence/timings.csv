@@ -1,0 +1,13 @@
+case,method,seed_index,seed,n_ensemble,ensemble_seconds,ensemble_seconds_definition,cv_seconds,total_seconds,run_dir
+base_case,sgs,0,3101,200,2294.557177066803,"sgsim_seconds (geostats.sgsim call, all N realizations)",,2298.6674246788025,results/raw/sgs/20261116T202722475929Z
+base_case,rbf_bootstrap,0,3201,200,3.0571441650390625,bootstrap_seconds (N RBF refits + grid predictions),7.437311887741089,14.588019847869873,results/raw/rbf_bootstrap/20261116T194917337559Z
+base_case,sgs,1,3102,200,2208.3017797470093,"sgsim_seconds (geostats.sgsim call, all N realizations)",,2212.374944448471,results/raw/sgs/20261116T202557261703Z
+base_case,rbf_bootstrap,1,3202,200,2.9073486328125,bootstrap_seconds (N RBF refits + grid predictions),7.468637228012085,14.507987976074219,results/raw/rbf_bootstrap/20261116T194917271265Z
+base_case,sgs,2,3103,200,2197.7492747306824,"sgsim_seconds (geostats.sgsim call, all N realizations)",,2201.85222697258,results/raw/sgs/20261116T202546418655Z
+base_case,rbf_bootstrap,2,3203,200,2.9387238025665283,bootstrap_seconds (N RBF refits + grid predictions),7.474883079528809,14.424053430557251,results/raw/rbf_bootstrap/20261116T194917203365Z
+density_1pct_rep0,sgs,0,3101,200,1218.7536823749542,"sgsim_seconds (geostats.sgsim call, all N realizations)",,1222.7503192424774,results/raw/sgs/20261116T200927216770Z
+density_1pct_rep0,rbf_bootstrap,0,3201,200,0.587378978729248,bootstrap_seconds (N RBF refits + grid predictions),1.6221046447753906,6.199735641479492,results/raw/rbf_bootstrap/20261116T194908992182Z
+density_1pct_rep0,sgs,1,3102,200,1238.7519810199738,"sgsim_seconds (geostats.sgsim call, all N realizations)",,1242.8408825397491,results/raw/sgs/20261116T200947375699Z
+density_1pct_rep0,rbf_bootstrap,1,3202,200,0.5887324810028076,bootstrap_seconds (N RBF refits + grid predictions),1.6959142684936523,6.299201726913452,results/raw/rbf_bootstrap/20261116T194909109677Z
+density_1pct_rep0,sgs,2,3103,200,1234.7991547584534,"sgsim_seconds (geostats.sgsim call, all N realizations)",,1238.8201093673706,results/raw/sgs/20261116T200943474327Z
+density_1pct_rep0,rbf_bootstrap,2,3203,200,0.6367623805999756,bootstrap_seconds (N RBF refits + grid predictions),1.6417994499206543,6.253670692443848,results/raw/rbf_bootstrap/20261116T194909064146Z

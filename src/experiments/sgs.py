@@ -44,6 +44,7 @@ Run with: .venv/Scripts/python.exe -m src.experiments.sgs
 """
 
 import time
+from typing import Optional
 
 import matplotlib
 import numpy as np
@@ -86,6 +87,12 @@ from src.io import make_run_dir, save_result
 # count so all methods being compared use the same number of replicates
 # (docs/geostatspy_conventions.md section 7, point 3). NOT re-declared as an
 # independent literal -- imported directly from rbf_bootstrap.py above.
+# This is the DEFAULT; since 2026-11-16 (E1 ensemble-size convergence task)
+# ``main()`` accepts an optional ``n_ensemble`` override (None -> this
+# default, bit-for-bit unchanged behavior). To keep SGS and RBF+bootstrap at
+# the same replicate count, overrides should go through
+# src/experiments/_axis_parallel.py's ``n_ensemble`` argument, which injects
+# the SAME value into both methods.
 N_REALIZATIONS = N_BOOTSTRAP
 
 # New named seed (does not collide with TRUTH_SEED=101, SAMPLE_SEED=20,
@@ -231,8 +238,18 @@ def main(
     hmin1: float = _COND_HMIN1,
     n_samples: int = N_SAMPLES,
     nug: float = _COND_NUG,
+    n_ensemble: Optional[int] = None,
+    sgs_seed: int = SGS_SEED,
 ):
     """Run the SGS base-case pipeline.
+
+    ``n_ensemble`` (added 2026-11-16): number of conditional realizations
+    (sgsim ``nsim``). None (default) -> N_REALIZATIONS (= rbf_bootstrap.
+    N_BOOTSTRAP = 10), i.e. unchanged behavior. ``sgs_seed`` (added
+    2026-11-16): sgsim's ``seed``, default SGS_SEED (60), unchanged. The
+    conditioning-data jitter seed (SGS_JITTER_SEED) is NOT affected by
+    ``sgs_seed``. Values actually used are recorded in the manifest
+    (params.n_realizations / params.sgs_seed).
 
     Defaults reproduce the exact base case (see kriging.main's docstring for
     the shared convention, including the ``n_samples`` sample-density-axis
@@ -244,6 +261,9 @@ def main(
     (one-factor-at-a-time -- do not vary those here).
     """
     t_start = time.time()
+    n_realizations = N_REALIZATIONS if n_ensemble is None else int(n_ensemble)
+    if n_realizations < 2:
+        raise ValueError(f"n_ensemble must be >= 2 (ddof=1 variance); got {n_realizations}.")
 
     truth, samples_df = get_base_case_conditioning_data(
         sample_seed=sample_seed,
@@ -290,14 +310,14 @@ def main(
         ltpar=SGSIM_LTPAR,
         utail=SGSIM_UTAIL,
         utpar=SGSIM_UTPAR,
-        nsim=N_REALIZATIONS,
+        nsim=n_realizations,
         nx=NX,
         xmn=XMN,
         xsiz=XSIZ,
         ny=NY,
         ymn=YMN,
         ysiz=YSIZ,
-        seed=SGS_SEED,
+        seed=sgs_seed,
         ndmin=NDMIN,
         ndmax=NDMAX,
         nodmax=NODMAX,
@@ -317,7 +337,7 @@ def main(
     # already follows this project's row 0 = max-y convention (same sgsim
     # call used unconditionally in src/truth_model.py, whose docstring
     # documents that convention).
-    realizations = np.stack([sim[r] for r in range(N_REALIZATIONS)], axis=0)  # (N_REALIZATIONS, NY, NX)
+    realizations = np.stack([sim[r] for r in range(n_realizations)], axis=0)  # (n_realizations, NY, NX)
 
     # --- Sample -> grid-cell mapping (used by both honor re-enforcement and
     # QC 1 below). Computed from the original (un-jittered) samples_df, via
@@ -337,7 +357,7 @@ def main(
     # visible/auditable rather than silently hidden by the correction below.
     honor_abs_errors_raw = np.abs(
         realizations[:, sample_row, sample_col] - samples_df[VCOL].values[None, :]
-    )  # (N_REALIZATIONS, n_actual_samples)
+    )  # (n_realizations, n_actual_samples)
     honor_raw_max_abs_error = float(honor_abs_errors_raw.max())
     honor_raw_mean_abs_error = float(honor_abs_errors_raw.mean())
 
@@ -360,13 +380,13 @@ def main(
     # sgsim's own behavior -- see honor_raw_* above for that).
     honor_abs_errors = np.abs(
         realizations[:, sample_row, sample_col] - samples_df[VCOL].values[None, :]
-    )  # (N_REALIZATIONS, n_actual_samples)
+    )  # (n_realizations, n_actual_samples)
     honor_max_abs_error = float(honor_abs_errors.max())
     honor_mean_abs_error = float(honor_abs_errors.mean())
 
     # --- QC 2: histogram reproduction ------------------------------------
-    realization_means = realizations.reshape(N_REALIZATIONS, -1).mean(axis=1)
-    realization_stdevs = realizations.reshape(N_REALIZATIONS, -1).std(axis=1)
+    realization_means = realizations.reshape(n_realizations, -1).mean(axis=1)
+    realization_stdevs = realizations.reshape(n_realizations, -1).std(axis=1)
 
     # --- QC 3: variogram structure (gamv on one example realization) -----
     qc_realization = realizations[QC_REALIZATION_INDEX]
@@ -428,7 +448,7 @@ def main(
     ax4 = plt.subplot(2, 3, 4)
     im4 = ax4.imshow(sgs_mean_map, extent=[XMIN, XMAX, YMIN, YMAX], origin="upper", cmap="viridis", vmin=vmin, vmax=vmax)
     ax4.scatter(samples_df["X"], samples_df["Y"], s=8, c="red", marker="+")
-    ax4.set_title(f"SGS mean ({N_REALIZATIONS} realizations)")
+    ax4.set_title(f"SGS mean ({n_realizations} realizations)")
     ax4.set_xlabel("X (m)")
     ax4.set_ylabel("Y (m)")
     plt.colorbar(im4, ax=ax4, label="Porosity (%)")
@@ -436,7 +456,7 @@ def main(
     ax5 = plt.subplot(2, 3, 5)
     im5 = ax5.imshow(sgs_var_map, extent=[XMIN, XMAX, YMIN, YMAX], origin="upper", cmap="magma")
     ax5.scatter(samples_df["X"], samples_df["Y"], s=8, c="cyan", marker="+")
-    ax5.set_title(f"SGS variance ({N_REALIZATIONS} realizations)")
+    ax5.set_title(f"SGS variance ({n_realizations} realizations)")
     ax5.set_xlabel("X (m)")
     ax5.set_ylabel("Y (m)")
     plt.colorbar(im5, ax=ax5, label="Variance (Porosity %^2)")
@@ -470,8 +490,9 @@ def main(
         "n_samples_requested": n_samples,
         "n_samples_actual": n_actual_samples,
         "variogram": vario,
-        "n_realizations": N_REALIZATIONS,
-        "sgs_seed": SGS_SEED,
+        "n_realizations": n_realizations,
+        "n_realizations_default": N_REALIZATIONS,
+        "sgs_seed": sgs_seed,
         "sgsim_input_jitter": {
             "applied": True,
             "reason": (
@@ -559,7 +580,7 @@ def main(
     manifest_path = save_result(
         experiment=EXPERIMENT_NAME,
         params=params,
-        seed_or_seeds={"truth_seed": truth_seed, "sample_seed": sample_seed, "sgs_seed": SGS_SEED},
+        seed_or_seeds={"truth_seed": truth_seed, "sample_seed": sample_seed, "sgs_seed": sgs_seed},
         run_dir=run_dir,
         code_entrypoint=CODE_ENTRYPOINT,
         output_files=output_files,

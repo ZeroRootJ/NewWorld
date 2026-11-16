@@ -45,6 +45,15 @@ METHOD_MODULES = {
 
 DEFAULT_METHODS = ("kriging", "sgs", "rbf_bootstrap", "gp_mle")
 
+# Methods whose uncertainty model is an ENSEMBLE whose size is controlled by
+# the ``n_ensemble`` keyword of their ``main()`` (added 2026-11-16, E1
+# ensemble-size convergence task). Project rule: SGS realization count ==
+# RBF bootstrap replicate count. ``run_levels_parallel(n_ensemble=...)``
+# therefore injects ONE value into every method listed here, and callers are
+# NOT allowed to put ``n_ensemble`` into ``level_kwargs`` / ``method_kwargs``
+# themselves (that would allow setting it for only one of the two).
+ENSEMBLE_METHODS = ("sgs", "rbf_bootstrap")
+
 # Env vars that cap BLAS/OpenMP thread pools (numpy in this environment is
 # OpenBLAS-backed). Set on the PARENT process before the pool is created so
 # spawned children inherit them at process-creation time, before they import
@@ -101,6 +110,8 @@ def run_levels_parallel(
     level_kwargs: Dict[str, dict],
     methods: Sequence[str] = DEFAULT_METHODS,
     max_workers: Optional[int] = None,
+    n_ensemble: Optional[int] = None,
+    method_kwargs: Optional[Dict[str, Dict[str, dict]]] = None,
 ) -> Dict[str, Dict[str, Path]]:
     """Run ``methods x level_kwargs`` as one flat pool of independent tasks.
 
@@ -114,6 +125,19 @@ def run_levels_parallel(
     methods : method names to run at every level; must be keys of
         ``METHOD_MODULES``.
     max_workers : process-pool size; defaults to ``default_max_workers()``.
+    n_ensemble : optional ensemble size (added 2026-11-16). None (default) ->
+        nothing is injected and every method uses its own module default
+        (sgs N_REALIZATIONS == rbf_bootstrap N_BOOTSTRAP == 10), i.e. the
+        pre-existing behavior. Otherwise ``n_ensemble=<value>`` is added to
+        the kwargs of EVERY method in ``ENSEMBLE_METHODS`` (sgs and
+        rbf_bootstrap) -- the same value for both -- and not to kriging/gp_mle
+        (whose ``main()`` has no ensemble).
+    method_kwargs : optional ``{level_key: {method: extra_kwargs}}`` (added
+        2026-11-16) merged on top of ``level_kwargs[level_key]`` for that one
+        (level, method) task only -- e.g. a method-specific seed
+        (``sgs_seed`` for sgs, ``bootstrap_seed`` for rbf_bootstrap). Keys
+        colliding with ``level_kwargs`` or containing ``n_ensemble`` are
+        rejected.
 
     Returns
     -------
@@ -123,6 +147,38 @@ def run_levels_parallel(
     """
     if max_workers is None:
         max_workers = default_max_workers()
+
+    method_kwargs = method_kwargs or {}
+    for level_key, kwargs in level_kwargs.items():
+        if "n_ensemble" in kwargs:
+            raise ValueError(
+                f"level '{level_key}': pass n_ensemble via run_levels_parallel(n_ensemble=...), "
+                "not inside level_kwargs (SGS and RBF+bootstrap must receive the same value)."
+            )
+    for level_key, per_method in method_kwargs.items():
+        if level_key not in level_kwargs:
+            raise ValueError(f"method_kwargs level '{level_key}' is not in level_kwargs.")
+        for method, extra in per_method.items():
+            if method not in methods:
+                raise ValueError(f"method_kwargs level '{level_key}': method '{method}' is not being run.")
+            if "n_ensemble" in extra:
+                raise ValueError(
+                    f"method_kwargs level '{level_key}' method '{method}': n_ensemble must be passed "
+                    "via run_levels_parallel(n_ensemble=...)."
+                )
+            overlap = set(extra) & set(level_kwargs[level_key])
+            if overlap:
+                raise ValueError(
+                    f"method_kwargs level '{level_key}' method '{method}' overrides level_kwargs "
+                    f"keys {sorted(overlap)}."
+                )
+
+    def _task_kwargs(level_key: str, method: str) -> dict:
+        kw = dict(level_kwargs[level_key])
+        kw.update(method_kwargs.get(level_key, {}).get(method, {}))
+        if n_ensemble is not None and method in ENSEMBLE_METHODS:
+            kw["n_ensemble"] = int(n_ensemble)
+        return kw
 
     # Cap BLAS/OpenMP thread pools in the CHILD processes (see
     # default_max_workers() docstring). Set on the parent's environ before
@@ -134,8 +190,8 @@ def run_levels_parallel(
         os.environ[var] = "1"
 
     tasks = [
-        (level_key, method, kwargs)
-        for level_key, kwargs in level_kwargs.items()
+        (level_key, method, _task_kwargs(level_key, method))
+        for level_key in level_kwargs
         for method in methods
     ]
 

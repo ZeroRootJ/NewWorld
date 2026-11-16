@@ -31,6 +31,7 @@ Run with: .venv/Scripts/python.exe -m src.experiments.rbf_bootstrap
 """
 
 import time
+from typing import Optional
 
 import matplotlib
 import numpy as np
@@ -213,6 +214,14 @@ SMOOTHING_GRID = np.concatenate(
 )  # ascending, 17 values
 
 # --- Bootstrap ------------------------------------------------------------
+# N_BOOTSTRAP is the DEFAULT replicate count (unchanged, 10). Since
+# 2026-11-16 (E1 ensemble-size convergence task) ``main()`` accepts an
+# optional ``n_ensemble`` override; when omitted (None) N_BOOTSTRAP is used,
+# so every pre-existing call path reproduces bit-for-bit. SGS's realization
+# count must always equal this method's replicate count (project rule,
+# docs/geostatspy_conventions.md section 7 point 3) -- callers that override
+# it go through src/experiments/_axis_parallel.py's ``n_ensemble`` argument,
+# which injects the SAME value into both sgs and rbf_bootstrap.
 N_BOOTSTRAP = 10
 BOOTSTRAP_SEED = 30
 
@@ -251,8 +260,16 @@ def main(
     hmin1: float = _COND_HMIN1,
     n_samples: int = N_SAMPLES,
     nug: float = _COND_NUG,
+    n_ensemble: Optional[int] = None,
+    bootstrap_seed: int = BOOTSTRAP_SEED,
 ):
     """Run the RBF+bootstrap base-case pipeline.
+
+    ``n_ensemble`` (added 2026-11-16): number of bootstrap replicates. None
+    (default) -> N_BOOTSTRAP (10), i.e. unchanged behavior. ``bootstrap_seed``
+    (added 2026-11-16): seed of the bootstrap resampling RandomState,
+    default BOOTSTRAP_SEED (30), unchanged. Both values actually used are
+    recorded in the manifest (params.n_bootstrap / params.bootstrap_seed).
 
     Defaults reproduce the exact base case (see kriging.main's docstring for
     the shared convention, including the ``n_samples`` sample-density-axis
@@ -271,6 +288,9 @@ def main(
     designed to probe (docs/experiment_context.md section 3, axis 2).
     """
     t_start = time.time()
+    n_bootstrap = N_BOOTSTRAP if n_ensemble is None else int(n_ensemble)
+    if n_bootstrap < 2:
+        raise ValueError(f"n_ensemble must be >= 2 (ddof=1 variance); got {n_bootstrap}.")
 
     truth, samples_df = get_base_case_conditioning_data(
         sample_seed=sample_seed,
@@ -353,10 +373,11 @@ def main(
     # manifest, i.e. the dedup branch was never entered for any of the
     # N_BOOTSTRAP replicates, so it cannot have influenced any base-case
     # number.
-    rng = np.random.RandomState(BOOTSTRAP_SEED)
-    replicate_maps = np.empty((N_BOOTSTRAP, NY, NX))
+    t_bootstrap_start = time.time()
+    rng = np.random.RandomState(bootstrap_seed)
+    replicate_maps = np.empty((n_bootstrap, NY, NX))
     n_bootstrap_deduplicated = 0
-    for b in range(N_BOOTSTRAP):
+    for b in range(n_bootstrap):
         idx = rng.choice(n_actual_samples, size=n_actual_samples, replace=True)
         X_fit, d_fit = X[idx], d[idx]
         if best_smoothing == 0.0:
@@ -381,6 +402,8 @@ def main(
             "not fully resolve an ill-conditioned RBFInterpolator fit for "
             "at least one bootstrap replicate. Do not silently proceed."
         )
+
+    bootstrap_seconds = time.time() - t_bootstrap_start
 
     bootstrap_mean_map = replicate_maps.mean(axis=0)
     bootstrap_var_map = replicate_maps.var(axis=0, ddof=1)
@@ -433,7 +456,7 @@ def main(
     ax3 = plt.subplot(1, 3, 3)
     im3 = ax3.imshow(bootstrap_var_map, extent=[XMIN, XMAX, YMIN, YMAX], origin="upper", cmap="magma")
     ax3.scatter(samples_df["X"], samples_df["Y"], s=8, c="cyan", marker="+")
-    ax3.set_title(f"Bootstrap variance ({N_BOOTSTRAP} replicates)")
+    ax3.set_title(f"Bootstrap variance ({n_bootstrap} replicates)")
     ax3.set_xlabel("X (m)")
     ax3.set_ylabel("Y (m)")
     plt.colorbar(im3, ax=ax3, label="Variance (Porosity %^2)")
@@ -465,8 +488,9 @@ def main(
         "smoothing_grid": SMOOTHING_GRID.tolist(),
         "best_epsilon": best_epsilon,
         "best_smoothing": best_smoothing,
-        "n_bootstrap": N_BOOTSTRAP,
-        "bootstrap_seed": BOOTSTRAP_SEED,
+        "n_bootstrap": n_bootstrap,
+        "n_bootstrap_default": N_BOOTSTRAP,
+        "bootstrap_seed": bootstrap_seed,
         "n_bootstrap_deduplicated": n_bootstrap_deduplicated,
         "n_bootstrap_deduplicated_note": (
             "Number of the N_BOOTSTRAP replicates (of this run) whose "
@@ -478,13 +502,14 @@ def main(
             "best_smoothing>0."
         ),
         "cv_seconds": cv_seconds,
+        "bootstrap_seconds": bootstrap_seconds,
         "total_seconds": total_seconds,
     }
 
     manifest_path = save_result(
         experiment=EXPERIMENT_NAME,
         params=params,
-        seed_or_seeds={"truth_seed": truth_seed, "sample_seed": sample_seed, "bootstrap_seed": BOOTSTRAP_SEED, "cv_seed": CV_SEED},
+        seed_or_seeds={"truth_seed": truth_seed, "sample_seed": sample_seed, "bootstrap_seed": bootstrap_seed, "cv_seed": CV_SEED},
         run_dir=run_dir,
         code_entrypoint=CODE_ENTRYPOINT,
         output_files=output_files,
@@ -494,7 +519,7 @@ def main(
     print(f"Manifest: {manifest_path}")
     print(f"n_samples_actual = {n_actual_samples}")
     print(f"best_epsilon = {best_epsilon}, best_smoothing = {best_smoothing}")
-    print(f"n_bootstrap_deduplicated = {n_bootstrap_deduplicated} of {N_BOOTSTRAP}")
+    print(f"n_bootstrap_deduplicated = {n_bootstrap_deduplicated} of {n_bootstrap}")
     print(f"CV grid search took {cv_seconds:.2f}s, total {total_seconds:.2f}s")
 
     return run_dir, manifest_path, samples_df
