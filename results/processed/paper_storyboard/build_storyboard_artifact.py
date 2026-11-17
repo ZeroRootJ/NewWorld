@@ -21,22 +21,22 @@ FIGS = {
         title="정확도와 calibration, 3개 축",
         body=[
             "위 행은 MSE, 아래 행은 UMG입니다. 열은 왼쪽부터 ground-truth range, nugget, sample density 축입니다.",
-            "range와 nugget 축은 레벨당 ground-truth realization 1개, 샘플셋 1개입니다. density 축은 샘플 배치 replicate 10개의 평균과 ±1 표준편차입니다.",
+            "range와 nugget 축은 레벨당 ground-truth realization 10개(샘플셋은 같음, n = 121), density 축은 ground truth 10개 × 샘플셋 10개 = 100셀입니다. 점은 평균, 막대는 레벨 내 모든 셀의 ±1 표준편차입니다. SGS와 RBF+bootstrap의 ensemble 크기는 N = 50입니다.",
         ]),
     "F2": dict(
         stem="F2_base_case_calibration_and_variance", st=REAL,
         title="Base case calibration 곡선과 예측 분산",
         body=[
-            "A는 base case의 accuracy plot(명목 확률 구간 대 실제 포함 비율)입니다. B는 방법별 평균 예측 분산을 sample density에 대해 그린 것입니다.",
+            "A는 base case(ground truth 1개, 샘플셋 1개, N = 50)의 accuracy plot(명목 확률 구간 대 실제 포함 비율)입니다. B는 방법별 평균 예측 분산을 sample density에 대해 그린 것입니다(레벨당 100셀의 평균 ± 1 표준편차).",
             "분산은 모두 porosity %² 단위입니다. kriging 분산은 normal-score 분산을 Monte Carlo로 역변환한 값입니다.",
         ]),
     "F3": dict(
         stem="F3_gp_vs_sample_density", st=REAL,
         title="밀도에 따른 GP와 kriging",
         body=[
-            "A는 MSE, B는 UMG, C는 90% 구간 coverage입니다. kriging과 GP-MLE를 진하게, 나머지 두 방법을 옅게 그렸습니다. C의 점선은 공칭값 0.90입니다.",
+            "레벨당 ground truth 10개 × 샘플셋 10개 = 100셀입니다(SGS, RBF+bootstrap은 N = 50). A는 MSE, B는 UMG, C는 90% 구간 coverage입니다. kriging과 GP-MLE를 진하게, 나머지 두 방법을 옅게 그렸습니다. C의 점선은 공칭값 0.90입니다.",
             "90% coverage는 각 방법이 내놓은 90% 예측 구간 안에 truth가 실제로 들어간 셀의 비율입니다. UMG를 계산하는 accuracy plot에서 p = 0.90인 한 점이고, UMG와 같은 계산 경로를 씁니다(kriging은 normal-score 구간의 back-transform, 나머지는 평균 ± 표준편차의 정규분포).",
-            "D는 GP-MLE가 맞춘 practical range를 replicate마다 점 하나로 찍은 것입니다. 점선은 ground-truth range 300 m입니다. 최소 144.6 m, 최대 739.9 m입니다.",
+            "D는 GP-MLE가 맞춘 practical range를 셀마다 점 하나로 찍은 것입니다(레벨당 100개, 로그 축). 점선은 ground-truth range 300 m입니다. 최소 57 m, 최대 740 m입니다.",
         ]),
     "F4": dict(
         stem="F4_gp_fitted_vs_truth_hyperparameters", st=REAL,
@@ -72,21 +72,22 @@ FIGS = {
 CLAIMS = {
     "F1": [
         "정확도(MSE)는 4개 방법이 세 축 모두에서 비슷합니다. 정확도만 보면 방법 간 차이가 드러나지 않습니다.",
-        "UMG는 RBF+bootstrap만 크게 낮습니다. range 축 0.29~0.47, nugget 축 0.30~0.47, density 축 0.46~0.53이고, 나머지 세 방법은 0.83 이상입니다.",
+        "UMG는 RBF+bootstrap만 크게 낮습니다. range 축 0.37~0.55, nugget 축 0.37~0.55, density 축 0.48~0.52이고, 나머지 세 방법은 0.79 이상입니다.",
+        "range 축에서 kriging과 SGS의 UMG는 range 100 m → 800 m에서 0.95 → 0.79, 0.95 → 0.81로 내려가고, GP-MLE는 0.95로 일정합니다.",
         "이 차이는 ground truth의 range, nugget, 샘플 밀도를 바꿔도 유지됩니다. 특정 조건 하나에서만 나온 결과가 아니라는 근거입니다.",
         "정확도와 uncertainty 품질은 따로 봐야 한다는 논문의 전제를 한 장으로 보여줍니다.",
     ],
     "F2": [
-        "A: RBF+bootstrap의 곡선이 1:1 선 아래로 크게 내려갑니다. 명목 95 % 구간에 참값이 실제로는 48 %만 들어옵니다. 구간이 너무 좁다는 뜻입니다.",
-        "B: 그 원인이 예측 분산의 크기에 있음을 보여줍니다. RBF+bootstrap의 평균 분산은 0.3~1.5로, kriging의 2.3~7.3보다 훨씬 작습니다.",
+        "A: RBF+bootstrap의 곡선이 1:1 선 아래로 크게 내려갑니다. 명목 95 % 구간에 참값이 실제로는 47 %만 들어옵니다. 구간이 너무 좁다는 뜻입니다.",
+        "B: 그 원인이 예측 분산의 크기에 있음을 보여줍니다. RBF+bootstrap의 평균 분산은 0.4~1.5로, kriging의 2.2~6.9보다 훨씬 작습니다.",
         "bootstrap은 샘플셋이 바뀔 때 생기는 변동만 잡고, 샘플이 없는 곳의 공간적 불확실성은 잡지 못한다는 결론 1-a의 근거입니다.",
     ],
     "F3": [
-        "A, B: 평균만 보면 GP-MLE는 모든 밀도에서 kriging과 MSE, UMG가 비슷합니다. 현재 데이터에서는 저밀도에서도 평균 UMG 차이가 작습니다(1 %에서 약 0.90 대 0.91).",
-        "C: 90% coverage는 밀도가 17.8 %에서 1 %로 줄 때 GP-MLE가 0.90에서 0.85로, kriging이 0.92에서 0.86으로 떨어집니다. 모든 밀도에서 GP-MLE가 kriging보다 낮지만, 둘의 차이는 밀도가 줄어도 커지지 않습니다. 1 %에서 replicate 간 표준편차는 0.07~0.08입니다.",
-        "D: GP가 맞춘 range는 밀도가 낮아지면 replicate마다 크게 달라집니다. 17.8 %에서는 168~208 m에 모이고, 1 %에서는 145~740 m로 퍼집니다.",
+        "A, B: 평균만 보면 GP-MLE는 모든 밀도에서 kriging과 MSE, UMG가 비슷합니다. 저밀도에서도 평균 UMG 차이는 작습니다(1 %에서 0.89 대 0.90).",
+        "C: 90% coverage는 밀도가 17.8 %에서 1 %로 줄 때 GP-MLE가 0.89에서 0.83으로, kriging이 0.87에서 0.85로 떨어집니다. 4.8 % 이상에서는 GP-MLE가 kriging보다 높고, 2 %와 1 %에서는 낮습니다. GP-MLE의 셀 간 표준편차는 17.8 %에서 0.015, 1 %에서 0.092입니다(kriging 0.054, 0.086).",
+        "D: GP가 맞춘 range는 밀도가 낮아지면 replicate마다 크게 달라집니다. 17.8 %에서는 148~248 m에 모이고, 1 %에서는 57~740 m로 퍼집니다.",
         "따라서 이 그림이 뒷받침하는 것은 '저밀도에서 GP의 하이퍼파라미터 추정이 샘플 배치에 따라 불안정해진다'입니다. 'GP의 uncertainty가 fail한다'까지는 현재 평균 UMG로는 보이지 않습니다.",
-        "밀도가 충분한 구간(4.8 % 이상)에서도 GP가 맞춘 range는 실제 값 300 m보다 짧은 쪽에 모여 있습니다.",
+        "밀도가 충분한 구간에서도 GP가 맞춘 range는 실제 값 300 m보다 짧은 쪽에 모여 있습니다. 300 m를 넘는 셀은 100개 중 17.8 % 0개, 9.5 % 4개, 4.8 % 16개, 2 % 26개, 1 % 38개입니다.",
     ],
     "F4": [
         "A: ground truth의 range가 길어져도 GP가 맞춘 range는 따라가지 못합니다. 실제 값이 100 m에서 800 m로 늘 때 평균은 130 m에서 337 m로만 늡니다.",
@@ -127,9 +128,8 @@ FLOW = [
 ]
 
 TODO = [
-    ("F1, F2, F3", "range, nugget 축을 여러 ground-truth realization으로 재실행", "현재 레벨당 1개"),
-    ("F1, F2, F3", "bootstrap 수와 SGS realization 수를 최종 설정으로 재실행", "현재 둘 다 10"),
-    ("F3, F6", "density 축을 여러 ground-truth realization으로 확장", "현재 1개, 샘플 배치만 10회"),
+    ("F1, F2, F3", "SGS realization, bootstrap 수를 50개 배치로 추가(N = 100, 150)", "현재 N = 50 (배치 1)"),
+    ("F6", "density 축을 ground truth 10개 데이터(E4)로 교체", "E4 데이터 있음, F6 미반영"),
     ("F6-B", "파라미터가 더 많은 커널의 적합 안정성", "실험 없음"),
     ("F7", "range × nugget grid에서 MSE와 UMG 동시 평가", "실험 없음"),
 ]
