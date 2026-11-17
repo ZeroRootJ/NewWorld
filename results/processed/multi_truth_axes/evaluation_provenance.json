@@ -1,0 +1,114 @@
+{
+  "generated_by": "src/experiments/evaluate_multi_truth_axes.py",
+  "git_commit": "8e8c4a62aeb5340495632fefe55d8d130a3f0691",
+  "git_dirty": true,
+  "git_dirty_files": [
+    "results/processed/multi_truth_axes/"
+  ],
+  "sources": [
+    {
+      "source": "results/raw/multi_truth_axes/20261116T222609599808Z",
+      "batch": 1,
+      "n_ensemble_this_batch": 50,
+      "is_production_configuration": true,
+      "n_registry_entries": 2560,
+      "n_tasks_total": 2560
+    }
+  ],
+  "batch_sets": [
+    [
+      1
+    ]
+  ],
+  "n_cells_evaluated": 641,
+  "n_cells_skipped_incomplete": 0,
+  "skipped_cells": [],
+  "metrics": [
+    "mse",
+    "umg",
+    "variance_mean",
+    "coverage90"
+  ],
+  "coverage_nominal_p": 0.9,
+  "umg_bins": 20,
+  "summary_definition": "mean / std(ddof=1) / n over all (truth_seed, sample_rep) rows of a (experiment, axis_level, method, n_ensemble, batches, metric) group",
+  "kriging_gp_rows": "n_ensemble = NaN, batches = '' (no ensemble; evaluated once per cell)",
+  "batches_column": "'batches' is always written as a STRING: the comma-separated batch list ('1', '1,2', ...) for sgs / rbf_bootstrap, '' for kriging / gp_mle. pandas would otherwise parse '1' as an integer and '' as NaN; read with read_metrics_csv() (dtype={'batches': str}, '' kept as '') .",
+  "run_git_commits_by_method_batch": {
+    "kriging|batch=none": {
+      "b19b7917a6cfa962df9b9e3942e47088bcf0573a (dirty=False)": 18,
+      "88f29666efe4f0a6991ae06c7df16bd8ec620286 (dirty=False)": 553,
+      "ffe81d24d6583efcd4f7f297525d592d5a890380 (dirty=False)": 33,
+      "ffe81d24d6583efcd4f7f297525d592d5a890380 (dirty=True)": 7,
+      "58823fd92ef1467bdaa0b5c486b447991f7b2842 (dirty=False)": 23,
+      "58823fd92ef1467bdaa0b5c486b447991f7b2842 (dirty=True)": 7
+    },
+    "gp_mle|batch=none": {
+      "b19b7917a6cfa962df9b9e3942e47088bcf0573a (dirty=False)": 18,
+      "88f29666efe4f0a6991ae06c7df16bd8ec620286 (dirty=False)": 553,
+      "ffe81d24d6583efcd4f7f297525d592d5a890380 (dirty=False)": 32,
+      "ffe81d24d6583efcd4f7f297525d592d5a890380 (dirty=True)": 8,
+      "58823fd92ef1467bdaa0b5c486b447991f7b2842 (dirty=False)": 22,
+      "58823fd92ef1467bdaa0b5c486b447991f7b2842 (dirty=True)": 8
+    },
+    "sgs|batch=1": {
+      "ffe81d24d6583efcd4f7f297525d592d5a890380 (dirty=False)": 31,
+      "88f29666efe4f0a6991ae06c7df16bd8ec620286 (dirty=False)": 572,
+      "ffe81d24d6583efcd4f7f297525d592d5a890380 (dirty=True)": 10,
+      "58823fd92ef1467bdaa0b5c486b447991f7b2842 (dirty=False)": 22,
+      "58823fd92ef1467bdaa0b5c486b447991f7b2842 (dirty=True)": 6
+    },
+    "rbf_bootstrap|batch=1": {
+      "b19b7917a6cfa962df9b9e3942e47088bcf0573a (dirty=False)": 18,
+      "88f29666efe4f0a6991ae06c7df16bd8ec620286 (dirty=False)": 553,
+      "b19b7917a6cfa962df9b9e3942e47088bcf0573a (dirty=True)": 1,
+      "ffe81d24d6583efcd4f7f297525d592d5a890380 (dirty=False)": 31,
+      "ffe81d24d6583efcd4f7f297525d592d5a890380 (dirty=True)": 8,
+      "58823fd92ef1467bdaa0b5c486b447991f7b2842 (dirty=False)": 22,
+      "58823fd92ef1467bdaa0b5c486b447991f7b2842 (dirty=True)": 8
+    }
+  },
+  "batch_invariant_params_asserted": {
+    "sgs": [
+      "grid",
+      "variogram",
+      "sgsim_input_jitter",
+      "honor_reenforcement",
+      "ndmin",
+      "ndmax",
+      "nodmax",
+      "mults",
+      "nmult",
+      "noct",
+      "ktype",
+      "colocorr",
+      "sec_map",
+      "sgsim_backtransform"
+    ],
+    "rbf_bootstrap": [
+      "grid",
+      "rbf_kernel",
+      "cv_folds",
+      "cv_seed",
+      "epsilon_grid",
+      "smoothing_grid"
+    ]
+  },
+  "checks": {
+    "gp_crosscheck_vs_f4_csv": {
+      "range_axis": {
+        "reference": "results/processed/range_axis/gp_hyperparameters_by_realization.csv",
+        "n_compared": 80,
+        "n_values_compared": 240,
+        "max_rel_diff": 2.8647187012996216e-06
+      },
+      "nugget_axis": {
+        "reference": "results/processed/nugget_axis/gp_hyperparameters_by_realization.csv",
+        "n_compared": 60,
+        "n_values_compared": 180,
+        "max_rel_diff": 1.8991917589772893e-11
+      }
+    },
+    "gp_crosscheck_full_coverage_required": true
+  }
+}
