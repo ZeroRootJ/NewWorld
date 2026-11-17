@@ -1,10 +1,8 @@
 {
   "generated_by": "results/processed/hyperparam_grid_surface/make_f7_tables.py",
-  "git_commit": "f4de1b6788412f3c2e6f55aed603e3770bc06ce4",
-  "git_dirty": true,
-  "git_dirty_files": [
-    "results/processed/hyperparam_grid_surface/"
-  ],
+  "git_commit": "9a9b92376a832ed46e561265e36098b7cee6c51f",
+  "git_dirty": false,
+  "git_dirty_files": [],
   "source_run": "results/raw/hyperparam_grid_surface/20261117T071222580635Z",
   "source_files_sha256": {
     "metrics_summary.csv": "f31b6283d6bf373cf50f0c1897dc4c6bc09b4cb8203897bcca33369c97d0dbfa",
