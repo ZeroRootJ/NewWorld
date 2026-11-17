@@ -5,7 +5,9 @@ has been run yet.
 NO SIMULATION IS RUN HERE. This script only READS existing CSV/JSON files under
 results/processed/ (plus, read-only, the multi_truth_axes run_config.json named
 in results/processed/multi_truth_axes/evaluation_provenance.json, for the
-ground-truth parameters of each cell) and draws. results/raw/ is never modified.
+ground-truth parameters of each cell, and the hyperparam_grid_surface
+run_config.json named in results/processed/hyperparam_grid_surface/
+provenance.json, for F7's grid / truth parameters) and draws. results/raw/ is never modified.
 
 Figures (results/figures/paper_storyboard/, each as vector PDF + 300 dpi PNG +
 a ``.status.txt`` sidecar):
@@ -18,7 +20,8 @@ a ``.status.txt`` sidecar):
   F4 (1-b)  GP-MLE fitted range / nugget vs ground truth (10 realizations/level)
   F5 (1-b)  anisotropy: true range vs azimuth, variogram check, PLACEHOLDER metrics
   F6 (1-b)  hyperparameter stability vs density: real (isotropic) + PLACEHOLDER
-  F7 (2)    response surfaces of MSE and UMG over (range, nugget): PLACEHOLDER
+  F7 (2)    MSE and UMG over fixed-hyperparameter grids, 4 methods x 2 surfaces
+            [hyperparam_grid_surface, via results/processed/hyperparam_grid_surface/]
 
 Conventions
 -----------
@@ -37,8 +40,6 @@ Conventions
   ``PLACEHOLDER - schematic, no data`` label above the panel, no numeric tick
   labels, and dashed/hollow artists. Their curve shapes are arbitrary seeded
   smooth curves that carry NO expected-result meaning (see _schematic_curves).
-  The single exception is F7, where the coordinator's spec asks for two bowls
-  with their optima at different places; that is stated in F7's status file.
 
 Run with:
 .venv/Scripts/python.exe -m results.processed.paper_storyboard.make_storyboard_figures
@@ -1356,87 +1357,188 @@ def figure_f6(dens):
 # ---------------------------------------------------------------------------
 # F7
 # ---------------------------------------------------------------------------
+F7_SUMMARY = PROCESSED / "hyperparam_grid_surface" / "metrics_summary.csv"
+F7_OPTIMA = PROCESSED / "hyperparam_grid_surface" / "optima.csv"
+F7_PROV = PROCESSED / "hyperparam_grid_surface" / "provenance.json"
+F7_METHODS = ["kriging", "sgs", "rbf_bootstrap", "gp"]
+F7_TITLES = {"kriging": "Simple kriging", "sgs": "SGS", "rbf_bootstrap": "RBF+bootstrap",
+             "gp": "GP (fixed hyperparameters)"}
+F7_YLABELS = {"kriging": "Nugget (fraction of sill)", "sgs": "Nugget (fraction of sill)",
+              "rbf_bootstrap": "Smoothing λ", "gp": "Noise variance (fraction of sill)"}
+F7_YLOG = {"kriging": False, "sgs": False, "rbf_bootstrap": True, "gp": True}
+F7_YTICKS = {"kriging": [0.0, 0.1, 0.2, 0.3, 0.4, 0.5], "sgs": [0.0, 0.1, 0.2, 0.3, 0.4],
+             "rbf_bootstrap": [1e-5, 1e-3, 1e-1, 1e1], "gp": [1e-5, 1e-3, 1e-1]}
+F7_XTICKS = [106, 212, 424, 849]
+F7_BEST = {"mse": "min", "umg": "max"}
+F7_CMAP = {"mse": "viridis_r", "umg": "viridis"}   # bright = better on both surfaces
+F7_CBAR_LABEL = {"mse": MSE_LABEL, "umg": "UMG"}
+F7_TRUE_POINT = (300.0, 0.05)   # base-case truth (range m, nugget fraction); asserted vs provenance below
+# vertical layout (mm): colourbar strip, gap, panel; between rows: x ticks + next colourbar ticks/label
+F7_PANEL_MM = 30.0
+F7_CBAR_MM = 1.5
+F7_CBAR_GAP_MM = 1.2
+F7_ROW_GAP_MM = 12.5
+F7_COL_GAP_MM = 14.0
+
+
+def _f7_edges(vals, log):
+    """Cell edges around the grid nodes: midpoints (in log10 if ``log``) and
+    half a step beyond the outer nodes. Cells only -- no interpolation."""
+    v = np.log10(np.asarray(vals, float)) if log else np.asarray(vals, float)
+    mid = (v[1:] + v[:-1]) / 2.0
+    e = np.concatenate([[v[0] - (mid[0] - v[0])], mid, [v[-1] + (v[-1] - mid[-1])]])
+    return 10.0 ** e if log else e
+
+
+def _f7_grid(summ, method, metric):
+    g = summ[(summ["method"] == method) & (summ["metric"] == metric)]
+    xs = np.sort(g["range_equiv_m"].unique())
+    ys = np.sort(g["param2_value"].unique())
+    z = np.full((len(ys), len(xs)), np.nan)
+    for _, r in g.iterrows():
+        z[np.searchsorted(ys, r["param2_value"]), np.searchsorted(xs, r["range_equiv_m"])] = r["mean"]
+    if np.isnan(z).any():
+        raise ValueError(f"F7 {method} {metric}: incomplete grid")
+    return xs, ys, z
+
+
 def figure_f7():
+    from matplotlib import patheffects
+    from matplotlib.colors import LogNorm, Normalize
+    from matplotlib.ticker import LogFormatterMathtext, NullLocator
+
     stem = "F7_response_surfaces_accuracy_vs_uncertainty"
+    summ = pd.read_csv(F7_SUMMARY)
+    opt = pd.read_csv(F7_OPTIMA)
+    prov = json.loads(F7_PROV.read_text(encoding="utf-8"))
+    n_truths = prov["checks"]["n_truths_per_node"]
+    if len(n_truths) != 1:
+        raise ValueError(f"F7: unequal truth counts per node {n_truths}")
+    n_truths = n_truths[0]
+    run_cfg = json.loads((_REPO_ROOT / prov["source_run"] / "run_config.json").read_text(encoding="utf-8"))
+    truth = run_cfg["truth"]
+    if (truth["hmaj1"], truth["nug"]) != F7_TRUE_POINT:
+        raise ValueError(f"F7: base-case truth {truth} != {F7_TRUE_POINT}")
+    n_ens = run_cfg["n_ensemble"]
+    grid_txt = ", ".join(
+        f"{F7_TITLES[m].split(' (')[0]} {len(run_cfg['grids'][m]['range_levels_m'])}×"
+        f"{len(run_cfg['grids'][m]['param2_levels'])}" for m in F7_METHODS)
+
+    def opt_row(m, met):
+        r = opt[(opt["method"] == m) & (opt["metric"] == met)]
+        if len(r) != 1:
+            raise ValueError(f"F7 optima: {m} {met}")
+        return r.iloc[0]
+
     note = (
-        "A, B: PLACEHOLDER – no hyperparameter grid search has been run. Both surfaces are "
-        "synthetic quadratic bowls; contour shapes and the positions of both optima are arbitrary and "
-        "were not derived from any result."
+        f"Real data. Colour = mean over {n_truths} ground truths (base case: range {truth['hmaj1']:g} m, nugget "
+        f"{truth['nug']:g}, n = {truth['n_samples_requested']} requested) at each grid node; each cell is one node "
+        f"(no interpolation). Fixed hyperparameters, no tuning; SGS and bootstrap N = {n_ens}. Grids: {grid_txt}. "
+        "x = range-equivalent: kriging/SGS spherical range; RBF ε = √(−ln 0.05)/x and GP length scale = "
+        "x/√(−2 ln 0.05) (Gaussian kernel = 0.05 at x). GP: signal = 1 − noise in normalized units. Optima from grid "
+        f"nodes (MSE min, UMG max). Source: {prov['source_run']} (cross-check vs multi-truth run: "
+        f"{prov['checks']['crosscheck_verdict']})."
     )
-    fig, rect = _new_figure(plot_height_mm=66.0, status_text=note, top_mm=17.0)
-    gs = fig.add_gridspec(1, 2, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3], wspace=0.20)
-    ax_a = fig.add_subplot(gs[0, 0])
-    ax_b = fig.add_subplot(gs[0, 1])
+    plot_h = 2 * (F7_CBAR_MM + F7_CBAR_GAP_MM + F7_PANEL_MM) + F7_ROW_GAP_MM
+    fig, rect = _new_figure(plot_height_mm=plot_h, status_text=note, top_mm=19.0, left_mm=14.0)
+    ratios = [F7_CBAR_MM, F7_CBAR_GAP_MM, F7_PANEL_MM, F7_ROW_GAP_MM, F7_CBAR_MM, F7_CBAR_GAP_MM, F7_PANEL_MM]
+    panel_w = ((rect[2] - rect[0]) * FULL_WIDTH_MM - 3 * F7_COL_GAP_MM) / 4.0
+    gs = fig.add_gridspec(7, 4, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3],
+                          height_ratios=ratios, hspace=0.0, wspace=F7_COL_GAP_MM / panel_w)
+    halo = [patheffects.withStroke(linewidth=1.6, foreground="white")]
+    letters = iter("ABCDEFGH")
+    panel_info = []
+    for row, met in enumerate(("mse", "umg")):
+        other = "umg" if met == "mse" else "mse"
+        for col, m in enumerate(F7_METHODS):
+            cax = fig.add_subplot(gs[4 * row, col])
+            ax = fig.add_subplot(gs[4 * row + 2, col])
+            xs, ys, z = _f7_grid(summ, m, met)
+            zmin, zmax = float(np.min(z)), float(np.max(z))
+            use_log = met == "mse" and zmax / zmin >= RATIO_LOG_THRESHOLD
+            norm = LogNorm(zmin, zmax) if use_log else Normalize(zmin, zmax)
+            pc = ax.pcolormesh(_f7_edges(xs, True), _f7_edges(ys, F7_YLOG[m]), z, cmap=F7_CMAP[met],
+                               norm=norm, shading="flat", edgecolors="face", linewidth=0.0, rasterized=False)
+            ax.set_xscale("log")
+            if F7_YLOG[m]:
+                ax.set_yscale("log")
+                ax.yaxis.set_major_formatter(LogFormatterMathtext())
+            ax.set_xticks(F7_XTICKS)
+            ax.set_xticklabels([str(t) for t in F7_XTICKS])
+            ax.xaxis.set_minor_locator(NullLocator())
+            ax.set_yticks(F7_YTICKS[m])
+            ax.yaxis.set_minor_locator(NullLocator())
+            ax.set_ylabel(F7_YLABELS[m])
+            if row == 1:
+                ax.set_xlabel("Range equivalent (m)")
+            # optima (grid nodes)
+            own, oth = opt_row(m, met), opt_row(m, other)
+            ax.plot(oth["range_equiv_m"], oth["param2_value"], linestyle="none", marker="*", markersize=8,
+                    markerfacecolor="none", markeredgecolor="black", markeredgewidth=0.8, path_effects=halo,
+                    zorder=6, clip_on=False)
+            ax.plot(own["range_equiv_m"], own["param2_value"], linestyle="none", marker="*", markersize=8,
+                    markerfacecolor="black", markeredgecolor="white", markeredgewidth=0.4, zorder=7, clip_on=False)
+            if m in ("kriging", "sgs"):
+                ax.plot(*F7_TRUE_POINT, linestyle="none", marker="o", markersize=4, markerfacecolor="none",
+                        markeredgecolor="black", markeredgewidth=0.8, path_effects=halo, zorder=5, clip_on=False)
+            cb = fig.colorbar(pc, cax=cax, orientation="horizontal")
+            cax.xaxis.set_ticks_position("top")
+            cax.xaxis.set_label_position("top")
+            cb.set_label(F7_CBAR_LABEL[met], labelpad=1.5)
+            cb.outline.set_linewidth(0.5)
+            cax.tick_params(length=1.5, pad=1.0)
+            if use_log:
+                cax.xaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
+            if row == 0:
+                cax.annotate(F7_TITLES[m], xy=(0.5, 1.0), xycoords="axes fraction", xytext=(0, 21),
+                             textcoords="offset points", ha="center", va="bottom", fontweight="bold")
+            letter = next(letters)
+            _panel_label(ax, letter, dx_pt=-30.0, dy_pt=12.0)
+            panel_info.append((letter, m, met, use_log, zmin, zmax, own))
+    fig.legend(
+        handles=[
+            Line2D([0], [0], linestyle="none", marker="*", markersize=7, markerfacecolor="black",
+                   markeredgecolor="black", label="Optimum of this surface (grid node)"),
+            Line2D([0], [0], linestyle="none", marker="*", markersize=7, markerfacecolor="none",
+                   markeredgecolor="black", markeredgewidth=0.8, label="Optimum of the other surface"),
+            Line2D([0], [0], linestyle="none", marker="o", markersize=4, markerfacecolor="none",
+                   markeredgecolor="black", markeredgewidth=0.8,
+                   label=f"True base case ({truth['hmaj1']:g} m, {truth['nug']:g})"),
+        ],
+        loc="upper center", bbox_to_anchor=(0.5, 1.0), ncol=3, borderaxespad=0.3,
+    )
 
-    g = np.linspace(0.0, 1.0, 121)
-    xx, yy = np.meshgrid(g, g)
-
-    def bowl(x0, y0, a, b, rot):
-        dx, dy = xx - x0, yy - y0
-        u = np.cos(rot) * dx + np.sin(rot) * dy
-        w = -np.sin(rot) * dx + np.cos(rot) * dy
-        return a * u ** 2 + b * w ** 2
-
-    # Arbitrary, fixed positions (spec: the two panels' optima at different places).
-    opt_a = (0.38, 0.36)
-    opt_b = (0.64, 0.62)
-    z_a = bowl(*opt_a, 1.0, 2.2, 0.5)
-    z_b = bowl(*opt_b, 2.0, 1.0, -0.4)
-    levels = np.linspace(0.02, 0.9, 8)
-    for ax, z, own, other, own_lbl, other_lbl in (
-        (ax_a, z_a, opt_a, opt_b, "MSE optimum", "UMG optimum (from B)"),
-        (ax_b, z_b, opt_b, opt_a, "UMG optimum", "MSE optimum (from A)"),
-    ):
-        _mark_placeholder(ax)
-        ax.contour(xx, yy, z, levels=levels, colors="0.35", linewidths=0.5, linestyles="dashed")
-        ax.plot(*own, linestyle="none", marker="*", markersize=9, markerfacecolor="black",
-                markeredgecolor="black", zorder=5)
-        ax.plot(*other, linestyle="none", marker="*", markersize=9, markerfacecolor="none",
-                markeredgecolor="black", markeredgewidth=0.7, zorder=5)
-        ax.set_xlim(0, 1)
-        ax.set_ylim(0, 1)
-        ax.set_aspect("equal", adjustable="box")
-        ax.set_xlabel("Range hyperparameter (low → high)")
-        ax.set_ylabel("Nugget hyperparameter (low → high)")
-        ax.legend(
-            handles=[
-                Line2D([0], [0], linestyle="none", marker="*", markersize=7, markerfacecolor="black",
-                       markeredgecolor="black", label=own_lbl + " (schematic, no data)"),
-                Line2D([0], [0], linestyle="none", marker="*", markersize=7, markerfacecolor="none",
-                       markeredgecolor="black", markeredgewidth=0.7,
-                       label=other_lbl + " (schematic, no data)"),
-            ],
-            loc="lower center", bbox_to_anchor=(0.5, 1.07), ncol=1, borderaxespad=0.0,
-            title="Accuracy surface: MSE" if ax is ax_a else "Uncertainty-goodness surface: UMG",
-            title_fontsize=FONT_PT,
+    panels = []
+    for letter, m, met, use_log, zmin, zmax, own in panel_info:
+        panels.append((letter, (
+            f"{F7_TITLES[m]}, {met.upper()} surface: mean over {n_truths} truths at each of the "
+            f"{len(run_cfg['grids'][m]['range_levels_m'])}x{len(run_cfg['grids'][m]['param2_levels'])} grid nodes "
+            f"(pcolormesh, one cell per node, no interpolation); colour {'log' if use_log else 'linear'} scale "
+            f"{zmin:.4g}-{zmax:.4g}, colormap {F7_CMAP[met]} (bright = better). Filled star = {F7_BEST[met]} node "
+            f"({own['range_equiv_m']:g} m, {own['param2_name']} {own['param2_value']:.4g}, {own['mean']:.4f}); "
+            "hollow star = the other surface's optimum"
+            + ("; open circle = true base-case point." if m in ("kriging", "sgs") else ".")
+        )))
+    limits = [
+        f"source run {prov['source_run']}: status {prov['checks']['manifest_status']}, failed points "
+        f"{prov['checks']['n_failed_total']}, sgsim warnings {prov['checks']['sgsim_warnings_total']:g}, "
+        f"cross-check {prov['checks']['crosscheck_verdict']}.",
+        "colour scales are per panel (each panel has its own colourbar); MSE uses a log scale where "
+        f"max/min >= {RATIO_LOG_THRESHOLD:g}.",
+        "cell edges are midpoints between nodes (log-midpoints on log axes) and half a step beyond the outer nodes; "
+        "the cell size carries no data.",
+        "optima (results/processed/hyperparam_grid_surface/optima.csv), best vs runner-up node:",
+    ]
+    for _, r in opt.iterrows():
+        limits.append(
+            f"  {r['method']} {r['metric']}: best ({r['range_equiv_m']:g} m, {r['param2_value']:.4g}) "
+            f"{r['mean']:.4f} (std over truths {r['std_over_truths']:.4f}); runner-up "
+            f"({r['runner_up_range_equiv_m']:g} m, {r['runner_up_param2_value']:.4g}) {r['runner_up_mean']:.4f}; "
+            f"gap {r['gap_best_minus_runner_up']:+.4f}"
         )
-    _panel_label(ax_a, "A")
-    _panel_label(ax_b, "B")
-
-    lines = _status_file(
-        stem,
-        inputs=[],
-        panels=[
-            ("A", "PLACEHOLDER - synthetic illustration, NO DATA. Contours of an accuracy (MSE) response "
-                  "surface over a (range, nugget) hyperparameter grid; filled star = this panel's optimum, "
-                  "hollow star = panel B's optimum."),
-            ("B", "PLACEHOLDER - synthetic illustration, NO DATA. Same for uncertainty goodness (UMG); "
-                  "filled star = this panel's optimum, hollow star = panel A's optimum."),
-        ],
-        in_figure_note="DATA STATUS: " + note,
-        limits=[
-            "no input file is read. Both surfaces are analytic quadratic bowls with hard-coded, arbitrary "
-            f"centres {opt_a} and {opt_b} in unit-square axis coordinates; no random numbers are used.",
-            "that the two optima sit at different positions is the layout requested for this storyboard "
-            "slot; it is NOT a result and is not supported by any data in this repository.",
-            "no numeric tick labels; contour levels are unlabeled.",
-        ],
-        needed=[
-            "Hyperparameter grid (range x nugget) for the predictor(s) under study, evaluating BOTH MSE and "
-            "UMG at every grid node on the same ground truth(s) and sample set(s), so the two response "
-            "surfaces and their optima can be drawn from data.",
-        ],
-    )
+    lines = _status_file(stem, inputs=[_rel(F7_SUMMARY), _rel(F7_OPTIMA), _rel(F7_PROV),
+                                       prov["source_run"] + "/run_config.json"],
+                         panels=panels, in_figure_note="DATA STATUS: " + note, limits=limits)
     return _save(fig, stem, lines)
 
 

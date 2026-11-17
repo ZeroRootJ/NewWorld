@@ -1,0 +1,26 @@
+{
+  "generated_by": "results/processed/hyperparam_grid_surface/make_f7_tables.py",
+  "git_commit": "f4de1b6788412f3c2e6f55aed603e3770bc06ce4",
+  "git_dirty": true,
+  "git_dirty_files": [
+    "results/processed/hyperparam_grid_surface/"
+  ],
+  "source_run": "results/raw/hyperparam_grid_surface/20261117T071222580635Z",
+  "source_files_sha256": {
+    "metrics_summary.csv": "f31b6283d6bf373cf50f0c1897dc4c6bc09b4cb8203897bcca33369c97d0dbfa",
+    "metrics.csv": "3b8e4fd48bd17fa8b1edecc8218a049ac224773c400c37124dbad446c84513d4",
+    "manifest.json": "c3b8d83fb3c6012b5ecd9896118abb729d935bb8f4b193cbb61aa3de09d98475",
+    "crosscheck.json": "59e9d35c7530f775469aaaa9b913a21ea0ca4f0e121f92a569857e6b6ab2c85e"
+  },
+  "source_run_git_commit": "f4de1b6788412f3c2e6f55aed603e3770bc06ce4",
+  "checks": {
+    "manifest_status": "complete",
+    "crosscheck_verdict": "PASS",
+    "n_truths_per_node": [
+      10
+    ],
+    "n_failed_total": 0,
+    "sgsim_warnings_total": 0.0
+  },
+  "optimum_rule": "grid node with the best truth-mean: mse minimum, umg maximum (no interpolation); ties broken by sort order (mergesort, stable)"
+}

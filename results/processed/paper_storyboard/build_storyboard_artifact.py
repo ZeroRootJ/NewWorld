@@ -61,11 +61,14 @@ FIGS = {
             "B는 가상 그림입니다. 파라미터가 더 많은 커널을 맞춘 실험이 없습니다.",
         ]),
     "F7": dict(
-        stem="F7_response_surfaces_accuracy_vs_uncertainty", st=NONE,
+        stem="F7_response_surfaces_accuracy_vs_uncertainty", st=REAL,
         title="정확도와 UMG의 반응면",
         body=[
-            "두 패널 모두 가상 그림입니다. 등고선 모양과 두 최적점의 위치는 임의로 정한 것이며 어떤 결과에서도 나오지 않았습니다.",
-            "들어갈 그림의 형식만 보여줍니다. x축은 range, y축은 nugget 하이퍼파라미터이고, 채운 별은 해당 면의 최적점, 빈 별은 다른 면의 최적점입니다.",
+            "위 행은 MSE, 아래 행은 UMG이고, 열은 왼쪽부터 simple kriging, SGS, RBF+bootstrap, GP입니다. 색은 grid 노드마다 ground truth 10개(base case: range 300 m, nugget 0.05)에 대한 평균입니다. SGS와 RBF+bootstrap의 ensemble 크기는 N = 50입니다.",
+            "하이퍼파라미터는 grid 값으로 고정했고 자동 튜닝(CV, marginal likelihood)은 하지 않았습니다. 칸 하나가 grid 노드 하나이며 보간은 하지 않았습니다. 최적점도 grid 노드 중에서 골랐습니다(MSE 최소, UMG 최대). 색 범위는 패널마다 다르고, 두 면 모두 밝을수록 좋은 쪽입니다. RBF와 GP의 MSE는 로그 색 척도입니다.",
+            "grid 크기는 kriging 8×9, SGS 5×5, RBF 8×13, GP 8×11입니다. y축은 kriging과 SGS가 nugget(sill 대비 비율, 선형), RBF가 smoothing λ(로그), GP가 noise variance(정규화 단위의 sill 대비 비율, 로그)입니다. GP는 signal = 1 − noise로 두었습니다(unit sill).",
+            "x축 range는 방법마다 같은 규칙으로 맞춘 등가값입니다. kriging과 SGS는 spherical variogram의 range 그대로입니다. RBF는 ε = √(−ln 0.05)/range, GP는 length scale = range/√(−2 ln 0.05)로, Gaussian 커널이 range 거리에서 0.05로 떨어지도록 변환했습니다. 두 covariance 함수가 같다는 뜻은 아닙니다.",
+            "채운 별은 그 면의 최적점, 빈 별은 다른 면의 최적점입니다. kriging과 SGS 패널의 원은 실제 base case 값(300 m, 0.05)입니다.",
         ]),
 }
 
@@ -106,9 +109,11 @@ CLAIMS = {
         "B (예정): 파라미터가 더 많은 커널을 같은 축에 겹쳐 보일 자리입니다. 데이터가 없어 아직 주장할 수 있는 내용이 없습니다.",
     ],
     "F7": [
-        "(예정) 정확도(MSE)가 가장 좋은 하이퍼파라미터 조합과 UMG가 가장 좋은 조합이 서로 다른 위치에 있음을 보일 자리입니다.",
-        "(예정) 그렇다면 grid search로 하나의 최적점을 찾는 방식으로는 둘을 동시에 만족시키기 어렵다는 결론 2의 근거가 됩니다.",
-        "실험이 없어 현재는 그림 형식만 있습니다. 두 최적점이 실제로 다른 곳에 있는지는 아직 확인되지 않았습니다.",
+        "Simple kriging: MSE 최적점은 (600 m, nugget 0.05)에서 3.861, UMG 최적점은 (106 m, nugget 0)에서 0.965입니다. MSE 최적점의 UMG는 0.808, UMG 최적점의 MSE는 5.562입니다. 실제 값(300 m, 0.05)에서는 MSE 3.887, UMG 0.928입니다.",
+        "SGS: MSE 최적점은 (600 m, 0.05)에서 3.892, UMG 최적점은 (106 m, 0)에서 0.963입니다. MSE 최적점의 UMG는 0.816, UMG 최적점의 MSE는 5.779입니다. 실제 값(300 m, 0.05)에서는 MSE 3.926, UMG 0.933입니다.",
+        "RBF+bootstrap: MSE 최적점은 (300 m, λ 0.316)에서 3.912, UMG 최적점은 (212 m, λ 3.2×10⁻⁴)에서 0.962입니다. MSE 최적점의 UMG는 0.489, UMG 최적점의 MSE는 19.52입니다.",
+        "GP: MSE 최적점은 (300 m, noise 0.169)에서 3.897, UMG 최적점은 (106 m, noise 0.169)에서 0.958입니다. MSE 최적점의 UMG는 0.883, UMG 최적점의 MSE는 5.096입니다.",
+        "4개 방법 모두 MSE 최적점과 UMG 최적점이 서로 다른 grid 노드입니다. 최적 노드와 2위 노드의 평균 차이는 MSE 0.0004~0.034, UMG 0.0006~0.010이고, ground truth 10개 사이의 표준편차는 MSE 1.28~1.33, UMG 0.025~0.029입니다.",
     ],
 }
 
@@ -124,14 +129,14 @@ FLOW = [
     ("1-b", "F3", "밀도별 GP와 kriging(MSE, UMG, 90% coverage), GP가 맞춘 range", REAL),
     ("1-b", "F4", "GP가 맞춘 range, nugget 대 실제 값", REAL),
     ("1-b", "F6", "파라미터 수와 필요한 데이터 양", PART),
-    ("2", "F7", "정확도와 UMG 반응면", NONE),
+    ("2", "F7", "정확도와 UMG 반응면, 고정 하이퍼파라미터 grid, 4개 방법", REAL),
 ]
 
 TODO = [
     ("F1, F2, F3", "SGS realization, bootstrap 수를 50개 배치로 추가(N = 100, 150)", "현재 N = 50 (배치 1)"),
     ("F6", "density 축을 ground truth 10개 데이터(E4)로 교체", "E4 데이터 있음, F6 미반영"),
     ("F6-B", "파라미터가 더 많은 커널의 적합 안정성", "실험 없음"),
-    ("F7", "range × nugget grid에서 MSE와 UMG 동시 평가", "실험 없음"),
+    ("F7", "range × 두 번째 하이퍼파라미터 grid에서 MSE와 UMG 동시 평가", "완료: ground truth 10개, N = 50, grid 노드 2,890개 (results/raw/hyperparam_grid_surface/20261117T071222580635Z), 그림 반영"),
 ]
 
 CSS = """
