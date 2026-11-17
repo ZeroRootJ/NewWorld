@@ -1398,6 +1398,25 @@ def _f7_edges(vals, log):
     return 10.0 ** e if log else e
 
 
+F7_N_LEVELS = 14      # filled-contour bands per panel
+F7_FINE_N = 200       # display grid per axis for the bilinear upsampling
+
+
+def _f7_fine(xs, ys, z, ylog):
+    """Bilinear interpolation of the node means onto a fine display grid, done in
+    the plotted coordinates (log10 range; log10 of param2 where the y axis is log),
+    so contour bands are straight between nodes as drawn. Node values are kept
+    exactly; the domain is the node hull (no extrapolation)."""
+    from scipy.interpolate import RegularGridInterpolator
+    tx = np.log10(xs)
+    ty = np.log10(ys) if ylog else np.asarray(ys, float)
+    fx = np.linspace(tx[0], tx[-1], F7_FINE_N)
+    fy = np.linspace(ty[0], ty[-1], F7_FINE_N)
+    gy, gx = np.meshgrid(fy, fx, indexing="ij")
+    fz = RegularGridInterpolator((ty, tx), z, method="linear")(np.stack([gy, gx], axis=-1))
+    return 10.0 ** fx, (10.0 ** fy if ylog else fy), fz
+
+
 def _f7_grid(summ, method, metric):
     g = summ[(summ["method"] == method) & (summ["metric"] == metric)]
     xs = np.sort(g["range_equiv_m"].unique())
@@ -1440,8 +1459,8 @@ def figure_f7():
 
     note = (
         f"Real data. Colour = mean over {n_truths} ground truths (base case: range {truth['hmaj1']:g} m, nugget "
-        f"{truth['nug']:g}, n = {truth['n_samples_requested']} requested) at each grid node; each cell is one node "
-        f"(no interpolation). Fixed hyperparameters, no tuning; SGS and bootstrap N = {n_ens}. Grids: {grid_txt}. "
+        f"{truth['nug']:g}, n = {truth['n_samples_requested']} requested) at each grid node, drawn as filled "
+        f"contours of a bilinear interpolation between nodes (log axes in log space). Fixed hyperparameters, no tuning; SGS and bootstrap N = {n_ens}. Grids: {grid_txt}. "
         "x = range-equivalent: kriging/SGS spherical range; RBF ε = √(−ln 0.05)/x and GP length scale = "
         "x/√(−2 ln 0.05) (Gaussian kernel = 0.05 at x). GP: signal = 1 − noise in normalized units. Optima from grid "
         f"nodes (MSE min, UMG max). Source: {prov['source_run']} (cross-check vs multi-truth run: "
@@ -1465,8 +1484,13 @@ def figure_f7():
             zmin, zmax = float(np.min(z)), float(np.max(z))
             use_log = met == "mse" and zmax / zmin >= RATIO_LOG_THRESHOLD
             norm = LogNorm(zmin, zmax) if use_log else Normalize(zmin, zmax)
-            pc = ax.pcolormesh(_f7_edges(xs, True), _f7_edges(ys, F7_YLOG[m]), z, cmap=F7_CMAP[met],
-                               norm=norm, shading="flat", edgecolors="face", linewidth=0.0, rasterized=False)
+            levels = (np.geomspace(zmin, zmax, F7_N_LEVELS + 1) if use_log
+                      else np.linspace(zmin, zmax, F7_N_LEVELS + 1))
+            fx, fy, fz = _f7_fine(xs, ys, z, F7_YLOG[m])
+            pc = ax.contourf(fx, fy, fz, levels=levels, cmap=F7_CMAP[met], norm=norm, extend="neither")
+            ax.contour(fx, fy, fz, levels=levels[1:-1], colors="black", linewidths=0.25, alpha=0.45)
+            ax.set_xlim(xs[0], xs[-1])
+            ax.set_ylim(ys[0], ys[-1])
             ax.set_xscale("log")
             if F7_YLOG[m]:
                 ax.set_yscale("log")
@@ -1495,8 +1519,15 @@ def figure_f7():
             cb.set_label(F7_CBAR_LABEL[met], labelpad=1.5)
             cb.outline.set_linewidth(0.5)
             cax.tick_params(length=1.5, pad=1.0)
+            # contourf colourbars default to one tick per band edge -> pick a few readable ticks
             if use_log:
-                cax.xaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
+                tk = matplotlib.ticker.LogLocator(base=10, subs=(1.0, 2.0, 5.0)).tick_values(zmin, zmax)
+            else:
+                tk = matplotlib.ticker.MaxNLocator(nbins=4).tick_values(zmin, zmax)
+            tk = [t for t in tk if zmin <= t <= zmax]
+            cb.set_ticks(tk)
+            cb.set_ticklabels([f"{t:g}" for t in tk])
+            cax.xaxis.set_minor_locator(NullLocator())
             if row == 0:
                 cax.annotate(F7_TITLES[m], xy=(0.5, 1.0), xycoords="axes fraction", xytext=(0, 21),
                              textcoords="offset points", ha="center", va="bottom", fontweight="bold")
@@ -1521,7 +1552,7 @@ def figure_f7():
         panels.append((letter, (
             f"{F7_TITLES[m]}, {met.upper()} surface: mean over {n_truths} truths at each of the "
             f"{len(run_cfg['grids'][m]['range_levels_m'])}x{len(run_cfg['grids'][m]['param2_levels'])} grid nodes "
-            f"(pcolormesh, one cell per node, no interpolation); colour {'log' if use_log else 'linear'} scale "
+            f"(filled contours, {F7_N_LEVELS} bands, bilinear interpolation between nodes); colour {'log' if use_log else 'linear'} scale "
             f"{zmin:.4g}-{zmax:.4g}, colormap {F7_CMAP[met]} (bright = better). Filled star = {F7_BEST[met]} node "
             f"({own['range_equiv_m']:g} m, {own['param2_name']} {own['param2_value']:.4g}, {own['mean']:.4f}); "
             "hollow star = the other surface's optimum"
@@ -1533,8 +1564,9 @@ def figure_f7():
         f"cross-check {prov['checks']['crosscheck_verdict']}.",
         "colour scales are per panel (each panel has its own colourbar); MSE uses a log scale where "
         f"max/min >= {RATIO_LOG_THRESHOLD:g}.",
-        "cell edges are midpoints between nodes (log-midpoints on log axes) and half a step beyond the outer nodes; "
-        "the cell size carries no data.",
+        "contours: node means bilinearly interpolated on a {0}x{0} display grid in the plotted coordinates "
+        "(log10 on log axes); values between nodes are interpolated, not computed; domain = outer nodes, no "
+        "extrapolation; thin lines = band boundaries.".format(F7_FINE_N),
         "optima (results/processed/hyperparam_grid_surface/optima.csv), best vs runner-up node:",
     ]
     for _, r in opt.iterrows():
