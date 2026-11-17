@@ -11,12 +11,12 @@ INPUT FILES (read-only):
 
 PANELS:
   A: REAL DATA - MSE vs density; kriging and GP-MLE at full strength, SGS and RBF+bootstrap drawn faded (same data, alpha 0.32); mean +-1 std over 100 cells per level
-  B: REAL DATA - UMG vs density, same emphasis and statistics
-  C: REAL DATA - 90% interval coverage vs density, same emphasis and statistics; dashed gray line = nominal 0.90
+  B: REAL DATA - UMG vs density, same emphasis and statistics; RBF+bootstrap NOT drawn (user request 2026-11-17; its values are listed below)
+  C: REAL DATA - 90% interval coverage vs density, same emphasis and statistics; RBF+bootstrap NOT drawn (as B); dashed gray line = nominal 0.90
   D: REAL DATA - GP-MLE fitted practical range, one point per cell (100 per level = 10 truths x 10 sample sets), dashed line = ground-truth range 300 m
 
 DATA STATUS note printed in the figure margin:
-  DATA STATUS: 10 ground-truth realizations × 10 sample sets = 100 cells per level (ground-truth range 300 m); A–C: points = mean, bars = ±1 std (ddof = 1) pooled over all cells of a level; C: fraction of evaluated cells inside the central 90% predictive interval (kriging: normal-score interval back-transformed; SGS, RBF+bootstrap, GP-MLE: Gaussian mean ± z·std interval); D: one point per cell (100 per level; fitted practical range = RBF-kernel length scale converted at the 0.05 correlation cutoff; max/min over all points = 13.0×, log y axis). SGS and RBF+bootstrap ensemble N = 50 (batch 1); kriging and GP-MLE have no ensemble.
+  DATA STATUS: 10 ground-truth realizations × 10 sample sets = 100 cells per level (ground-truth range 300 m); A–C: points = mean, bars = ±1 std (ddof = 1) pooled over all cells of a level; C: fraction of evaluated cells inside the central 90% predictive interval (kriging: normal-score interval back-transformed; SGS, RBF+bootstrap, GP-MLE: Gaussian mean ± z·std interval); B, C: RBF+bootstrap not drawn (values in status file); D: one point per cell (100 per level; fitted practical range = RBF-kernel length scale converted at the 0.05 correlation cutoff; max/min over all points = 13.0×, log y axis). SGS and RBF+bootstrap ensemble N = 50 (batch 1); kriging and GP-MLE have no ensemble.
 
 DATA LIMITATIONS / FACTS ABOUT THE INPUTS:
   - evaluation: src/experiments/evaluate_multi_truth_axes.py at git 8e8c4a6 (git_dirty=True, dirty files ['results/processed/multi_truth_axes/']); 641 cells evaluated, 0 skipped; source results/raw/multi_truth_axes/20261116T222609599808Z (is_production_configuration=True).

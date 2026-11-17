@@ -146,6 +146,8 @@ F3_RIGHT_MM = 8.0
 # F3 panel D (100 points per level): deterministic horizontal spread (+- fraction of x),
 # marker area (pt^2) and alpha, chosen for readability only.
 F3_D_SPREAD_FRAC = 0.12
+# methods left out of F3 panels B (UMG) and C (coverage90) - user request 2026-11-17
+F3_BC_OMIT = ("rbf_bootstrap",)
 F3_D_MARKER_S = 3.0
 F3_D_ALPHA = 0.35
 F3_D_LOG_TICKS = (50, 100, 200, 300, 500, 1000, 2000)
@@ -846,12 +848,13 @@ def figure_f3(mt):
     faded = ("sgs", "rbf_bootstrap")
     if "coverage90" not in set(summ["metric"]):
         raise ValueError(f"{_rel(MTA_SUMMARY)} has no coverage90 for {ed['experiment']}.")
-    cov = summ[summ["metric"] == "coverage90"]
+    cov = summ[(summ["metric"] == "coverage90") & (~summ["method"].isin(F3_BC_OMIT))]
 
     note = (
         f"{_mt_axis_text(ed)} (ground-truth range {dens['truth_range_m']:g} m); A–C: {_mt_bar_text()}; "
         f"C: fraction of evaluated cells inside the central {COV90_NOMINAL:.0%} predictive interval (kriging: "
         f"normal-score interval back-transformed; SGS, RBF+bootstrap, GP-MLE: Gaussian mean ± z·std interval); "
+        f"B, C: RBF+bootstrap not drawn (values in status file); "
         f"D: one point per cell ({n_per} per level; fitted practical range = RBF-kernel length scale converted "
         f"at the 0.05 correlation cutoff; max/min over all points = {spread:.1f}×, "
         f"{'log' if use_log else 'linear'} y axis). {_mt_ensemble_text(mt)}."
@@ -862,9 +865,12 @@ def figure_f3(mt):
     ax_a, ax_b, ax_c, ax_d = (fig.add_subplot(gs[0, i]) for i in range(4))
 
     _plot_density_metric(ax_a, summ, dens, "mse", faded=faded)
-    _plot_density_metric(ax_b, summ, dens, "umg", faded=faded)
+    # B and C omit RBF+bootstrap (its UMG ~0.5 / coverage ~0.45 compresses the
+    # y range of the other methods); its values are in the status file.
+    bc_methods = [m for m in METHODS if m not in F3_BC_OMIT]
+    _plot_density_metric(ax_b, summ, dens, "umg", methods=bc_methods, faded=faded)
     ax_b.axhline(1.0, color="gray", linestyle="--", linewidth=0.6, zorder=1)
-    _plot_density_metric(ax_c, summ, dens, "coverage90", faded=faded)
+    _plot_density_metric(ax_c, summ, dens, "coverage90", methods=bc_methods, faded=faded)
     ax_c.axhline(COV90_NOMINAL, color="gray", linestyle="--", linewidth=0.6, zorder=1)
     ax_a.set_ylabel(MSE_LABEL)
     ax_b.set_ylabel(UMG_LABEL)
@@ -930,8 +936,10 @@ def figure_f3(mt):
         panels=[
             ("A", "REAL DATA - MSE vs density; kriging and GP-MLE at full strength, SGS and RBF+bootstrap "
                   f"drawn faded (same data, alpha 0.32); mean +-1 std over {n_per} cells per level"),
-            ("B", "REAL DATA - UMG vs density, same emphasis and statistics"),
-            ("C", f"REAL DATA - 90% interval coverage vs density, same emphasis and statistics; "
+            ("B", "REAL DATA - UMG vs density, same emphasis and statistics; RBF+bootstrap NOT drawn "
+                  "(user request 2026-11-17; its values are listed below)"),
+            ("C", f"REAL DATA - 90% interval coverage vs density, same emphasis and statistics; RBF+bootstrap "
+                  "NOT drawn (as B); "
                   f"dashed gray line = nominal {COV90_NOMINAL:.2f}"),
             ("D", f"REAL DATA - GP-MLE fitted practical range, one point per cell ({n_per} per level = "
                   f"{ed['n_truth']} truths x {ed['n_sets']} sample sets), dashed line = ground-truth range "

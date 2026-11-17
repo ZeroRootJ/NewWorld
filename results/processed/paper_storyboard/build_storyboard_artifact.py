@@ -34,7 +34,7 @@ FIGS = {
         stem="F3_gp_vs_sample_density", st=REAL,
         title="밀도에 따른 GP와 kriging",
         body=[
-            "레벨당 ground truth 10개 × 샘플셋 10개 = 100셀입니다(SGS, RBF+bootstrap은 N = 50). A는 MSE, B는 UMG, C는 90% 구간 coverage입니다. kriging과 GP-MLE를 진하게, 나머지 두 방법을 옅게 그렸습니다. C의 점선은 공칭값 0.90입니다.",
+            "레벨당 ground truth 10개 × 샘플셋 10개 = 100셀입니다(SGS, RBF+bootstrap은 N = 50). A는 MSE, B는 UMG, C는 90% 구간 coverage입니다. kriging과 GP-MLE를 진하게, 나머지 두 방법을 옅게 그렸습니다. B와 C에서는 RBF+bootstrap을 뺐습니다(UMG 0.48~0.52, coverage 0.44~0.48). C의 점선은 공칭값 0.90입니다.",
             "90% coverage는 각 방법이 내놓은 90% 예측 구간 안에 truth가 실제로 들어간 셀의 비율입니다. UMG를 계산하는 accuracy plot에서 p = 0.90인 한 점이고, UMG와 같은 계산 경로를 씁니다(kriging은 normal-score 구간의 back-transform, 나머지는 평균 ± 표준편차의 정규분포).",
             "D는 GP-MLE가 맞춘 practical range를 셀마다 점 하나로 찍은 것입니다(레벨당 100개, 로그 축). 점선은 ground-truth range 300 m입니다. 최소 57 m, 최대 740 m입니다.",
         ]),
