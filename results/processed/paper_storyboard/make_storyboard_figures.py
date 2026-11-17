@@ -1398,7 +1398,22 @@ def _f7_edges(vals, log):
     return 10.0 ** e if log else e
 
 
-F7_N_LEVELS = 14      # filled-contour bands per panel
+F7_TRUE_MARKER = {"kriging": "o", "sgs": "o", "rbf_bootstrap": "D", "gp": "D"}
+
+
+def _f7_true_point(method):
+    """Base-case truth on each method's axes. Kriging/SGS: (range, nugget) exactly.
+    RBF/GP: APPROXIMATE equivalent for visual comparison only (user request) --
+    x = 300 m on the same range-equivalent axis; GP noise = nugget (unit sill,
+    signal 1 - noise, same units); RBF smoothing = nugget / (1 - nugget), the
+    noise-to-signal ratio added to the unit-diagonal Gaussian kernel matrix."""
+    r, nug = F7_TRUE_POINT
+    if method == "rbf_bootstrap":
+        return r, nug / (1.0 - nug)
+    return r, nug
+
+
+F7_N_LEVELS = 14     # filled-contour bands per panel
 F7_FINE_N = 200       # display grid per axis for the bilinear upsampling
 
 
@@ -1463,7 +1478,8 @@ def figure_f7():
         f"contours of a bilinear interpolation between nodes (log axes in log space). Fixed hyperparameters, no tuning; SGS and bootstrap N = {n_ens}. Grids: {grid_txt}. "
         "x = range-equivalent: kriging/SGS spherical range; RBF ε = √(−ln 0.05)/x and GP length scale = "
         "x/√(−2 ln 0.05) (Gaussian kernel = 0.05 at x). GP: signal = 1 − noise in normalized units. Optima from grid "
-        f"nodes (MSE min, UMG max). Source: {prov['source_run']} (cross-check vs multi-truth run: "
+        f"nodes (MSE min, UMG max). Diamond = approximate true-case equivalent for comparison only: GP noise = nugget, "
+        f"RBF λ = nugget/(1 − nugget) (noise-to-signal ratio). Source: {prov['source_run']} (cross-check vs multi-truth run: "
         f"{prov['checks']['crosscheck_verdict']})."
     )
     plot_h = 2 * (F7_CBAR_MM + F7_CBAR_GAP_MM + F7_PANEL_MM) + F7_ROW_GAP_MM
@@ -1510,9 +1526,9 @@ def figure_f7():
                     zorder=6, clip_on=False)
             ax.plot(own["range_equiv_m"], own["param2_value"], linestyle="none", marker="*", markersize=8,
                     markerfacecolor="black", markeredgecolor="white", markeredgewidth=0.4, zorder=7, clip_on=False)
-            if m in ("kriging", "sgs"):
-                ax.plot(*F7_TRUE_POINT, linestyle="none", marker="o", markersize=4, markerfacecolor="none",
-                        markeredgecolor="black", markeredgewidth=0.8, path_effects=halo, zorder=5, clip_on=False)
+            ax.plot(*_f7_true_point(m), linestyle="none", marker=F7_TRUE_MARKER[m], markersize=4,
+                    markerfacecolor="none", markeredgecolor="black", markeredgewidth=0.8, path_effects=halo,
+                    zorder=5, clip_on=False)
             cb = fig.colorbar(pc, cax=cax, orientation="horizontal")
             cax.xaxis.set_ticks_position("top")
             cax.xaxis.set_label_position("top")
@@ -1537,14 +1553,17 @@ def figure_f7():
     fig.legend(
         handles=[
             Line2D([0], [0], linestyle="none", marker="*", markersize=7, markerfacecolor="black",
-                   markeredgecolor="black", label="Optimum of this surface (grid node)"),
+                   markeredgecolor="black", label="Optimum, this surface"),
             Line2D([0], [0], linestyle="none", marker="*", markersize=7, markerfacecolor="none",
-                   markeredgecolor="black", markeredgewidth=0.8, label="Optimum of the other surface"),
+                   markeredgecolor="black", markeredgewidth=0.8, label="Optimum, other surface"),
             Line2D([0], [0], linestyle="none", marker="o", markersize=4, markerfacecolor="none",
                    markeredgecolor="black", markeredgewidth=0.8,
                    label=f"True base case ({truth['hmaj1']:g} m, {truth['nug']:g})"),
+            Line2D([0], [0], linestyle="none", marker="D", markersize=4, markerfacecolor="none",
+                   markeredgecolor="black", markeredgewidth=0.8,
+                   label="Approx. true-case equivalent (RBF, GP)"),
         ],
-        loc="upper center", bbox_to_anchor=(0.5, 1.0), ncol=3, borderaxespad=0.3,
+        loc="upper center", bbox_to_anchor=(0.5, 1.0), ncol=4, borderaxespad=0.3,
     )
 
     panels = []
@@ -1556,7 +1575,9 @@ def figure_f7():
             f"{zmin:.4g}-{zmax:.4g}, colormap {F7_CMAP[met]} (bright = better). Filled star = {F7_BEST[met]} node "
             f"({own['range_equiv_m']:g} m, {own['param2_name']} {own['param2_value']:.4g}, {own['mean']:.4f}); "
             "hollow star = the other surface's optimum"
-            + ("; open circle = true base-case point." if m in ("kriging", "sgs") else ".")
+            + ("; open circle = true base-case point." if m in ("kriging", "sgs") else
+               f"; open diamond = APPROXIMATE base-case equivalent ({_f7_true_point(m)[0]:g} m, "
+               f"{_f7_true_point(m)[1]:.4g}), for visual comparison only.")
         )))
     limits = [
         f"source run {prov['source_run']}: status {prov['checks']['manifest_status']}, failed points "
