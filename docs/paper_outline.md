@@ -25,18 +25,19 @@ goodness를 동시에 고려하면 두 response surface의 최적점이 서로 �
 
 | 결론 | 그림 | 내용 | 상태 |
 |---|---|---|---|
-| 1-a | F1 | MSE·UMG, 3개 축(range/nugget/density), 4개 방법 | 실제 데이터 |
-| 1-a | F2 | Base case calibration 곡선, 예측 분산 vs density | 실제 데이터 |
-| 1-b | F3 | 밀도별 GP vs kriging, GP fitted range | 실제 데이터 |
+| 1-a | F1 | MSE·UMG, 3개 축(range/nugget/density), 4개 방법 | 실제 데이터 (ground truth 10개, N = 50, 2026-11-17) |
+| 1-a | F2 | Base case calibration 곡선, 예측 분산 vs density | 실제 데이터 (ground truth 10개, N = 50, 2026-11-17) |
+| 1-b | F3 | 밀도별 GP vs kriging(MSE, UMG, 90% coverage), GP fitted range | 실제 데이터 (ground truth 10개 × 샘플셋 10개, N = 50, 2026-11-17) |
 | 1-b | F4 | GP fitted range·nugget vs truth (10 realization) | 실제 데이터 |
 | 1-b | F5 | 이방성 range·variogram(A, B), 4개 방법 비교(C) | **보류 (2026-11-16 사용자 결정, 스토리보드에서 제외)** |
 | 1-b | F6 | 파라미터 수 vs 필요 데이터량 | B는 placeholder |
 | 2 | F7 | Accuracy·UMG response surface, 4개 방법 고정 하이퍼파라미터 grid | 실제 데이터 (2026-11-17) |
 
 ## 그림을 채우는 데 필요한 실험
-- range/nugget 축 4개 방법을 여러 ground-truth realization으로 재실행 (현재 레벨당 1개)
-- N_BOOTSTRAP / SGS N_REALIZATIONS를 최종 설정으로 재실행 (현재 둘 다 10)
-- density 축 ground-truth realization 확장 (현재 1개, 샘플 배치 replicate만 10)
+- ~~range/nugget 축 4개 방법을 여러 ground-truth realization으로 재실행~~ 완료 2026-11-17 (E2, E3: ground truth 10개)
+- ~~density 축 ground-truth realization 확장~~ 완료 2026-11-17 (E4: ground truth 10개 × 샘플셋 10개)
+- SGS realization / bootstrap 수: 현재 N = 50 (batch 1). 50개 배치 추가로 N = 100, 150 가능 (E1 기준 선택값 150)
+- F6 A를 E4(ground truth 10개) 데이터로 교체
 - (보류) 이방성 축 본편 (F5-C); F5-A(300/600 m)와 F5-B(900/300 m)의 파라미터 세트 통일
 - 파라미터 수 vs 데이터량 (F6-B)
 - ~~(range × nugget) 하이퍼파라미터 grid에서 MSE·UMG 동시 평가 (F7)~~ 완료 2026-11-17
