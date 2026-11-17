@@ -3,16 +3,18 @@ data that already exists, plus clearly marked placeholders where no experiment
 has been run yet.
 
 NO SIMULATION IS RUN HERE. This script only READS existing CSV/JSON files under
-results/processed/ (and two integer constants from src/experiments/) and draws.
-results/raw/ is never touched.
+results/processed/ (plus, read-only, the multi_truth_axes run_config.json named
+in results/processed/multi_truth_axes/evaluation_provenance.json, for the
+ground-truth parameters of each cell) and draws. results/raw/ is never modified.
 
 Figures (results/figures/paper_storyboard/, each as vector PDF + 300 dpi PNG +
 a ``.status.txt`` sidecar):
 
   F1 (1-a)  accuracy (MSE) vs calibration (UMG) along range / nugget / density
-  F2 (1-a)  base-case accuracy plot + mean predictive variance vs density
+            [multi_truth_axes E2 / E3 / E4]
+  F2 (1-a)  base-case accuracy plot [E5] + mean predictive variance vs density [E4]
   F3 (1-b)  kriging vs GP-MLE along sample density (MSE, UMG, 90% coverage)
-            + GP-MLE fitted range
+            + GP-MLE fitted range [E4]
   F4 (1-b)  GP-MLE fitted range / nugget vs ground truth (10 realizations/level)
   F5 (1-b)  anisotropy: true range vs azimuth, variogram check, PLACEHOLDER metrics
   F6 (1-b)  hyperparameter stability vs density: real (isotropic) + PLACEHOLDER
@@ -48,6 +50,7 @@ import textwrap
 from pathlib import Path
 
 import matplotlib
+import matplotlib.ticker  # noqa: F401  (F3 panel D log-axis labels)
 import numpy as np
 import pandas as pd
 
@@ -58,23 +61,33 @@ from matplotlib.lines import Line2D  # noqa: E402
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(_REPO_ROOT))
 
-from src.experiments.rbf_bootstrap import N_BOOTSTRAP  # noqa: E402
-from src.experiments.sgs import N_REALIZATIONS  # noqa: E402
+from src.evaluation import calc_umg  # noqa: E402
+from src.experiments.base_case import NX, NY  # noqa: E402
+from src.experiments.evaluate_multi_truth_axes import read_metrics_csv  # noqa: E402
+from src.experiments.evaluate_sample_replicate_axis import (  # noqa: E402
+    VARIANCE_SOURCE_FILES,
+    VARIANCE_SOURCE_IS_MC_BACKTRANSFORM,
+)
 
 PROCESSED = _REPO_ROOT / "results" / "processed"
 FIGURES_DIR = _REPO_ROOT / "results" / "figures" / "paper_storyboard"
 
 # --- inputs (all read-only) ---------------------------------------------------
-RANGE_METRICS = PROCESSED / "range_axis" / "metrics.csv"
-NUGGET_METRICS = PROCESSED / "nugget_axis" / "metrics.csv"
+# F1-F3: multi-truth evaluation (src/experiments/evaluate_multi_truth_axes.py)
+MTA_DIR = PROCESSED / "multi_truth_axes"
+MTA_METRICS = MTA_DIR / "metrics.csv"
+MTA_SUMMARY = MTA_DIR / "metrics_summary.csv"
+MTA_HYPER = MTA_DIR / "hyperparameters.csv"
+MTA_CELLS = MTA_DIR / "evaluation_cells.csv"
+MTA_PROV = MTA_DIR / "evaluation_provenance.json"
+MTA_CURVES = MTA_DIR / "accuracy_plot_curves.csv"   # written by make_base_case_curves.py
+MTA_EXP = {"range": "E2", "nugget": "E3", "density": "E4", "base": "E5"}
+# F4-F6: single-truth / per-axis inputs (unchanged)
 REPL_SUMMARY = PROCESSED / "sample_replicate_axis" / "metrics_summary.csv"
 REPL_SEEDS = PROCESSED / "sample_replicate_axis" / "replicate_seeds.json"
 REPL_EXTRA = PROCESSED / "sample_replicate_axis" / "extra_density_levels_record.json"
 REPL_LENGTH = PROCESSED / "sample_replicate_axis" / "length_scale_by_replicate.csv"
 REPL_VAR_SOURCES = PROCESSED / "sample_replicate_axis" / "variance_metric_sources.csv"
-REPL_COV90_SUMMARY = PROCESSED / "sample_replicate_axis" / "coverage90_summary.csv"
-REPL_COV90 = PROCESSED / "sample_replicate_axis" / "coverage90.csv"
-BASE_CURVES = PROCESSED / "base_case" / "accuracy_plot_curves.csv"
 RANGE_GP_REAL = PROCESSED / "range_axis" / "gp_hyperparameters_by_realization.csv"
 NUGGET_GP_REAL = PROCESSED / "nugget_axis" / "gp_hyperparameters_by_realization.csv"
 ANISO_AZIMUTH = PROCESSED / "anisotropy_azimuth_sweep" / "true_range_by_azimuth.csv"
@@ -129,6 +142,12 @@ F3_PLOT_HEIGHT_MM = 50.0
 F3_LEGEND_NCOL = 7
 # wider right margin so panel D's x label is not clipped at 190 mm
 F3_RIGHT_MM = 8.0
+# F3 panel D (100 points per level): deterministic horizontal spread (+- fraction of x),
+# marker area (pt^2) and alpha, chosen for readability only.
+F3_D_SPREAD_FRAC = 0.12
+F3_D_MARKER_S = 3.0
+F3_D_ALPHA = 0.35
+F3_D_LOG_TICKS = (50, 100, 200, 300, 500, 1000, 2000)
 
 MSE_LABEL = "MSE (porosity %²)"
 UMG_LABEL = "UMG (1 = calibrated)"
@@ -288,16 +307,6 @@ def _status_file(stem, inputs, panels, in_figure_note, limits=(), needed=()):
 # ---------------------------------------------------------------------------
 # Data loading (with the checks the status notes rely on)
 # ---------------------------------------------------------------------------
-def _load_tidy(path: Path) -> pd.DataFrame:
-    df = pd.read_csv(path)
-    counts = df.groupby(["axis_level", "method", "metric"]).size()
-    if counts.max() != 1:
-        raise ValueError(f"{_rel(path)}: expected 1 row per (level, method, metric).")
-    if set(df["method"]) != set(METHODS):
-        raise ValueError(f"{_rel(path)}: unexpected method set {sorted(set(df['method']))}.")
-    return df
-
-
 def _load_summary() -> pd.DataFrame:
     df = pd.read_csv(REPL_SUMMARY)
     df["axis_level"] = df["axis_level"].astype(str)
@@ -384,22 +393,213 @@ def _replicate_n_text(dens) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Multi-truth evaluation data (F1-F3)
+# ---------------------------------------------------------------------------
+def _load_multi_truth() -> dict:
+    """Everything F1-F3 need from results/processed/multi_truth_axes/, with the
+    checks every DATA STATUS number relies on. All counts are derived here.
+
+    Error bars everywhere in F1-F3 are the evaluator's POOLED mean / std
+    (ddof=1) over all cells of a level (metrics_summary.csv); this is
+    re-derived from metrics.csv and asserted equal."""
+    prov = json.loads(MTA_PROV.read_text(encoding="utf-8"))
+    if len(prov["batch_sets"]) != 1 or len(prov["sources"]) != 1:
+        raise ValueError(f"{_rel(MTA_PROV)}: expected one source and one batch set.")
+    batches = ",".join(str(b) for b in prov["batch_sets"][0])
+    src_dir = _REPO_ROOT / prov["sources"][0]["source"]
+    cfg = json.loads((src_dir / "run_config.json").read_text(encoding="utf-8"))
+    cfg_cells = pd.DataFrame(cfg["cells"])
+
+    metrics = read_metrics_csv(MTA_METRICS)
+    summary = read_metrics_csv(MTA_SUMMARY)
+    for name, df in (("metrics", metrics), ("summary", summary)):
+        if set(df["method"]) != set(METHODS):
+            raise ValueError(f"multi_truth_axes {name}: unexpected methods {sorted(set(df['method']))}.")
+    ens = summary[summary["method"].isin(["sgs", "rbf_bootstrap"])]
+    if set(ens["batches"]) != {batches} or ens["n_ensemble"].nunique() != 1:
+        raise ValueError(f"{_rel(MTA_SUMMARY)}: ensemble rows not all batch set '{batches}' with one N.")
+    n_ens = int(ens["n_ensemble"].iloc[0])
+    key = ["experiment", "axis_level", "method", "metric"]
+    if summary.groupby(key).size().max() != 1:
+        raise ValueError(f"{_rel(MTA_SUMMARY)}: more than one row per {key}.")
+    # pooled mean / std (ddof=1) / n re-derived from the per-cell table
+    re = metrics.groupby(key)["value"].agg(mean="mean", std=lambda v: float(np.std(v, ddof=1)),
+                                          n="count")
+    chk = summary.set_index(key)[["mean", "std", "n"]].join(re, rsuffix="_re")
+    if not (np.allclose(chk["mean"], chk["mean_re"], rtol=1e-12, atol=0)
+            and np.allclose(chk["std"].fillna(0), chk["std_re"].fillna(0), rtol=1e-9, atol=1e-15)
+            and (chk["n"] == chk["n_re"]).all()):
+        raise ValueError("metrics_summary.csv does not equal the pooled mean/std/n of metrics.csv.")
+
+    cells = pd.read_csv(MTA_CELLS, dtype={"axis_level": str})
+    cells = cells.merge(cfg_cells[["experiment", "config_key", "hmaj1", "hmin1", "nug"]],
+                        on=["experiment", "config_key"], how="left", validate="many_to_one")
+    if cells[["hmaj1", "hmin1", "nug"]].isna().any().any():
+        raise ValueError("evaluation_cells.csv rows without a run_config cell.")
+    n_grid = NX * NY
+    if not ((cells["n_cells_evaluated"] + cells["n_samples_actual"]) == n_grid).all():
+        raise ValueError(f"n_cells_evaluated + n_samples_actual != NX*NY = {n_grid} for some cell.")
+
+    exp = {}
+    for axis, e in MTA_EXP.items():
+        c = cells[cells["experiment"] == e]
+        per = c.groupby("axis_level").agg(n_cells=("truth_seed", "size"), n_truth=("truth_seed", "nunique"),
+                                          n_sets=("sample_seed", "nunique"))
+        if per.nunique().max() != 1:
+            raise ValueError(f"{e}: unequal cell counts per level {per.to_dict()}")
+        s = summary[summary["experiment"] == e]
+        if set(s["n"]) != {int(per["n_cells"].iloc[0])}:
+            raise ValueError(f"{e}: summary n {sorted(set(s['n']))} != cells per level {per['n_cells'].iloc[0]}")
+        exp[axis] = {
+            "experiment": e, "summary": s, "cells": c,
+            "n_cells": int(per["n_cells"].iloc[0]), "n_truth": int(per["n_truth"].iloc[0]),
+            "n_sets": int(per["n_sets"].iloc[0]), "n_levels": int(len(per)),
+            "truth_seeds": sorted(int(v) for v in c["truth_seed"].unique()),
+            "sample_seeds": sorted(int(v) for v in c["sample_seed"].unique()),
+            "n_req": sorted(int(v) for v in c["n_samples_requested"].unique()),
+            "n_act": sorted(int(v) for v in c["n_samples_actual"].unique()),
+            "hmaj1": sorted(float(v) for v in c["hmaj1"].unique()),
+            "hmin1": sorted(float(v) for v in c["hmin1"].unique()),
+            "nug": sorted(float(v) for v in c["nug"].unique()),
+        }
+
+    # density axis: x = cell-MEAN actual (post grid-cell dedup) sample fraction
+    d = exp["density"]["cells"]
+    if set(d["axis_level"]) != set(DENSITY_LEVELS):
+        raise ValueError(f"E4 levels {sorted(set(d['axis_level']))} != {DENSITY_LEVELS}")
+    n_actual, n_requested, warn = {}, {}, {}
+    for lvl in DENSITY_LEVELS:
+        sub = d[d["axis_level"] == lvl]
+        n_actual[lvl] = [int(v) for v in sub["n_samples_actual"]]
+        if sub["n_samples_requested"].nunique() != 1:
+            raise ValueError(f"E4 level {lvl}: more than one n_samples_requested.")
+        n_requested[lvl] = int(sub["n_samples_requested"].iloc[0])
+        w = sub["sgs_grid_node_warnings_b1"]
+        warn[lvl] = (int((w > 0).sum()), int(np.nansum(w)), int(w.isna().sum()))
+    if len(exp["density"]["hmaj1"]) != 1 or exp["density"]["hmaj1"] != exp["density"]["hmin1"]:
+        raise ValueError("E4 ground truth is not a single isotropic range.")
+    dens = {
+        "n_actual": n_actual, "n_requested": n_requested, "n_grid": n_grid,
+        "pct": {lvl: 100.0 * float(np.mean(n_actual[lvl])) / n_grid for lvl in DENSITY_LEVELS},
+        "truth_range_m": exp["density"]["hmaj1"][0], "sgs_warnings": warn,
+    }
+
+    hyper = pd.read_csv(MTA_HYPER, dtype={"axis_level": str})
+    gp_range = hyper[(hyper["experiment"] == MTA_EXP["density"]) & (hyper["method"] == "gp_mle")
+                     & (hyper["parameter"] == "gp_practical_range_m")].copy()
+    counts = gp_range.groupby("axis_level").size()
+    if set(counts.index) != set(DENSITY_LEVELS) or set(counts) != {exp["density"]["n_cells"]}:
+        raise ValueError(f"{_rel(MTA_HYPER)}: unexpected E4 gp_practical_range_m rows {counts.to_dict()}")
+
+    curves = pd.read_csv(MTA_CURVES, dtype={"batches": str}, keep_default_na=False,
+                         na_values={"n_ensemble": [""]})
+    return {
+        "prov": prov, "src_dir": src_dir, "batches": batches, "n_ens": n_ens,
+        "project_default_n_ensemble": cfg.get("project_default_n_ensemble"),
+        "exp": exp, "dens": dens, "gp_range": gp_range, "curves": curves,
+    }
+
+
+def _mt_ensemble_text(mt) -> str:
+    return (f"SGS and RBF+bootstrap ensemble N = {mt['n_ens']} (batch {mt['batches']}); kriging and GP-MLE "
+            "have no ensemble")
+
+
+def _mt_bar_text() -> str:
+    return "points = mean, bars = ±1 std (ddof = 1) pooled over all cells of a level"
+
+
+def _mt_axis_text(a) -> str:
+    """'10 ground-truth realizations x 1 sample set (n = 121 of 125 requested) = 10 cells per level'."""
+    n = (f"n = {a['n_act'][0]} of {a['n_req'][0]} requested" if len(a["n_act"]) == 1
+         else f"n = {a['n_act'][0]}-{a['n_act'][-1]}")
+    sets = f"1 sample set ({n})" if a["n_sets"] == 1 else f"{a['n_sets']} sample sets"
+    return f"{a['n_truth']} ground-truth realizations × {sets} = {a['n_cells']} cells per level"
+
+
+def _plot_level_metric(ax, summ, metric):
+    """mean +- 1 std on a LINEAR numeric level axis; methods offset additively
+    by a fraction of the level spacing so error bars do not overlap."""
+    levels = np.array(sorted(summ["axis_level"].astype(float).unique()))
+    step = float(np.min(np.diff(levels)))
+    for m_idx, method in enumerate(METHODS):
+        off = (m_idx - (len(METHODS) - 1) / 2) * METHOD_X_OFFSET_FRAC * step
+        sub = summ[(summ["method"] == method) & (summ["metric"] == metric)].copy()
+        sub["x"] = sub["axis_level"].astype(float)
+        sub = sub.sort_values("x")
+        ax.errorbar(sub["x"] + off, sub["mean"], yerr=sub["std"], color=METHOD_COLORS[method],
+                    marker=METHOD_MARKERS[method], markersize=3.6, linewidth=1.0,
+                    elinewidth=0.5, capsize=1.5, capthick=0.5, zorder=3)
+    ax.set_xticks(levels)
+    return levels
+
+
+def _level_table(summ, metric) -> str:
+    t = summ[summ["metric"] == metric].copy()
+    t["x"] = t["axis_level"].astype(float)
+    parts = []
+    for method in METHODS:
+        s = t[t["method"] == method].sort_values("x")
+        parts.append(f"{method}: " + ", ".join(
+            f"{r.axis_level} {r.mean:.3g}±{r.std:.2g}" for r in s.itertuples()))
+    return "; ".join(parts)
+
+
+def _density_table(summ, metric) -> str:
+    t = summ[summ["metric"] == metric].set_index(["method", "axis_level"])
+    return "; ".join(
+        f"{m}: " + ", ".join(f"{lvl}% {t.loc[(m, lvl), 'mean']:.3g}±{t.loc[(m, lvl), 'std']:.2g}"
+                             for lvl in DENSITY_LEVELS)
+        for m in METHODS)
+
+
+def _mt_inputs(mt, extra=()):
+    return [
+        f"{_rel(MTA_SUMMARY)} (read with read_metrics_csv; pooled mean, std (ddof=1), n per experiment, "
+        "axis_level, method, n_ensemble, batches, metric) - re-derived from "
+        f"{_rel(MTA_METRICS)} at run time and asserted equal",
+        f"{_rel(MTA_CELLS)} (n_samples_requested, n_samples_actual, n_cells_evaluated, sample_seed, "
+        "sgs_grid_node_warnings_b1, config_key)",
+        f"{_rel(MTA_PROV)} (source run folder, batch set)",
+        f"{_rel(mt['src_dir'])}/run_config.json (read-only; hmaj1 / hmin1 / nug of every cell, "
+        "joined on experiment + config_key)",
+        *extra,
+    ]
+
+
+def _mt_common_limits(mt):
+    p = mt["prov"]
+    return [
+        f"evaluation: {p['generated_by']} at git {p['git_commit'][:7]} (git_dirty={p['git_dirty']}, dirty files "
+        f"{p['git_dirty_files']}); {p['n_cells_evaluated']} cells evaluated, {p['n_cells_skipped_incomplete']} "
+        f"skipped; source {p['sources'][0]['source']} (is_production_configuration="
+        f"{p['sources'][0]['is_production_configuration']}).",
+        f"ensemble size: SGS and RBF+bootstrap N = {mt['n_ens']} from batch set '{mt['batches']}' "
+        f"(run_config project_default_n_ensemble = {mt['project_default_n_ensemble']} is NOT what these runs "
+        "used); kriging / GP-MLE rows have no ensemble.",
+        "error bars: POOLED mean +- 1 std (ddof=1) over all cells of a level, exactly metrics_summary.csv. "
+        "On the density axis the cells are truth x sample-set combinations, so the std mixes between-truth "
+        "and between-sample-set variation (no nested decomposition).",
+    ]
+
+
+# ---------------------------------------------------------------------------
 # F1
 # ---------------------------------------------------------------------------
-def figure_f1(dens, summary):
+def figure_f1(mt):
     stem = "F1_accuracy_vs_calibration_three_axes"
-    rng_df = _load_tidy(RANGE_METRICS)
-    nug_df = _load_tidy(NUGGET_METRICS)
-    n_rep = int(summary["n_replicates"].unique().item())
-    n_range_lvls = rng_df["axis_level"].nunique()
-    n_nug_lvls = nug_df["axis_level"].nunique()
-
+    ex = mt["exp"]
+    dens = mt["dens"]
+    range_txt, nugget_txt = _mt_axis_text(ex["range"]), _mt_axis_text(ex["nugget"])
+    if range_txt == nugget_txt:
+        rn_txt = (f"Range axis ({ex['range']['n_levels']} levels) and nugget axis "
+                  f"({ex['nugget']['n_levels']} levels): {range_txt}")
+    else:
+        rn_txt = (f"Range axis ({ex['range']['n_levels']} levels): {range_txt}. Nugget axis "
+                  f"({ex['nugget']['n_levels']} levels): {nugget_txt}")
     note = (
-        f"range axis ({n_range_lvls} levels) and nugget axis ({n_nug_lvls} levels): 1 ground-truth "
-        f"realization and 1 sample set per level (no error bars possible). Density axis: 1 ground-truth "
-        f"realization, {n_rep} sample-location replicates per level (points = mean, bars = ±1 std). "
-        f"RBF+bootstrap N_BOOTSTRAP = {N_BOOTSTRAP}; SGS N_REALIZATIONS = {N_REALIZATIONS} – "
-        "to be re-run at production settings."
+        f"{rn_txt}. Density axis: {_mt_axis_text(ex['density'])}. "
+        f"{_mt_bar_text().capitalize()}. {_mt_ensemble_text(mt)}."
     )
     fig, rect = _new_figure(plot_height_mm=84.0, status_text=note, top_mm=13.0)
     gs = fig.add_gridspec(2, 3, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3],
@@ -410,21 +610,18 @@ def figure_f1(dens, summary):
         axes[1, c] = fig.add_subplot(gs[1, c], sharex=axes[0, c],
                                      sharey=axes[1, 0] if c > 0 else None)
 
-    tidy_cols = [
-        (rng_df, "Ground-truth variogram range (m)"),
-        (nug_df, "Ground-truth nugget (fraction of sill)"),
+    level_cols = [
+        (ex["range"]["summary"], "Ground-truth variogram range (m)"),
+        (ex["nugget"]["summary"], "Ground-truth nugget (fraction of sill)"),
     ]
-    for c, (df, xlabel) in enumerate(tidy_cols):
+    level_values = []
+    for c, (summ, xlabel) in enumerate(level_cols):
         for r, metric in enumerate(["mse", "umg"]):
-            ax = axes[r, c]
-            for method in METHODS:
-                sub = df[(df["method"] == method) & (df["metric"] == metric)].sort_values("axis_level")
-                ax.plot(sub["axis_level"], sub["value"], color=METHOD_COLORS[method],
-                        marker=METHOD_MARKERS[method], markersize=3.6)
-            ax.set_xticks(sorted(df["axis_level"].unique()))
+            lv = _plot_level_metric(axes[r, c], summ, metric)
+        level_values.append(lv)
         axes[1, c].set_xlabel(xlabel)
     for r, metric in enumerate(["mse", "umg"]):
-        _plot_density_metric(axes[r, 2], summary, dens, metric)
+        _plot_density_metric(axes[r, 2], ex["density"]["summary"], dens, metric)
     _style_density_axis(axes[1, 2], dens, xlabel=False)
     axes[1, 2].set_xlabel(DENSITY_XLABEL_SHORT)
 
@@ -446,38 +643,45 @@ def figure_f1(dens, summary):
     fig.legend(handles=handles, loc="upper center", ncol=5, bbox_to_anchor=(0.5, 1.0),
                columnspacing=1.8)
 
+    er, en, ed = ex["range"], ex["nugget"], ex["density"]
     lines = _status_file(
         stem,
-        inputs=[
-            f"{_rel(RANGE_METRICS)} (columns axis_level, method, metric, value; metrics mse, umg)",
-            f"{_rel(NUGGET_METRICS)} (columns axis_level, method, metric, value; metrics mse, umg)",
-            f"{_rel(REPL_SUMMARY)} (columns axis_level, method, metric, mean, std, n_replicates; metrics mse, umg)",
-            f"{_rel(REPL_SEEDS)} + {_rel(REPL_EXTRA)} (n_samples_actual -> x positions)",
-            f"{_rel(REPL_VAR_SOURCES)} (n_cells_averaged, only to recover grid size {dens['n_grid']})",
-            f"src/experiments/rbf_bootstrap.py N_BOOTSTRAP = {N_BOOTSTRAP}; "
-            f"src/experiments/sgs.py N_REALIZATIONS = {N_REALIZATIONS}",
-        ],
+        inputs=_mt_inputs(mt),
         panels=[
-            ("A", "REAL DATA - MSE vs ground-truth range, 4 methods"),
-            ("B", "REAL DATA - MSE vs ground-truth nugget, 4 methods"),
-            ("C", "REAL DATA - MSE vs sample density, 4 methods, mean +-1 std (ddof=1 per metrics_summary.csv)"),
-            ("D", "REAL DATA - UMG vs ground-truth range"),
-            ("E", "REAL DATA - UMG vs ground-truth nugget"),
-            ("F", "REAL DATA - UMG vs sample density, mean +-1 std"),
+            ("A", f"REAL DATA - MSE vs ground-truth range ({er['experiment']}), 4 methods, mean +-1 std over "
+                  f"{er['n_cells']} cells per level"),
+            ("B", f"REAL DATA - MSE vs ground-truth nugget ({en['experiment']}), mean +-1 std over "
+                  f"{en['n_cells']} cells per level"),
+            ("C", f"REAL DATA - MSE vs sample density ({ed['experiment']}), mean +-1 std over "
+                  f"{ed['n_cells']} cells per level"),
+            ("D", "REAL DATA - UMG vs ground-truth range, same statistics as A"),
+            ("E", "REAL DATA - UMG vs ground-truth nugget, same statistics as B"),
+            ("F", "REAL DATA - UMG vs sample density, same statistics as C"),
         ],
         in_figure_note="DATA STATUS: " + note,
-        limits=[
-            f"range_axis/metrics.csv: exactly 1 row per (level, method, metric) -> 1 realization per level; "
-            f"levels {sorted(rng_df['axis_level'].unique())} m.",
-            f"nugget_axis/metrics.csv: exactly 1 row per (level, method, metric) -> 1 realization per level; "
-            f"levels {sorted(nug_df['axis_level'].unique())}.",
-            f"density axis: n_replicates = {n_rep} at every level; same truth (truth_seed "
-            f"{dens['truth_seed']}, range {dens['truth_range_m']:g} m); sample seeds {dens['sample_seeds']} "
-            "reused at every level.",
-            "density x positions are the replicate-MEAN actual sample fraction: " + _replicate_n_text(dens) + ".",
-            "density-axis methods are offset multiplicatively in x (+-7% steps) only so error bars do not "
-            "overlap; tick positions are the true level values.",
+        limits=_mt_common_limits(mt) + [
+            f"range axis {er['experiment']}: levels {[float(v) for v in level_values[0]]} m (hmaj1 = hmin1), "
+            f"nug {er['nug']}; truth seeds {er['truth_seeds']}; sample seed(s) {er['sample_seeds']} shared by "
+            f"every truth and level; n_samples_actual {er['n_act']} (requested {er['n_req']}).",
+            f"nugget axis {en['experiment']}: levels {[float(v) for v in level_values[1]]} (fraction of sill), "
+            f"range {en['hmaj1']} m; truth seeds {en['truth_seeds']}; sample seed(s) {en['sample_seeds']}; "
+            f"n_samples_actual {en['n_act']} (requested {en['n_req']}).",
+            f"density axis {ed['experiment']}: truth range {ed['hmaj1']} m, nug {ed['nug']}; truth seeds "
+            f"{ed['truth_seeds']} x sample seeds {ed['sample_seeds']} (the same sample seeds at every truth "
+            "and level).",
+            "density x positions are the cell-MEAN actual sample fraction of the "
+            f"{NX}x{NY} = {dens['n_grid']} grid, from evaluation_cells.csv n_samples_actual: "
+            + _replicate_n_text(dens) + ".",
+            "methods are offset in x only so error bars do not overlap (range / nugget: additive "
+            f"+-{METHOD_X_OFFSET_FRAC:g} x level spacing steps; density: multiplicative +-"
+            f"{METHOD_X_OFFSET_FRAC:.0%} steps); tick positions are the true level values.",
             "UMG row (D-F) shares one y axis; MSE row (A-C) has independent y axes.",
+            "plotted values (level mean+-std), MSE range axis: " + _level_table(er["summary"], "mse"),
+            "UMG range axis: " + _level_table(er["summary"], "umg"),
+            "MSE nugget axis: " + _level_table(en["summary"], "mse"),
+            "UMG nugget axis: " + _level_table(en["summary"], "umg"),
+            "MSE density axis: " + _density_table(ed["summary"], "mse"),
+            "UMG density axis: " + _density_table(ed["summary"], "umg"),
         ],
     )
     return _save(fig, stem, lines)
@@ -486,29 +690,62 @@ def figure_f1(dens, summary):
 # ---------------------------------------------------------------------------
 # F2
 # ---------------------------------------------------------------------------
-def figure_f2(dens, summary):
+def figure_f2(mt):
     stem = "F2_base_case_calibration_and_variance"
-    curves = pd.read_csv(BASE_CURVES)
-    if set(curves["method"]) != set(METHODS):
-        raise ValueError(f"{_rel(BASE_CURVES)}: unexpected methods.")
-    if "variance_mean" not in set(summary["metric"]):
-        raise ValueError(f"{_rel(REPL_SUMMARY)} has no variance_mean metric.")
-    src = pd.read_csv(REPL_VAR_SOURCES)
-    units = sorted(src["units"].unique())
-    if units != ["porosity %^2"]:
-        raise ValueError(f"variance units are not uniform: {units}")
-    src_files = src.groupby("method")["variance_source_file"].unique()
-    if any(len(v) != 1 for v in src_files):
-        raise ValueError("more than one variance source file per method.")
-    mc_methods = sorted(src[src["is_monte_carlo_backtransform_approximation"]]["method"].unique())
-    n_rep = int(summary["n_replicates"].unique().item())
+    ex = mt["exp"]
+    dens = mt["dens"]
+    eb, ed = ex["base"], ex["density"]
+    curves = mt["curves"]
+    if set(curves["method"]) != set(METHODS) or set(curves["experiment"]) != {eb["experiment"]}:
+        raise ValueError(f"{_rel(MTA_CURVES)}: unexpected methods / experiment.")
+    c_ens = curves[curves["method"].isin(["sgs", "rbf_bootstrap"])]
+    if set(c_ens["n_ensemble"].astype(int)) != {mt["n_ens"]} or set(c_ens["batches"]) != {mt["batches"]}:
+        raise ValueError(f"{_rel(MTA_CURVES)}: ensemble N / batches differ from metrics_summary.csv.")
+    n_p = int(curves.groupby("method").size().iloc[0])
+    # UMG of the stored curves vs metrics_summary (E5 has 1 cell -> mean = the cell value)
+    eb_umg = eb["summary"][eb["summary"]["metric"] == "umg"].set_index("method")["mean"]
+    for method in METHODS:
+        sub = curves[curves["method"] == method].sort_values("p_interval")
+        g = calc_umg(sub["p_interval"].values, sub["fraction_in"].values)
+        if not np.isclose(g, eb_umg[method], rtol=0.0, atol=1e-12):
+            raise ValueError(f"{_rel(MTA_CURVES)} {method}: UMG {g} != metrics_summary {eb_umg[method]}")
+    mc_methods = sorted(m for m in METHODS if VARIANCE_SOURCE_IS_MC_BACKTRANSFORM[m])
+    # The in-figure wording below names exactly one Monte Carlo back-transformed method.
+    if len(mc_methods) != 1:
+        raise ValueError(f"expected exactly one MC back-transform variance method, got {mc_methods}")
+    n_native = len(METHODS) - 1
+    mc_txt = (f"{mc_methods[0]}'s is a Monte Carlo back-transform of its normal-score variance, the other "
+              f"{ {2: 'two', 3: 'three', 4: 'four'}.get(n_native, str(n_native)) } are native")
+    # E5 cell vs any other cell with the same configuration (shared run folders)
+    all_cells = pd.concat([a["cells"] for a in ex.values()], ignore_index=True)
+    e5_cell = eb["cells"]
+    if len(e5_cell) != 1:
+        raise ValueError(f"expected 1 {eb['experiment']} cell, got {len(e5_cell)}")
+    e5_cell = e5_cell.iloc[0]
+    run_cols = [c for c in all_cells.columns if c.startswith("run_dir_")]
+    twins = all_cells[(all_cells["config_key"] == e5_cell["config_key"])
+                      & (all_cells["experiment"] != eb["experiment"])]
+    for _, t in twins.iterrows():
+        if any(t[c] != e5_cell[c] for c in run_cols):
+            raise ValueError(f"{eb['experiment']} and {t['experiment']} share config_key "
+                             f"{e5_cell['config_key']} but not all {run_cols}.")
+    twin_txt = (
+        "panel A: the " + eb["experiment"] + " cell (config_key " + e5_cell["config_key"] + ") has the same "
+        "configuration as " + "; ".join(
+            f"{t['experiment']} level {t['axis_level']} / truth {t['truth_seed']} / sample_rep {t['sample_rep']}"
+            for _, t in twins.iterrows())
+        + f" and identical run folders ({', '.join(run_cols)} all equal, checked at run time)."
+        if len(twins) else
+        f"panel A: no other evaluated cell shares the {eb['experiment']} config_key {e5_cell['config_key']}."
+    )
+    if "variance_mean" not in set(ed["summary"]["metric"]):
+        raise ValueError(f"{_rel(MTA_SUMMARY)} has no variance_mean for {ed['experiment']}.")
 
     note = (
-        "A: base case = 1 ground-truth realization, 1 sample set. B: 1 ground-truth realization, "
-        f"{n_rep} sample-location replicates per density level (mean ±1 std); all variances in "
-        f"porosity %² – kriging's is a Monte Carlo back-transform of its normal-score variance, "
-        f"the other three are native. RBF+bootstrap N_BOOTSTRAP = {N_BOOTSTRAP}; SGS N_REALIZATIONS = "
-        f"{N_REALIZATIONS} – to be re-run at production settings."
+        f"A: base case ({eb['experiment']}) = 1 ground-truth realization (truth seed {eb['truth_seeds'][0]}), "
+        f"1 sample set (n = {eb['n_act'][0]} of {eb['n_req'][0]} requested). "
+        f"B: {_mt_axis_text(ed)}; {_mt_bar_text()}. All variances in porosity %² – {mc_txt}. "
+        f"{_mt_ensemble_text(mt)}."
     )
     fig, rect = _new_figure(plot_height_mm=62.0, status_text=note, top_mm=12.0)
     gs = fig.add_gridspec(1, 2, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3],
@@ -528,7 +765,7 @@ def figure_f2(dens, summary):
     ax_a.set_ylabel("Fraction of truth in interval")
     ax_a.grid(True)
 
-    _plot_density_metric(ax_b, summary, dens, "variance_mean")
+    _plot_density_metric(ax_b, ed["summary"], dens, "variance_mean")
     _style_density_axis(ax_b, dens)
     ax_b.set_ylabel("Mean predictive variance (porosity %²)")
     ax_b.grid(True)
@@ -544,38 +781,44 @@ def figure_f2(dens, summary):
     lines = _status_file(
         stem,
         inputs=[
-            f"{_rel(BASE_CURVES)} (columns method, p_interval, fraction_in)",
-            f"{_rel(REPL_SUMMARY)} (metric variance_mean; columns mean, std, n_replicates)",
-            f"{_rel(REPL_VAR_SOURCES)} (columns units, variance_source_file, "
-            "is_monte_carlo_backtransform_approximation - unit/provenance check)",
-            f"{_rel(REPL_SEEDS)} + {_rel(REPL_EXTRA)} (n_samples_actual -> x positions)",
-            f"src/experiments/rbf_bootstrap.py N_BOOTSTRAP = {N_BOOTSTRAP}; "
-            f"src/experiments/sgs.py N_REALIZATIONS = {N_REALIZATIONS}",
-        ],
+            f"{_rel(MTA_CURVES)} (columns method, n_ensemble, batches, p_interval, fraction_in) - written by "
+            "results/processed/multi_truth_axes/make_base_case_curves.py from the evaluator's own "
+            "evaluate_cell calc_umg inputs",
+        ] + _mt_inputs(mt, extra=[
+            "src/experiments/evaluate_sample_replicate_axis.py VARIANCE_SOURCE_FILES / "
+            "VARIANCE_SOURCE_IS_MC_BACKTRANSFORM (variance provenance text)",
+        ]),
         panels=[
-            ("A", "REAL DATA - base-case accuracy plot (fraction of truth inside each nominal interval), "
-                  f"{curves.groupby('method').size().iloc[0]} probability levels per method, 1:1 reference line"),
-            ("B", "REAL DATA - variance_mean vs sample density, mean +-1 std over replicates"),
+            ("A", f"REAL DATA - base-case ({eb['experiment']}) accuracy plot (fraction of truth inside each "
+                  f"nominal interval), {n_p} probability levels per method, 1:1 reference line"),
+            ("B", f"REAL DATA - variance_mean vs sample density ({ed['experiment']}), mean +-1 std over "
+                  f"{ed['n_cells']} cells per level"),
         ],
         in_figure_note="DATA STATUS: " + note,
-        limits=[
-            "panel A: single ground-truth realization and single sample set (base case); the curves "
-            "come from base_case/accuracy_plot_curves.csv as stored.",
-            f"panel B: variance_mean WAS present in sample_replicate_axis/metrics_summary.csv, so the "
-            f"{n_rep}-replicate mean/std is used (sample_density_axis/metrics.csv single-run values are not used).",
-            "panel B variance source arrays (variance_metric_sources.csv): "
-            + "; ".join(f"{m}: {src_files[m][0]}" for m in METHODS)
-            + f". units all '{units[0]}'. Monte Carlo back-transform approximation: {mc_methods}.",
-            "panel B x positions are the replicate-MEAN actual sample fraction: " + _replicate_n_text(dens) + ".",
+        limits=_mt_common_limits(mt) + [
+            f"panel A cell: {eb['experiment']} truth seed {eb['truth_seeds'][0]}, sample seed "
+            f"{eb['sample_seeds'][0]}, range {eb['hmaj1']} m, nug {eb['nug']}. The UMG of each stored curve "
+            "is recomputed here with src.evaluation.calc_umg and asserted equal (atol 1e-12) to the "
+            f"{eb['experiment']} umg in metrics_summary.csv.",
+            f"panel A UMG per method: " + ", ".join(f"{m} {eb_umg[m]:.3f}" for m in METHODS) + ".",
+            twin_txt,
+            "panel B variance sources (VARIANCE_SOURCE_FILES): " + "; ".join(
+                f"{m}: {VARIANCE_SOURCE_FILES[m]}" for m in METHODS)
+            + f"; SGS / RBF+bootstrap variance recomputed by the evaluator from the N = {mt['n_ens']} "
+            "ensemble (ddof=1) and asserted equal to the saved map. Monte Carlo back-transform "
+            f"approximation: {mc_methods}. Units are not stored in the multi_truth_axes outputs; "
+            "porosity %² follows those source definitions.",
+            "panel B x positions are the cell-MEAN actual sample fraction: " + _replicate_n_text(dens) + ".",
             "panel B y axis is linear and autoscaled; an error bar (mean - 1 std) may extend below 0 "
             "where std > mean - this is the plotted +-1 std, not a negative variance.",
+            "panel B plotted values (level mean+-std): " + _density_table(ed["summary"], "variance_mean"),
         ],
     )
     return _save(fig, stem, lines)
 
 
 # ---------------------------------------------------------------------------
-# F3
+# Single-truth replicate-axis loader (used by F6 only)
 # ---------------------------------------------------------------------------
 def _load_gp_lengths() -> pd.DataFrame:
     df = pd.read_csv(REPL_LENGTH, comment="#")
@@ -587,70 +830,65 @@ def _load_gp_lengths() -> pd.DataFrame:
     return gp
 
 
-def _load_cov90_summary() -> pd.DataFrame:
-    """coverage90_summary.csv (written by
-    results/processed/sample_replicate_axis/make_coverage90.py) in the same
-    (axis_level, method, metric, mean, std, n_replicates) shape as
-    metrics_summary.csv, so _plot_density_metric can draw it unchanged."""
-    df = pd.read_csv(REPL_COV90_SUMMARY, comment="#")
-    df["axis_level"] = df["axis_level"].astype(str)
-    if set(df["metric"]) != {"coverage90"}:
-        raise ValueError(f"{_rel(REPL_COV90_SUMMARY)}: unexpected metrics {sorted(set(df['metric']))}.")
-    if set(df["axis_level"]) != set(DENSITY_LEVELS) or set(df["method"]) != set(METHODS):
-        raise ValueError(f"{_rel(REPL_COV90_SUMMARY)}: unexpected levels/methods.")
-    if df.groupby(["axis_level", "method"]).size().max() != 1:
-        raise ValueError(f"{_rel(REPL_COV90_SUMMARY)}: duplicate (level, method) rows.")
-    return df
-
-
-def figure_f3(dens, summary):
+# ---------------------------------------------------------------------------
+# F3
+# ---------------------------------------------------------------------------
+def figure_f3(mt):
     stem = "F3_gp_vs_sample_density"
-    gp = _load_gp_lengths()
-    n_rep = int(gp.groupby("axis_level").size().iloc[0])
-    spread = float(gp["length_scale_m"].max() / gp["length_scale_m"].min())
+    ed = mt["exp"]["density"]
+    dens = mt["dens"]
+    summ = ed["summary"]
+    gp = mt["gp_range"]
+    n_per = ed["n_cells"]
+    spread = float(gp["value"].max() / gp["value"].min())
     use_log = spread >= RATIO_LOG_THRESHOLD
     faded = ("sgs", "rbf_bootstrap")
-    cov = _load_cov90_summary()
-    n_rep_cov = int(cov["n_replicates"].unique().item())
-    if n_rep_cov != n_rep:
-        raise ValueError(f"coverage90 n_replicates {n_rep_cov} != GP length rows per level {n_rep}.")
+    if "coverage90" not in set(summ["metric"]):
+        raise ValueError(f"{_rel(MTA_SUMMARY)} has no coverage90 for {ed['experiment']}.")
+    cov = summ[summ["metric"] == "coverage90"]
 
     note = (
-        f"1 ground-truth realization (range {dens['truth_range_m']:g} m), {n_rep} sample-location "
-        f"replicates per density level; A–C: mean ±1 std; C: fraction of evaluated cells inside the "
-        f"central {COV90_NOMINAL:.0%} predictive interval (kriging: normal-score interval back-transformed; "
-        f"SGS, RBF+bootstrap, GP-MLE: Gaussian mean ± z·std interval); D: one point per replicate (fitted "
-        f"practical range = RBF-kernel length scale converted at the 0.05 correlation cutoff; max/min "
-        f"over all points = {spread:.1f}×, {'log' if use_log else 'linear'} y axis). "
-        f"RBF+bootstrap N_BOOTSTRAP = {N_BOOTSTRAP}; SGS N_REALIZATIONS = {N_REALIZATIONS} – to be "
-        "re-run at production settings."
+        f"{_mt_axis_text(ed)} (ground-truth range {dens['truth_range_m']:g} m); A–C: {_mt_bar_text()}; "
+        f"C: fraction of evaluated cells inside the central {COV90_NOMINAL:.0%} predictive interval (kriging: "
+        f"normal-score interval back-transformed; SGS, RBF+bootstrap, GP-MLE: Gaussian mean ± z·std interval); "
+        f"D: one point per cell ({n_per} per level; fitted practical range = RBF-kernel length scale converted "
+        f"at the 0.05 correlation cutoff; max/min over all points = {spread:.1f}×, "
+        f"{'log' if use_log else 'linear'} y axis). {_mt_ensemble_text(mt)}."
     )
     fig, rect = _new_figure(plot_height_mm=F3_PLOT_HEIGHT_MM, status_text=note, top_mm=14.0,
                             right_mm=F3_RIGHT_MM)
     gs = fig.add_gridspec(1, 4, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3], wspace=0.42)
     ax_a, ax_b, ax_c, ax_d = (fig.add_subplot(gs[0, i]) for i in range(4))
 
-    _plot_density_metric(ax_a, summary, dens, "mse", faded=faded)
-    _plot_density_metric(ax_b, summary, dens, "umg", faded=faded)
+    _plot_density_metric(ax_a, summ, dens, "mse", faded=faded)
+    _plot_density_metric(ax_b, summ, dens, "umg", faded=faded)
     ax_b.axhline(1.0, color="gray", linestyle="--", linewidth=0.6, zorder=1)
-    _plot_density_metric(ax_c, cov, dens, "coverage90", faded=faded)
+    _plot_density_metric(ax_c, summ, dens, "coverage90", faded=faded)
     ax_c.axhline(COV90_NOMINAL, color="gray", linestyle="--", linewidth=0.6, zorder=1)
     ax_a.set_ylabel(MSE_LABEL)
     ax_b.set_ylabel(UMG_LABEL)
     ax_c.set_ylabel(COV90_LABEL)
 
-    # Deterministic (non-random) horizontal spread of the replicate points.
-    spread_frac = np.linspace(-0.10, 0.10, n_rep)
+    # Deterministic (non-random) horizontal spread of the per-cell points,
+    # ordered by (truth_seed, sample_rep).
+    spread_frac = np.linspace(-F3_D_SPREAD_FRAC, F3_D_SPREAD_FRAC, n_per)
     for lvl in DENSITY_LEVELS:
-        sub = gp[gp["axis_level"] == lvl].sort_values("replicate")
+        sub = gp[gp["axis_level"] == lvl].sort_values(["truth_seed", "sample_rep"])
         ax_d.scatter(
-            dens["pct"][lvl] * (1.0 + spread_frac), sub["length_scale_m"],
-            s=9, marker=METHOD_MARKERS["gp_mle"], facecolors=METHOD_COLORS["gp_mle"],
-            edgecolors="none", alpha=0.75, zorder=3,
+            dens["pct"][lvl] * (1.0 + spread_frac), sub["value"],
+            s=F3_D_MARKER_S, marker=METHOD_MARKERS["gp_mle"], facecolors=METHOD_COLORS["gp_mle"],
+            edgecolors="none", alpha=F3_D_ALPHA, zorder=3,
         )
     ax_d.axhline(dens["truth_range_m"], color="black", linestyle="--", linewidth=0.7, zorder=2)
     if use_log:
         ax_d.set_yscale("log")
+        # plain-number major ticks inside the data range (default log ticks
+        # label only 10^2 here)
+        lo, hi = ax_d.get_ylim()
+        ticks = [t for t in F3_D_LOG_TICKS if lo <= t <= hi]
+        ax_d.set_yticks(ticks)
+        ax_d.set_yticklabels([f"{t:g}" for t in ticks])
+        ax_d.yaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
     else:
         ax_d.set_ylim(bottom=0)
     ax_d.set_ylabel("GP-MLE fitted practical range (m)")
@@ -679,52 +917,57 @@ def figure_f3(dens, summary):
     fig.legend(handles=handles, loc="upper center", ncol=F3_LEGEND_NCOL, bbox_to_anchor=(0.5, 1.0),
                columnspacing=1.4)
 
-    per_level = gp.groupby("axis_level")["length_scale_m"].agg(["min", "max"]).loc[DENSITY_LEVELS]
+    per_level = gp.groupby("axis_level")["value"].describe(percentiles=[0.5]).loc[DENSITY_LEVELS]
+    n_above = {lvl: int((gp[gp["axis_level"] == lvl]["value"] > dens["truth_range_m"]).sum())
+               for lvl in DENSITY_LEVELS}
     lines = _status_file(
         stem,
-        inputs=[
-            f"{_rel(REPL_SUMMARY)} (metrics mse, umg; columns mean, std, n_replicates)",
-            f"{_rel(REPL_COV90_SUMMARY)} (read with comment='#'; metric coverage90; columns mean, std, "
-            "n_replicates) - written by results/processed/sample_replicate_axis/make_coverage90.py; "
-            f"per-replicate values in {_rel(REPL_COV90)}",
-            f"{_rel(REPL_LENGTH)} (read with comment='#'; rows method == gp_mle; column length_scale_m)",
-            f"{_rel(REPL_SEEDS)} + {_rel(REPL_EXTRA)} (n_samples_actual -> x positions; hmaj1 -> truth range)",
-            f"src/experiments/rbf_bootstrap.py N_BOOTSTRAP = {N_BOOTSTRAP}; "
-            f"src/experiments/sgs.py N_REALIZATIONS = {N_REALIZATIONS}",
-        ],
+        inputs=_mt_inputs(mt, extra=[
+            f"{_rel(MTA_HYPER)} (rows experiment == {ed['experiment']}, method == gp_mle, parameter == "
+            "gp_practical_range_m; column value)",
+        ]),
         panels=[
             ("A", "REAL DATA - MSE vs density; kriging and GP-MLE at full strength, SGS and RBF+bootstrap "
-                  "drawn faded (same data, alpha 0.32)"),
-            ("B", "REAL DATA - UMG vs density, same emphasis"),
-            ("C", f"REAL DATA - 90% interval coverage vs density, same emphasis, mean +-1 std (ddof=1); "
+                  f"drawn faded (same data, alpha 0.32); mean +-1 std over {n_per} cells per level"),
+            ("B", "REAL DATA - UMG vs density, same emphasis and statistics"),
+            ("C", f"REAL DATA - 90% interval coverage vs density, same emphasis and statistics; "
                   f"dashed gray line = nominal {COV90_NOMINAL:.2f}"),
-            ("D", f"REAL DATA - GP-MLE fitted practical range, one point per replicate ({n_rep} per level), "
-                  f"dashed line = ground-truth range {dens['truth_range_m']:g} m"),
+            ("D", f"REAL DATA - GP-MLE fitted practical range, one point per cell ({n_per} per level = "
+                  f"{ed['n_truth']} truths x {ed['n_sets']} sample sets), dashed line = ground-truth range "
+                  f"{dens['truth_range_m']:g} m"),
         ],
         in_figure_note="DATA STATUS: " + note,
-        limits=[
-            "length_definition in the CSV: " + str(gp["length_definition"].unique()[0]),
-            f"panel C coverage90 = accuracy-plot fraction_in evaluated at exactly p = {COV90_NOMINAL:.2f} "
-            "(strict inequality, conditioning-sample cells excluded), computed through the SAME per-method "
-            "path as UMG in src/experiments/evaluate_sample_replicate_axis.py:evaluate_one_cell; "
-            "make_coverage90.py re-derives UMG from the same calls and asserts it equals metrics.csv (atol 1e-12).",
+        limits=_mt_common_limits(mt) + [
+            "panel D practical range = sqrt(-2 ln 0.05) x fitted RBF length scale "
+            "(evaluate_multi_truth_axes.py, qc_nugget_axis.GP_PRACTICAL_RANGE_FACTOR).",
+            f"panel C coverage90 = accuracy-plot fraction_in at exactly p = {COV90_NOMINAL:.2f} from the SAME "
+            "call that produces UMG in src/experiments/evaluate_multi_truth_axes.py:evaluate_cell (p grid = "
+            "default 20 levels + 0.90; strict inequality; conditioning-sample cells excluded).",
             "panel C kriging: normal-score central interval back-transformed per cell (kriging_fraction_in, "
             "same tail parameters as the point back-transform).",
             "panel C SGS, RBF+bootstrap and GP-MLE: Gaussian percentile method, interval = mean +- z*std from "
-            "(sgs_mean_map, sgs_var_map) / (bootstrap_mean_map, bootstrap_var_map) / (posterior_mean_map, "
-            "posterior_var_map) - NOT empirical quantiles of the SGS realizations or bootstrap replicates.",
-            f"panel C SGS ensemble size N_REALIZATIONS = {N_REALIZATIONS} (src/experiments/sgs.py); "
-            f"RBF+bootstrap N_BOOTSTRAP = {N_BOOTSTRAP}.",
+            f"the N = {mt['n_ens']} ensemble mean / variance (SGS, RBF+bootstrap) or the GP posterior mean / "
+            "variance - NOT empirical quantiles of the SGS realizations or bootstrap replicates.",
             "panel C y axis autoscaled to include every mean +-1 std bar (checked at run time; no clipping).",
             f"panel D y-axis rule: log if max/min >= {RATIO_LOG_THRESHOLD:g}x; observed {spread:.2f}x -> "
             f"{'log' if use_log else 'linear'}.",
-            "panel D per-level min-max (m): " + "; ".join(
-                f"level {lvl}: {per_level.loc[lvl, 'min']:.0f}-{per_level.loc[lvl, 'max']:.0f}"
+            "panel D per-level min / median / max (m) and count above the true range: " + "; ".join(
+                f"{lvl}%: {per_level.loc[lvl, 'min']:.0f} / {per_level.loc[lvl, '50%']:.0f} / "
+                f"{per_level.loc[lvl, 'max']:.0f}, {n_above[lvl]} of {n_per} above"
                 for lvl in DENSITY_LEVELS),
-            "panel D points are spread horizontally by a fixed (non-random) +-10% pattern for visibility only.",
-            "single ground-truth realization (truth_seed "
-            f"{dens['truth_seed']}); only sample locations vary between replicates.",
-            "x positions are the replicate-MEAN actual sample fraction: " + _replicate_n_text(dens) + ".",
+            f"panel D points are spread horizontally by a fixed (non-random) +-{F3_D_SPREAD_FRAC:.0%} pattern "
+            "ordered by (truth_seed, sample_rep), for visibility only; marker alpha "
+            f"{F3_D_ALPHA:g}.",
+            f"truth seeds {ed['truth_seeds']} x sample seeds {ed['sample_seeds']}; the same sample seeds at "
+            "every truth and level.",
+            "SGS grid-node warnings (evaluation_cells.csv sgs_grid_node_warnings_b1; cells with >0 / total "
+            "warnings / cells without the field): " + "; ".join(
+                f"{lvl}%: {dens['sgs_warnings'][lvl][0]} / {dens['sgs_warnings'][lvl][1]} / "
+                f"{dens['sgs_warnings'][lvl][2]}" for lvl in DENSITY_LEVELS) + ".",
+            "x positions are the cell-MEAN actual sample fraction: " + _replicate_n_text(dens) + ".",
+            "plotted values (level mean+-std), MSE: " + _density_table(summ, "mse"),
+            "UMG: " + _density_table(summ, "umg"),
+            "coverage90: " + _density_table(summ, "coverage90"),
         ],
     )
     return _save(fig, stem, lines)
@@ -1199,13 +1442,13 @@ def figure_f7():
 
 def main():
     _setup_style()
-    dens = _density_info()
-    summary = _load_summary()
+    dens = _density_info()   # F6 (single-truth replicate axis)
+    mt = _load_multi_truth()  # F1-F3 (multi_truth_axes E2-E5)
     written = []
     for name, fn, args in (
-        ("F1", figure_f1, (dens, summary)),
-        ("F2", figure_f2, (dens, summary)),
-        ("F3", figure_f3, (dens, summary)),
+        ("F1", figure_f1, (mt,)),
+        ("F2", figure_f2, (mt,)),
+        ("F3", figure_f3, (mt,)),
         ("F4", figure_f4, ()),
         ("F5", figure_f5, ()),
         ("F6", figure_f6, (dens,)),
