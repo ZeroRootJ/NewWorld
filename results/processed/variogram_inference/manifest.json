@@ -1,0 +1,60 @@
+{
+  "experiment": "variogram_inference",
+  "timestamp": "2026-11-17T17:56:23.729665+00:00",
+  "git_commit": "b616658330db7497b58987d96363d247ef3a5019",
+  "git_dirty": true,
+  "git_dirty_files": [
+    "results/processed/variogram_inference/"
+  ],
+  "params": {
+    "source_cells_csv": "results/processed/multi_truth_axes/evaluation_cells.csv",
+    "source_run": "results/raw/multi_truth_axes/20261116T222609599808Z",
+    "samples_source": "<run_dir_kriging_b>/samples.csv (exact kriging conditioning data)",
+    "nscore": "src.nscore.nscore on Por (asserted == saved NPor, atol 1e-10)",
+    "n_cells": 641,
+    "domain_extent_m": 1000.0,
+    "lag_rule": "lag_dist = mean nearest-neighbour distance of the cell's samples; lag_tol = 0.5 * lag_dist; nlag = floor(MAX_LAG_M / lag_dist) + 1 (gamv bin centres 0, lag_dist, ..., <= MAX_LAG_M); MAX_LAG_M = 0.5 * domain extent = 500.0 m; omnidirectional (atol=90, bandh=9999, azi=0); isill=1",
+    "gamv": {
+      "tmin": -9999.0,
+      "tmax": 9999.0,
+      "azi": 0.0,
+      "atol": 90.0,
+      "bandh": 9999.0,
+      "isill": 1,
+      "max_lag_m": 500.0,
+      "lag_tol_fraction": 0.5
+    },
+    "npairs_note": "npairs = distinct point pairs = gamv npp / 4 (ordered pairs x omni double count); gamv index 0 (self pairs) and empty bins dropped",
+    "fit_rule": "single spherical structure, total sill fixed 1.0: gamma(h) = nug + (1 - nug) * Sph(h; range); nug in [0.0, 0.999], range in [lag_dist, 1000.0] m; lags with < 30 distinct pairs excluded; weighted least squares (scipy.optimize.least_squares, method='trf') with w_j = npairs_j / h_j^2 (gstat fit.method = 7, the gstat default); deterministic multi-start grid nug0 in [0.0, 0.2, 0.4, 0.6, 0.8] x range0 in geomspace(lag_dist, 1000.0, 6); lowest cost kept. fit_rmse = unweighted RMSE over used lags.",
+    "fit": {
+      "sill": 1.0,
+      "nug_bounds": [
+        0.0,
+        0.999
+      ],
+      "range_bounds": [
+        "lag_dist_m",
+        1000.0
+      ],
+      "min_pairs_for_fit": 30,
+      "min_lags_ok": 3,
+      "multistart_nuggets": [
+        0.0,
+        0.2,
+        0.4,
+        0.6,
+        0.8
+      ],
+      "multistart_n_ranges": 6,
+      "weights": "w_j = npairs_j / h_j^2 (gstat fit.method = 7, the gstat default)",
+      "bound_flag_rtol": 0.001
+    },
+    "runtime_seconds": 63.173117876052856
+  },
+  "seed": null,
+  "code_entrypoint": "src/experiments/infer_variograms.py",
+  "output_files": [
+    "experimental_variograms.csv",
+    "fitted_variograms.csv"
+  ]
+}

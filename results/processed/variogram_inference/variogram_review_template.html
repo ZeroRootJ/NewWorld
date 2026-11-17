@@ -1,0 +1,427 @@
+<title>Variogram Review</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* layout: toolbar on top; cell list | variogram plot | pick panel, stacking to one column on phones */
+:root{
+  --bg:#f5f6f8; --surface:#ffffff; --fg:#1b2330; --muted:#5b6676; --line:#d9dee6; --grid:#e8ecf1;
+  --accent:#1f5f8b; --pick:#c8641a; --auto:#1f5f8b; --truth:#7a8494; --pt:#1b2330;
+  --ok:#1f7a4d; --ok-bg:#e3f3ea; --warn:#9a6200; --warn-bg:#fbefd6; --edit:#c8641a; --edit-bg:#fbe9dc;
+  --sel:#e6eef5;
+  --sans:"IBM Plex Sans KR","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#12161c; --surface:#1a2029; --fg:#e4e9f0; --muted:#9aa6b6; --line:#2e3744; --grid:#252d38;
+  --accent:#7db8e0; --pick:#f0a060; --auto:#7db8e0; --truth:#8d97a6; --pt:#e4e9f0;
+  --ok:#6fcf9b; --ok-bg:#173326; --warn:#e8b860; --warn-bg:#3a2c10; --edit:#f0a060; --edit-bg:#3a2516;
+  --sel:#223040; color-scheme:dark } }
+:root[data-theme="dark"]{
+  --bg:#12161c; --surface:#1a2029; --fg:#e4e9f0; --muted:#9aa6b6; --line:#2e3744; --grid:#252d38;
+  --accent:#7db8e0; --pick:#f0a060; --auto:#7db8e0; --truth:#8d97a6; --pt:#e4e9f0;
+  --ok:#6fcf9b; --ok-bg:#173326; --warn:#e8b860; --warn-bg:#3a2c10; --edit:#f0a060; --edit-bg:#3a2516;
+  --sel:#223040; color-scheme:dark }
+body{background:var(--bg);color:var(--fg);font-family:var(--sans);font-size:14px;line-height:1.55}
+.wrap{max-width:1280px;margin:0 auto;padding-block:22px 48px;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));
+  display:flex;flex-direction:column;gap:16px}
+h1{font-size:24px;font-weight:600;margin:0}
+.lede{color:var(--muted);margin:4px 0 0;max-width:80ch}
+.status-line{display:flex;flex-wrap:wrap;gap:8px 16px;font-size:13px;color:var(--muted);font-variant-numeric:tabular-nums}
+.status-line b{color:var(--fg);font-weight:600}
+.conn{font-size:12.5px}
+.toolbar{display:flex;flex-wrap:wrap;gap:10px 14px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:10px 12px}
+.seg{display:flex;flex-wrap:wrap;gap:4px}
+.seg button{font:inherit;font-size:13px;border:1px solid var(--line);background:transparent;color:var(--fg);padding:4px 10px;border-radius:4px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--surface)}
+label.inl{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--muted)}
+select,input[type=number]{font:inherit;font-size:13px;color:var(--fg);background:var(--surface);border:1px solid var(--line);border-radius:4px;padding:3px 6px}
+button:focus-visible,select:focus-visible,input:focus-visible,summary:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.main{display:grid;grid-template-columns:240px minmax(0,1fr) 280px;gap:14px;align-items:start}
+@media (max-width:980px){.main{grid-template-columns:minmax(0,1fr)}}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:6px;min-width:0}
+.list{max-height:620px;overflow-y:auto}
+@media (max-width:980px){.list{max-height:260px}}
+.list button{display:grid;grid-template-columns:10px 1fr auto;gap:8px;align-items:center;width:100%;text-align:left;font:inherit;font-size:13px;
+  background:transparent;color:var(--fg);border:0;border-bottom:1px solid var(--grid);padding:6px 10px;cursor:pointer;font-variant-numeric:tabular-nums}
+.list button[aria-current="true"]{background:var(--sel)}
+.list .sub{color:var(--muted);font-family:var(--mono);font-size:11.5px}
+.dot{width:8px;height:8px;border-radius:50%;border:1.5px solid var(--muted)}
+.dot.edited{background:var(--edit);border-color:var(--edit)}
+.dot.confirmed{background:var(--ok);border-color:var(--ok)}
+.listhead{font-size:12px;color:var(--muted);padding:8px 10px;border-bottom:1px solid var(--line)}
+.plotbox{padding:10px 12px 6px}
+.plotbox h2{font-size:15px;font-weight:600;margin:0 0 2px}
+.plotbox .meta{font-family:var(--mono);font-size:12px;color:var(--muted)}
+svg{display:block;width:100%;height:auto}
+svg text{fill:var(--muted);font-family:var(--sans);font-size:11px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12.5px;color:var(--muted);padding:4px 2px 6px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.side{padding:12px;display:flex;flex-direction:column;gap:14px}
+.side h3{margin:0;font-size:13px;font-weight:600;color:var(--muted);letter-spacing:.04em}
+.field{display:flex;flex-direction:column;gap:4px}
+.field .row{display:flex;gap:8px;align-items:center}
+.field input[type=range]{flex:1;min-width:0;accent-color:var(--pick)}
+.field input[type=number]{width:84px;font-family:var(--mono)}
+.cmp{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+.cmp th,.cmp td{padding:4px 6px;border-bottom:1px solid var(--grid);text-align:right}
+.cmp th:first-child,.cmp td:first-child{text-align:left;color:var(--muted);font-weight:400}
+.cmp thead th{color:var(--muted);font-weight:500;font-size:12px}
+.btns{display:flex;flex-wrap:wrap;gap:6px}
+.btn{font:inherit;font-size:13px;border:1px solid var(--line);background:transparent;color:var(--fg);padding:6px 10px;border-radius:4px;cursor:pointer}
+.btn.primary{background:var(--ok);border-color:var(--ok);color:var(--surface)}
+.btn:disabled{opacity:.45;cursor:default}
+.chip{display:inline-block;font-size:12px;padding:1px 8px;border-radius:999px;white-space:nowrap}
+.chip.auto{color:var(--muted);background:var(--grid)}
+.chip.edited{color:var(--edit);background:var(--edit-bg)}
+.chip.confirmed{color:var(--ok);background:var(--ok-bg)}
+.chip.warn{color:var(--warn);background:var(--warn-bg)}
+.note{font-size:12.5px;color:var(--muted)}
+.kbd{font-family:var(--mono);font-size:11.5px;border:1px solid var(--line);border-radius:3px;padding:0 4px}
+details.sec{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:10px 14px}
+details.sec>summary{cursor:pointer;font-weight:600}
+details.sec p,details.sec li{max-width:80ch}
+details.sec code{font-family:var(--mono);font-size:12.5px}
+.ovwrap{overflow-x:auto}
+.ov{border-collapse:collapse;font-size:12.5px;font-variant-numeric:tabular-nums;min-width:640px;width:100%}
+.ov th,.ov td{padding:4px 8px;border-bottom:1px solid var(--grid);text-align:right}
+.ov th:first-child,.ov td:first-child,.ov th:nth-child(2),.ov td:nth-child(2){text-align:left}
+.ov thead th{color:var(--muted);font-weight:500}
+</style>
+
+<div class="wrap">
+<header>
+  <h1>Variogram Review</h1>
+  <p class="lede">각 셀의 conditioning sample(normal score)로 계산한 실험 variogram과, 거기서 자동으로 뽑은 spherical 모델(range, nugget)입니다. 값을 직접 고치거나 그대로 확정하면 저장되고, 저장된 값이 kriging과 SGS 재실행의 입력이 됩니다.</p>
+</header>
+
+<div class="status-line" id="status"></div>
+
+<div class="toolbar">
+  <div class="seg" id="expSeg" role="group" aria-label="실험"></div>
+  <label class="inl" for="lvlSel">레벨 <select id="lvlSel"></select></label>
+  <label class="inl" for="flt">표시 <select id="flt">
+    <option value="all">전체</option>
+    <option value="todo">미확정</option>
+    <option value="edited">수정함</option>
+    <option value="confirmed">확정함</option>
+    <option value="bound">자동 피팅이 경계에 닿음</option>
+  </select></label>
+  <span class="note">이동 <span class="kbd">J</span>/<span class="kbd">K</span> · 확정 <span class="kbd">Enter</span></span>
+</div>
+
+<div class="main">
+  <div class="panel">
+    <div class="listhead" id="listHead"></div>
+    <div class="list" id="list" role="list"></div>
+  </div>
+
+  <div class="panel plotbox">
+    <h2 id="cellTitle"></h2>
+    <div class="meta" id="cellMeta"></div>
+    <div class="legend">
+      <span><svg width="14" height="10"><circle cx="7" cy="5" r="3.5" fill="var(--pt)"/></svg>실험 variogram (크기 ∝ pair 수)</span>
+      <span><svg width="14" height="10"><circle cx="7" cy="5" r="3.5" fill="none" stroke="var(--pt)"/></svg>피팅 제외 (pair &lt; 30)</span>
+      <span><svg width="22" height="10"><line x1="0" y1="5" x2="22" y2="5" stroke="var(--pick)" stroke-width="2.2"/></svg>현재 값</span>
+      <span><svg width="22" height="10"><line x1="0" y1="5" x2="22" y2="5" stroke="var(--auto)" stroke-width="1.4" stroke-dasharray="5 3"/></svg>자동 피팅</span>
+      <span><svg width="22" height="10"><line x1="0" y1="5" x2="22" y2="5" stroke="var(--truth)" stroke-width="1.4" stroke-dasharray="1.5 2.5"/></svg>정답 (oracle)</span>
+    </div>
+    <svg id="plot" viewBox="0 0 640 400" role="img" aria-label="실험 variogram과 모델"></svg>
+  </div>
+
+  <div class="panel side">
+    <div><h3>상태</h3><div id="stateChip" style="margin-top:6px"></div></div>
+    <div class="field">
+      <label for="rNum">Range (m)</label>
+      <div class="row"><input type="range" id="rSl" min="20" max="1000" step="1"><input type="number" id="rNum" min="1" max="2000" step="1"></div>
+    </div>
+    <div class="field">
+      <label for="nNum">Nugget (sill 1 대비)</label>
+      <div class="row"><input type="range" id="nSl" min="0" max="0.99" step="0.005"><input type="number" id="nNum" min="0" max="0.99" step="0.005"></div>
+    </div>
+    <table class="cmp"><thead><tr><th></th><th>range</th><th>nugget</th></tr></thead><tbody id="cmp"></tbody></table>
+    <div class="btns">
+      <button class="btn primary" id="confirmBtn">확정하고 다음</button>
+      <button class="btn" id="resetBtn">자동 피팅으로 되돌리기</button>
+    </div>
+    <div class="btns">
+      <button class="btn" id="prevBtn">← 이전</button>
+      <button class="btn" id="nextBtn">다음 →</button>
+    </div>
+    <div class="note" id="saveNote"></div>
+  </div>
+</div>
+
+<details class="sec" open>
+  <summary>레벨별 요약</summary>
+  <p class="note">각 레벨에서 셀마다 지금 값(수정했으면 수정값, 아니면 자동 피팅)의 평균입니다. 정답은 그 레벨의 ground-truth 값입니다.</p>
+  <div class="ovwrap"><table class="ov"><thead><tr><th>실험</th><th>레벨</th><th>셀</th><th>확정</th><th>정답 range</th><th>평균 range</th><th>정답 nugget</th><th>평균 nugget</th></tr></thead><tbody id="ov"></tbody></table></div>
+</details>
+
+<details class="sec">
+  <summary>계산 방법</summary>
+  <ul>
+    <li>샘플: 각 셀에서 kriging이 실제로 쓴 conditioning sample(<code>samples.csv</code>)을 <code>src.nscore.nscore</code>로 normal score 변환한 값.</li>
+    <li>실험 variogram: <code>geostats.gamv</code>, 전방향(atol 90°). lag 간격 = 샘플의 평균 최근접 거리, lag 허용오차 = 간격의 절반, 최대 500 m(도메인 1000 m의 절반). γ는 샘플 분산으로 나눈 값(isill = 1). 점의 x 위치는 그 lag bin에 든 pair들의 평균 거리입니다.</li>
+    <li>자동 피팅: spherical 구조 하나, sill = 1 고정. nugget ∈ [0, 0.999], range ∈ [lag 간격, 1000 m]. pair가 30개 미만인 lag는 제외. 가중치 = pair 수 / h² (gstat 기본값). 시작점 5 × 6 격자에서 가장 비용이 낮은 해.</li>
+    <li>“자동 피팅이 경계에 닿음”은 nugget = 0 이거나 range가 lag 간격 또는 1000 m에 붙은 셀입니다.</li>
+    <li>저장: 수정하거나 확정한 값은 이 페이지의 저장소(셀당 문서 하나)에 들어가고, 그 값을 읽어 재실행에 씁니다. 수정하지 않은 셀은 자동 피팅 값을 씁니다.</li>
+  </ul>
+  <p class="note" id="prov"></p>
+</details>
+</div>
+
+<script>
+const DATA = /*__DATA__*/null;
+const cells = DATA.cells;
+const byId = new Map(cells.map(c => [c.id, c]));
+const picks = new Map();          // id -> {range_m, nugget, confirmed}
+let db = null, canWrite = false;
+let curExp = "E2", curLvl = null, curId = null;
+
+const $ = id => document.getElementById(id);
+const fmtR = v => (Math.round(v)).toString();
+const fmtN = v => (+v).toFixed(3);
+
+function valueOf(c){
+  const p = picks.get(c.id);
+  return p ? {r:p.range_m, n:p.nugget} : {r:c.fr, n:c.fn};
+}
+function stateOf(c){
+  const p = picks.get(c.id);
+  if(!p) return "auto";
+  if(p.confirmed) return (Math.abs(p.range_m-c.fr)>0.05||Math.abs(p.nugget-c.fn)>0.0005) ? "confirmed-edited" : "confirmed";
+  return "edited";
+}
+function isEdited(c){const p=picks.get(c.id);return !!p&&(Math.abs(p.range_m-c.fr)>0.05||Math.abs(p.nugget-c.fn)>0.0005);}
+
+/* ---------- filters ---------- */
+const exps = ["E2","E3","E4","E5"];
+function levelsOf(e){const s=[];const seen=new Set();for(const c of cells)if(c.e===e&&!seen.has(c.lv)){seen.add(c.lv);s.push(c);}return s;}
+function buildExpSeg(){
+  const seg=$("expSeg");seg.textContent="";
+  for(const e of exps){
+    const b=document.createElement("button");b.type="button";b.textContent=DATA.expLabel[e];
+    b.setAttribute("aria-pressed",e===curExp?"true":"false");
+    b.onclick=()=>{curExp=e;curLvl=null;buildExpSeg();buildLvl();renderList(true);};
+    seg.appendChild(b);
+  }
+}
+function buildLvl(){
+  const sel=$("lvlSel");sel.textContent="";
+  const lv=levelsOf(curExp);
+  const all=document.createElement("option");all.value="";all.textContent="전체";sel.appendChild(all);
+  for(const c of lv){const o=document.createElement("option");o.value=c.lv;o.textContent=c.lvl;sel.appendChild(o);}
+  if(curLvl===null) curLvl = lv.length>1 ? lv[0].lv : "";
+  sel.value=curLvl;
+}
+$("lvlSel").onchange=e=>{curLvl=e.target.value;renderList(true);};
+$("flt").onchange=()=>renderList(true);
+
+function visibleCells(){
+  const f=$("flt").value;
+  return cells.filter(c=>{
+    if(c.e!==curExp) return false;
+    if(curLvl && c.lv!==curLvl) return false;
+    const st=stateOf(c);
+    if(f==="todo") return !st.startsWith("confirmed");
+    if(f==="edited") return isEdited(c);
+    if(f==="confirmed") return st.startsWith("confirmed");
+    if(f==="bound") return c.b.length>0;
+    return true;
+  });
+}
+
+function renderList(selectFirst){
+  const vis=visibleCells();
+  const list=$("list");list.textContent="";
+  $("listHead").textContent=`${vis.length}개 셀`;
+  for(const c of vis){
+    const b=document.createElement("button");b.type="button";b.setAttribute("role","listitem");b.dataset.id=c.id;
+    const st=stateOf(c);
+    const d=document.createElement("span");d.className="dot "+(st.startsWith("confirmed")?"confirmed":st==="edited"?"edited":"");
+    const t=document.createElement("span");
+    t.innerHTML=`${c.lvl}<br><span class="sub">truth ${c.t}${c.s!=="base"?" · set "+c.s:""} · n ${c.n}</span>`;
+    const v=document.createElement("span");v.className="sub";const val=valueOf(c);v.textContent=`${fmtR(val.r)} / ${(+val.n).toFixed(2)}`;
+    b.append(d,t,v);
+    b.onclick=()=>select(c.id);
+    if(c.id===curId) b.setAttribute("aria-current","true");
+    list.appendChild(b);
+  }
+  if(selectFirst || !vis.some(c=>c.id===curId)){ if(vis.length) select(vis[0].id); else {curId=null;} }
+}
+function markCurrent(){
+  for(const b of $("list").children){
+    if(b.dataset.id===curId){b.setAttribute("aria-current","true");b.scrollIntoView({block:"nearest"});}
+    else b.removeAttribute("aria-current");
+  }
+}
+function refreshRow(id){
+  const b=[...$("list").children].find(x=>x.dataset.id===id); if(!b) return;
+  const c=byId.get(id), st=stateOf(c);
+  b.children[0].className="dot "+(st.startsWith("confirmed")?"confirmed":st==="edited"?"edited":"");
+  const val=valueOf(c); b.children[2].textContent=`${fmtR(val.r)} / ${(+val.n).toFixed(2)}`;
+}
+
+/* ---------- plot ---------- */
+const W=640,H=400,M={l:52,r:16,t:12,b:40};
+const X0=0,X1=520;
+function sph(h,a,n){ if(h<=0) return 0; if(h>=a) return 1; const x=h/a; return n+(1-n)*(1.5*x-0.5*x*x*x); }
+function modelPath(a,n,sx,sy){
+  let d=`M${sx(0)},${sy(0)} L${sx(0.0001)},${sy(n)}`;
+  for(let i=1;i<=260;i++){const h=X1*i/260;d+=` L${sx(h).toFixed(1)},${sy(sph(h,a,n)).toFixed(1)}`;}
+  return d;
+}
+function drawPlot(){
+  const svg=$("plot"); svg.textContent="";
+  const c=byId.get(curId); if(!c) return;
+  const gmax=Math.max(1.25,...c.p.map(p=>p[1]))*1.05;
+  const Y1=Math.ceil(gmax*5)/5;
+  const sx=h=>M.l+(h-X0)/(X1-X0)*(W-M.l-M.r);
+  const sy=g=>H-M.b-(g/Y1)*(H-M.t-M.b);
+  const NS="http://www.w3.org/2000/svg";
+  const el=(t,a)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);svg.appendChild(e);return e;};
+  for(let h=0;h<=500;h+=100){el("line",{x1:sx(h),x2:sx(h),y1:sy(0),y2:sy(Y1),stroke:"var(--grid)"});const t=el("text",{x:sx(h),y:H-M.b+16,"text-anchor":"middle"});t.textContent=h;}
+  for(let g=0;g<=Y1+1e-9;g+=0.2){el("line",{x1:sx(0),x2:sx(X1),y1:sy(g),y2:sy(g),stroke:"var(--grid)"});const t=el("text",{x:M.l-8,y:sy(g)+4,"text-anchor":"end"});t.textContent=g.toFixed(1);}
+  el("line",{x1:sx(0),x2:sx(X1),y1:sy(1),y2:sy(1),stroke:"var(--muted)","stroke-width":0.8});
+  const xl=el("text",{x:(M.l+W-M.r)/2,y:H-6,"text-anchor":"middle"});xl.textContent="lag 거리 (m)";
+  const yl=el("text",{x:14,y:(M.t+H-M.b)/2,"text-anchor":"middle",transform:`rotate(-90 14 ${(M.t+H-M.b)/2})`});yl.textContent="γ (normal score, sill 1)";
+  el("path",{d:modelPath(c.tr,c.tn,sx,sy),fill:"none",stroke:"var(--truth)","stroke-width":1.4,"stroke-dasharray":"1.5 2.5"});
+  el("path",{d:modelPath(c.fr,c.fn,sx,sy),fill:"none",stroke:"var(--auto)","stroke-width":1.4,"stroke-dasharray":"5 3"});
+  const v=valueOf(c);
+  el("path",{d:modelPath(v.r,v.n,sx,sy),fill:"none",stroke:"var(--pick)","stroke-width":2.2});
+  const maxP=Math.max(...c.p.map(p=>p[2]));
+  for(const p of c.p){
+    const r=2.2+4.2*Math.sqrt(p[2]/maxP);
+    const e=el("circle",{cx:sx(p[0]),cy:sy(p[1]),r:r,fill:p[3]?"var(--pt)":"none",stroke:"var(--pt)","stroke-width":1});
+    const tt=document.createElementNS(NS,"title");tt.textContent=`h = ${p[0]} m, γ = ${p[1]}, pairs = ${p[2]}${p[3]?"":" (제외)"}`;e.appendChild(tt);
+  }
+}
+
+/* ---------- side panel ---------- */
+function syncInputs(){
+  const c=byId.get(curId); if(!c) return;
+  const v=valueOf(c);
+  $("rSl").value=v.r; $("rNum").value=Math.round(v.r*10)/10;
+  $("nSl").value=v.n; $("nNum").value=(+v.n).toFixed(3);
+  const st=stateOf(c);
+  const chip=$("stateChip"); chip.textContent="";
+  const mk=(cls,txt)=>{const s=document.createElement("span");s.className="chip "+cls;s.textContent=txt;chip.appendChild(s);chip.append(" ");};
+  if(st==="auto") mk("auto","자동 피팅 그대로");
+  if(st==="edited") mk("edited","수정함, 미확정");
+  if(st==="confirmed") mk("confirmed","확정 (자동 값)");
+  if(st==="confirmed-edited") mk("confirmed","확정 (수정 값)");
+  const bl={nugget_at_lower:"nugget = 0",nugget_at_upper:"nugget 상한",range_at_lower:"range = lag 간격",range_at_upper:"range = 1000 m"};
+  for(const b of c.b) mk("warn","경계: "+bl[b]);
+  const tb=$("cmp"); tb.innerHTML=
+    `<tr><td>현재</td><td>${fmtR(v.r)}</td><td>${fmtN(v.n)}</td></tr>`+
+    `<tr><td>자동 피팅</td><td>${fmtR(c.fr)}</td><td>${fmtN(c.fn)}</td></tr>`+
+    `<tr><td>정답</td><td>${fmtR(c.tr)}</td><td>${fmtN(c.tn)}</td></tr>`;
+  const ctrls=["rSl","rNum","nSl","nNum","confirmBtn","resetBtn"];
+  for(const k of ctrls) $(k).disabled=!canWrite;
+}
+function select(id){
+  curId=id; markCurrent(); syncInputs(); drawPlot();
+  const c=byId.get(id);
+  $("cellTitle").textContent=`${DATA.expLabel[c.e]} · ${c.lvl}`;
+  $("cellMeta").textContent=`truth seed ${c.t}${c.s!=="base"?" · sample set "+c.s:""} · 샘플 ${c.n}개 · lag 간격 ${c.lag} m · 자동 피팅 RMSE ${c.rmse}`;
+}
+
+/* ---------- persistence ---------- */
+const queues=new Map();
+function save(id){
+  if(!db||!canWrite) return;
+  const prev=queues.get(id)||Promise.resolve();
+  const next=prev.then(async()=>{
+    const p=picks.get(id);
+    const ref=db.collection("picks").doc(id);
+    try{
+      if(p) await ref.set({...p, updated:new Date().toISOString()});
+      else await ref.delete();
+      $("saveNote").textContent="저장됨";
+    }catch(e){
+      $("saveNote").textContent = e&&e.code==="invalid_argument" ? "이 화면에서는 저장 권한이 없어 읽기 전용입니다." : "저장하지 못했습니다. 잠시 뒤 다시 바꿔 주세요.";
+      if(e&&e.code==="invalid_argument"){canWrite=false;syncInputs();}
+    }
+  });
+  queues.set(id,next);
+}
+function setPick(r,n,confirmed){
+  const c=byId.get(curId); if(!c) return;
+  r=Math.min(2000,Math.max(1,+r)); n=Math.min(0.99,Math.max(0,+n));
+  picks.set(c.id,{range_m:Math.round(r*10)/10,nugget:Math.round(n*1000)/1000,confirmed:!!confirmed});
+  syncInputs(); drawPlot(); refreshRow(c.id); renderStatus();
+}
+let saveTimer=null;
+function liveEdit(){
+  const c=byId.get(curId); if(!c) return;
+  setPick($("rNum").value,$("nNum").value,false);
+  clearTimeout(saveTimer); const id=c.id; saveTimer=setTimeout(()=>save(id),500);
+}
+$("rSl").oninput=e=>{$("rNum").value=e.target.value;liveEdit();};
+$("nSl").oninput=e=>{$("nNum").value=e.target.value;liveEdit();};
+$("rNum").onchange=liveEdit; $("nNum").onchange=liveEdit;
+$("resetBtn").onclick=()=>{const c=byId.get(curId);if(!c)return;picks.delete(c.id);syncInputs();drawPlot();refreshRow(c.id);renderStatus();save(c.id);};
+$("confirmBtn").onclick=confirmAndNext;
+function confirmAndNext(){
+  const c=byId.get(curId); if(!c||!canWrite) return;
+  const v=valueOf(c); setPick(v.r,v.n,true); clearTimeout(saveTimer); save(c.id); step(1);
+}
+function step(d){
+  const vis=visibleCells(); const i=vis.findIndex(c=>c.id===curId);
+  const j=Math.min(vis.length-1,Math.max(0,i+d)); if(vis[j]) select(vis[j].id);
+}
+$("prevBtn").onclick=()=>step(-1); $("nextBtn").onclick=()=>step(1);
+document.addEventListener("keydown",e=>{
+  if(e.target.tagName==="INPUT"||e.target.tagName==="SELECT") return;
+  if(e.key==="j"||e.key==="J") step(1);
+  else if(e.key==="k"||e.key==="K") step(-1);
+  else if(e.key==="Enter") {e.preventDefault();confirmAndNext();}
+});
+
+/* ---------- summaries ---------- */
+function renderStatus(){
+  let conf=0,ed=0;
+  for(const c of cells){const s=stateOf(c);if(s.startsWith("confirmed"))conf++;if(isEdited(c))ed++;}
+  $("status").innerHTML=`<span>전체 <b>${cells.length}</b>셀</span><span>확정 <b>${conf}</b></span><span>값을 수정한 셀 <b>${ed}</b></span><span class="conn" id="connNote">${connText}</span>`;
+  renderOverview();
+}
+let connText="저장소 연결 중…";
+function renderOverview(){
+  const rows=[];const groups=new Map();
+  for(const c of cells){const k=c.e+"|"+c.lv;if(!groups.has(k))groups.set(k,[]);groups.get(k).push(c);}
+  for(const [k,g] of groups){
+    const c0=g[0];let sr=0,sn=0,cf=0;
+    for(const c of g){const v=valueOf(c);sr+=v.r;sn+=v.n;if(stateOf(c).startsWith("confirmed"))cf++;}
+    rows.push(`<tr><td>${DATA.expLabel[c0.e]}</td><td>${c0.lvl}</td><td>${g.length}</td><td>${cf}</td><td>${fmtR(c0.tr)}</td><td>${fmtR(sr/g.length)}</td><td>${fmtN(c0.tn)}</td><td>${fmtN(sn/g.length)}</td></tr>`);
+  }
+  $("ov").innerHTML=rows.join("");
+}
+
+/* ---------- boot ---------- */
+$("prov").textContent=`데이터: results/processed/variogram_inference/ (git ${String(DATA.commit).slice(0,7)}), 셀 ${cells.length}개.`;
+buildExpSeg(); buildLvl(); renderStatus(); renderList(true);
+
+(async()=>{
+  try{
+    const claude=window.claude;
+    db = claude && claude.use ? await claude.use("db") : null;
+    const user = claude && claude.use ? await claude.use("user") : null;
+    if(!db){ connText="저장소를 쓸 수 없는 화면이라 읽기 전용입니다."; canWrite=false; renderStatus(); syncInputs(); return; }
+    const w = user ? user.can("data.write") : null;
+    canWrite = (w===null||w===undefined) ? true : !!w;
+    let timer=setTimeout(()=>{connText="저장된 값을 아직 불러오지 못했습니다.";renderStatus();},10000);
+    db.collection("picks").onSnapshot(snap=>{
+      if(!snap.metadata.fromCache){clearTimeout(timer);}
+      for(const ch of snap.docChanges()){
+        const d=ch.doc.data(); const id=ch.doc.id;
+        if(ch.type==="removed") picks.delete(id);
+        else if(d && byId.has(id)) picks.set(id,{range_m:+d.range_m,nugget:+d.nugget,confirmed:!!d.confirmed});
+      }
+      connText = canWrite ? "저장소 연결됨" : "읽기 전용";
+      renderStatus(); renderList(false); syncInputs(); drawPlot();
+    },err=>{clearTimeout(timer);connText="저장소 연결이 끊겼습니다. 새로고침해 주세요.";renderStatus();});
+    syncInputs();
+  }catch(e){ connText="저장소를 쓸 수 없는 화면이라 읽기 전용입니다."; canWrite=false; renderStatus(); syncInputs(); }
+})();
+</script>
