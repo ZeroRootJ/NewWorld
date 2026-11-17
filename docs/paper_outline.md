@@ -31,7 +31,7 @@ goodness를 동시에 고려하면 두 response surface의 최적점이 서로 �
 | 1-b | F4 | GP fitted range·nugget vs truth (10 realization) | 실제 데이터 |
 | 1-b | F5 | 이방성 range·variogram(A, B), 4개 방법 비교(C) | **보류 (2026-11-16 사용자 결정, 스토리보드에서 제외)** |
 | 1-b | F6 | 파라미터 수 vs 필요 데이터량 | B는 placeholder |
-| 2 | F7 | Accuracy·UMG response surface | 전부 placeholder |
+| 2 | F7 | Accuracy·UMG response surface, 4개 방법 고정 하이퍼파라미터 grid | 실제 데이터 (2026-11-17) |
 
 ## 그림을 채우는 데 필요한 실험
 - range/nugget 축 4개 방법을 여러 ground-truth realization으로 재실행 (현재 레벨당 1개)
@@ -39,6 +39,6 @@ goodness를 동시에 고려하면 두 response surface의 최적점이 서로 �
 - density 축 ground-truth realization 확장 (현재 1개, 샘플 배치 replicate만 10)
 - (보류) 이방성 축 본편 (F5-C); F5-A(300/600 m)와 F5-B(900/300 m)의 파라미터 세트 통일
 - 파라미터 수 vs 데이터량 (F6-B)
-- (range × nugget) 하이퍼파라미터 grid에서 MSE·UMG 동시 평가 (F7)
+- ~~(range × nugget) 하이퍼파라미터 grid에서 MSE·UMG 동시 평가 (F7)~~ 완료 2026-11-17
 
 Extrapolation 축(`experiment_context.md` 3절 axis 3)은 이 뼈대에 포함되지 않았다.

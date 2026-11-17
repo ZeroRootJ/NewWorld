@@ -23,3 +23,7 @@ reproduction 지표) 조사해 references.md에 반영 → 결과를 Sample Dens
 ## 2026-11-16
 
 **논문 뼈대 확정 + 스토리보드** — 결론 1-a/1-b/2 논리 정리(`paper_outline.md`) → 기존 데이터로 F1–F7 제작(없는 실험은 placeholder) → reviewer 검수·수정 → 아티팩트 게시.
+
+## 2026-11-17
+
+**F7 response surface** — 옛 SNMS grid 코드 검토 → 현재 case용 runner 작성·검수(결정 8건) → multi_truth_axes 종료 후 smoke 게이트 거쳐 자동 실행(490/490, crosscheck PASS) → F7 실제 데이터로 교체·아티팩트 게시.
