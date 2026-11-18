@@ -1708,8 +1708,10 @@ def figure_f3_extremes(mt):
                for r in rows}
     sgs_out = {r["tag"]: int(((r["maps"]["sgs"] < vmin) | (r["maps"]["sgs"] > vmax)).sum()) for r in rows}
     gp_out = {r["tag"]: int(((r["maps"]["gp"] < vmin) | (r["maps"]["gp"] > vmax)).sum()) for r in rows}
-    hist_edges = {r["tag"]: np.histogram_bin_edges(np.concatenate([r["maps"][key].ravel() for key in series]),
-                                                    bins=F3_EXT_HIST_BINS) for r in rows}
+    # one set of bin edges over the three maps of BOTH rows -> identical bins and x axis in every histogram panel
+    shared_edges = np.histogram_bin_edges(
+        np.concatenate([r["maps"][key].ravel() for r in rows for key in series]), bins=F3_EXT_HIST_BINS)
+    hist_edges = {r["tag"]: shared_edges for r in rows}
 
     note = (
         f"density {dens['pct'][lvl]:g}%: the GP-MLE cells with the shortest and the longest fitted practical range "
@@ -1718,7 +1720,7 @@ def figure_f3_extremes(mt):
         f"realization (index {k_real} of N = {rows_n_ens}, true {rng_true:g} m variogram) of the same cell (its ensemble "
         f"MSE / UMG are in the status file); experimental variograms of these three maps over all {NX * NY} grid cells "
         f"({N_PAIRS_DRAWN:,} random pairs, {LAG_BIN_WIDTH_M:g} m bins) with the true spherical model (dashed); "
-        f"histograms of all grid cells (same bins within a row). One colour scale for all maps (min/max of the two "
+        f"histograms of all grid cells (same bins and x axis in both rows). One colour scale for all maps (min/max of the two "
         f"truth fields)."
     )
     fig, _rect = _new_figure(plot_height_mm=F3_EXT_HEIGHT_MM, status_text=note, top_mm=F3_EXT_TOP_MM,
@@ -1781,6 +1783,7 @@ def figure_f3_extremes(mt):
         for key in series:
             axh.hist(r["maps"][key].ravel(), bins=hist_edges[r["tag"]], density=True, histtype="step",
                      color=colors[key], linewidth=1.0)
+        axh.set_xlim(shared_edges[0], shared_edges[-1])
         axh.set_xlabel("Porosity (%)")
         axh.set_ylabel("Density (1/%)")
         if i == 0:
@@ -1826,7 +1829,7 @@ def figure_f3_extremes(mt):
         + [("columns", f"1 truth map + samples; 2 GP-MLE posterior-mean map; 3 SGS realization {k_real}; "
                        f"4 experimental variograms (truth black, GP-MLE {colors['gp']}, SGS {colors['sgs']}) + true "
                        f"spherical model ({CURVE_COLORS['model']}, dashed); 5 step histograms, density=True, "
-                       f"{F3_EXT_HIST_BINS} identical bins per row spanning the min-max of the three maps of the row"),
+                       f"{F3_EXT_HIST_BINS} identical bins shared by both rows, spanning the min-max of the six maps"),
            ("series key", "truth = ground truth, gp = GP-MLE posterior mean, "
                           f"sgs = SGS realization {k_real}")],
         in_figure_note="DATA STATUS: " + note,
