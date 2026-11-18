@@ -192,6 +192,17 @@ INF_LABELS.update({"kriging_picked": "Simple kriging (user-picked variogram)",
 # panel D has 10 points per level per series (F3: 100) -> larger, less transparent markers
 F3_2_D_MARKER_S = 6.0
 F3_2_D_ALPHA = 0.7
+# F3-2 panel D: three series per level (GP-MLE / user-picked / auto-fit), x shift and spread
+F3_2_D_SHIFT = 0.15
+F3_2_D_SPREAD = 0.05
+F3_2_D_AUTO_COLOR = "tab:purple"
+# F3-2b: one-realization truth map + rep0 samples per density (user request 2026-11-18)
+F3_2_MAP_TRUTH_SEED = 101
+F3_2_MAP_XMIN = 0.0
+F3_2_MAP_CELL = 20.0  # == base_case XSIZ = YSIZ
+F3_2_MAP_HEIGHT_MM = 38.0
+F3_2_MAP_MARKER_S = 3.0
+F3_2_MAP_CMAP = "viridis"
 
 MSE_LABEL = "MSE (porosity %²)"
 UMG_LABEL = "UMG (1 = calibrated)"
@@ -1287,8 +1298,8 @@ def figure_f3_2(mt):
     n_src = pc["vario_source"].value_counts().to_dict()
     auto_cells = pc[pc["vario_source"] == "auto"]
     unconf = pc[pc["pick_confirmed"].astype(str) == "False"]
-    spread = float(max(gp_all["value"].max(), pc["vario_hmaj1"].max())
-                   / min(gp_all["value"].min(), pc["vario_hmaj1"].min()))
+    spread = float(max(gp_all["value"].max(), pc["vario_hmaj1"].max(), pc["auto_fit_range_m"].max())
+                   / min(gp_all["value"].min(), pc["vario_hmaj1"].min(), pc["auto_fit_range_m"].min()))
     use_log = spread >= RATIO_LOG_THRESHOLD
     ax_scale = "log" if use_log else "linear"
 
@@ -1301,7 +1312,7 @@ def figure_f3_2(mt):
         f"samplings); B, C dashed / hollow: kriging and SGS with the automatic-fit variogram on the same "
         f"{n_pick} {PICK_SAMPLE_REP} cells; C: fraction of evaluated cells inside the central {COV90_NOMINAL:.0%} predictive interval "
         f"(kriging: normal-score interval back-transformed; SGS, GP-MLE: Gaussian mean ± z·std interval); "
-        f"D: one point per cell ({F3_2_GP_N_CELLS} GP-MLE, {n_pick} kriging/SGS per level); GP-MLE practical "
+        f"D: one point per cell ({F3_2_GP_N_CELLS} GP-MLE, {n_pick} user-picked, {n_pick} auto-fit per level); GP-MLE practical "
         f"range = RBF-kernel length scale at the 0.05 correlation cutoff; user-picked range = spherical range "
         f"(correlation 0) – the two range definitions differ; max/min over all points = {spread:.1f}×, "
         f"{ax_scale} y axis. SGS ensemble N = {mt['n_ens']}; kriging and GP-MLE have no ensemble."
@@ -1320,20 +1331,26 @@ def figure_f3_2(mt):
     ax_b.set_ylabel(UMG_LABEL)
     ax_c.set_ylabel(COV90_LABEL)
 
-    # D: deterministic horizontal spread; GP-MLE (all cells) left, user-picked range (rep0) right
-    sp_gp = np.linspace(-F3_D_SPLIT_SPREAD, F3_D_SPLIT_SPREAD, F3_2_GP_N_CELLS)
-    sp_pk = np.linspace(-F3_D_SPLIT_SPREAD, F3_D_SPLIT_SPREAD, n_pick)
+    # D: deterministic horizontal spread; GP-MLE (all cells) left, user-picked range (rep0)
+    # centre, automatic-fit range of the same rep0 cells right (user request 2026-11-18)
+    sp_gp = np.linspace(-F3_2_D_SPREAD, F3_2_D_SPREAD, F3_2_GP_N_CELLS)
+    sp_pk = np.linspace(-F3_2_D_SPREAD, F3_2_D_SPREAD, n_pick)
     for lvl in DENSITY_LEVELS:
         sub = gp_all[gp_all["axis_level"] == lvl].sort_values(["truth_seed", "sample_rep"])
         ax_d.scatter(
-            dens["pct"][lvl] * (1.0 - F3_D_SPLIT_SHIFT + sp_gp), sub["value"],
+            dens["pct"][lvl] * (1.0 - F3_2_D_SHIFT + sp_gp), sub["value"],
             s=F3_D_MARKER_S, marker=METHOD_MARKERS["gp_mle"], facecolors=METHOD_COLORS["gp_mle"],
             edgecolors="none", alpha=F3_D_ALPHA, zorder=3,
         )
         psub = pc[pc["axis_level"] == lvl].sort_values("truth_seed")
         ax_d.scatter(
-            dens["pct"][lvl] * (1.0 + F3_D_SPLIT_SHIFT + sp_pk), psub["vario_hmaj1"],
+            dens["pct"][lvl] * (1.0 + sp_pk), psub["vario_hmaj1"],
             s=F3_2_D_MARKER_S, marker="o", facecolors=F3_D_INF_COLOR,
+            edgecolors="none", alpha=F3_2_D_ALPHA, zorder=3,
+        )
+        ax_d.scatter(
+            dens["pct"][lvl] * (1.0 + F3_2_D_SHIFT + sp_pk), psub["auto_fit_range_m"],
+            s=F3_2_D_MARKER_S, marker="s", facecolors=F3_2_D_AUTO_COLOR,
             edgecolors="none", alpha=F3_2_D_ALPHA, zorder=3,
         )
     ax_d.axhline(dens["truth_range_m"], color="black", linestyle="--", linewidth=0.7, zorder=2)
@@ -1380,6 +1397,8 @@ def figure_f3_2(mt):
                label=f"Ground-truth range ({dens['truth_range_m']:g} m)"),
         Line2D([0], [0], color=F3_D_INF_COLOR, marker="o", linestyle="none", markersize=3.0,
                label="D: user-picked range (spherical)"),
+        Line2D([0], [0], color=F3_2_D_AUTO_COLOR, marker="s", linestyle="none", markersize=3.0,
+               label="D: auto-fit range (spherical)"),
     ]
     fig.legend(handles=handles, loc="upper center", ncol=3, bbox_to_anchor=(0.5, 1.0), columnspacing=1.4)
 
@@ -1389,10 +1408,20 @@ def figure_f3_2(mt):
     pk_level = pc.groupby("axis_level")["vario_hmaj1"].describe(percentiles=[0.5]).loc[DENSITY_LEVELS]
     pk_above = {lvl: int((pc[pc["axis_level"] == lvl]["vario_hmaj1"] > dens["truth_range_m"]).sum())
                 for lvl in DENSITY_LEVELS}
+    fits = pd.read_csv(INF_FITS, dtype={"axis_level": str, "sample_rep": str})
+    fits = fits[fits["experiment"] == a["experiment"]].set_index("config_key")
+    if not np.allclose(pc["auto_fit_range_m"].values, fits.loc[pc["config_key"], "fit_range_m"].values,
+                       rtol=1e-12, atol=0):
+        raise ValueError(f"{_rel(PICK_CELLS)} auto_fit_range_m differs from {_rel(INF_FITS)} fit_range_m.")
+    au_level = pc.groupby("axis_level")["auto_fit_range_m"].describe(percentiles=[0.5]).loc[DENSITY_LEVELS]
+    au_above = {lvl: int((pc[pc["axis_level"] == lvl]["auto_fit_range_m"] > dens["truth_range_m"]).sum())
+                for lvl in DENSITY_LEVELS}
     prov = r0["prov"]
     lines = _status_file(
         stem,
         inputs=_mt_inputs(mt, extra=[
+            f"{_rel(PICK_CELLS)} auto_fit_range_m (panel D purple; asserted equal to {_rel(INF_FITS)} "
+            "fit_range_m)",
             f"{_rel(MTA_SUMMARY)} (rows experiment == {a['experiment']}, method == gp_mle; {F3_2_GP_N_CELLS} "
             "cells per level, pooled mean)",
             f"{_rel(MTA_HYPER)} (rows experiment == {a['experiment']}, method == gp_mle, parameter == "
@@ -1412,7 +1441,8 @@ def figure_f3_2(mt):
                   f"nominal {COV90_NOMINAL:.2f}"),
             ("D", f"REAL DATA - range, one point per cell: GP-MLE practical range of all {F3_2_GP_N_CELLS} cells "
                   f"per level (red diamonds, shifted left) and the spherical range of the user-picked variogram "
-                  f"of the {n_pick} rep0 cells used by kriging and SGS (blue circles, shifted right); dashed line = "
+                  f"of the {n_pick} rep0 cells used by kriging and SGS (blue circles, centre) and the automatic-fit "
+                  f"spherical range of the same cells (purple squares, shifted right); dashed line = "
                   f"ground-truth range {dens['truth_range_m']:g} m"),
         ],
         in_figure_note="DATA STATUS: " + note,
@@ -1450,6 +1480,9 @@ def figure_f3_2(mt):
             "panel D user-picked spherical range per-level min / median / max (m), count above the true range: " +
             "; ".join(f"{lvl}%: {pk_level.loc[lvl, 'min']:.0f} / {pk_level.loc[lvl, '50%']:.0f} / "
                       f"{pk_level.loc[lvl, 'max']:.0f}, {pk_above[lvl]} of {n_pick} above" for lvl in DENSITY_LEVELS),
+            "panel D auto-fit spherical range per-level min / median / max (m), count above the true range: " +
+            "; ".join(f"{lvl}%: {au_level.loc[lvl, 'min']:.0f} / {au_level.loc[lvl, '50%']:.0f} / "
+                      f"{au_level.loc[lvl, 'max']:.0f}, {au_above[lvl]} of {n_pick} above" for lvl in DENSITY_LEVELS),
             "SGS grid-node warnings, user-picked (cells with >0 / total): " + "; ".join(
                 f"{lvl}%: {r0['warn_picked'][lvl][0]} / {r0['warn_picked'][lvl][1]}" for lvl in DENSITY_LEVELS) + ".",
             "x positions are the REQUESTED sample fraction; actual n per level (rep0): " + "; ".join(
@@ -1467,6 +1500,91 @@ def figure_f3_2(mt):
             f"GP-MLE ({F3_2_GP_N_CELLS} cells) UMG: " + _density_table(gp_summ, "umg", ["gp_mle"]),
             f"GP-MLE ({F3_2_GP_N_CELLS} cells) coverage90: " + _density_table(gp_summ, "coverage90", ["gp_mle"]),
         ],
+    )
+    return _save(fig, stem, lines)
+
+
+def figure_f3_2_maps(mt):
+    """Ground-truth (oracle) porosity map of ONE realization (truth seed
+    F3_2_MAP_TRUTH_SEED) with the rep0 conditioning samples at each density level
+    (user request 2026-11-18). The truth and samples are regenerated with the
+    experiment's own generators and asserted equal to the samples.csv recorded by
+    the user-picked kriging run of each cell."""
+    from src.experiments.base_case_conditioning import (  # local: only this figure needs the generators
+        get_base_case_truth, get_conditioning_samples)
+
+    stem = "F3-2b_density_truth_and_samples"
+    dens = mt["dens"]
+    r0 = _load_rep0_density(mt)
+    pc = r0["pick_cells"]
+    t = F3_2_MAP_TRUTH_SEED
+    cells = pc[pc["truth_seed"] == t].set_index("axis_level")
+    if set(cells.index) != set(DENSITY_LEVELS):
+        raise ValueError(f"F3-2b: truth seed {t} lacks a rep0 cell at some density level.")
+    fits = pd.read_csv(INF_FITS, dtype={"axis_level": str, "sample_rep": str})
+    fits = fits[fits["experiment"] == r0["axis"]["experiment"]].set_index("config_key")
+    tv = fits.loc[cells["config_key"], ["true_range_m", "true_nugget"]].drop_duplicates()
+    if len(tv) != 1 or float(tv["true_range_m"].iloc[0]) != float(dens["truth_range_m"]):
+        raise ValueError("F3-2b: truth variogram differs between density levels / from the axis range.")
+    rng_true, nug_true = float(tv["true_range_m"].iloc[0]), float(tv["true_nugget"].iloc[0])
+    truth = get_base_case_truth(truth_seed=t, hmaj1=rng_true, hmin1=rng_true, nug=nug_true)
+    if truth.shape != (NY, NX):
+        raise ValueError(f"F3-2b: truth shape {truth.shape} != {(NY, NX)}")
+    samples = {}
+    for lvl in DENSITY_LEVELS:
+        c = cells.loc[lvl]
+        s = get_conditioning_samples(truth, sample_seed=int(c["sample_seed"]), n_samples=int(c["n_samples_requested"]))
+        rec = pd.read_csv(_REPO_ROOT / c["run_dir_kriging_picked"] / "samples.csv")
+        if len(rec) != len(s) or not np.allclose(rec[["X", "Y"]].values, s[["X", "Y"]].values, rtol=0, atol=1e-9):
+            raise ValueError(f"F3-2b: regenerated samples differ from {c['run_dir_kriging_picked']}/samples.csv")
+        samples[lvl] = s
+    vmin, vmax = float(np.min(truth)), float(np.max(truth))
+    ext = (F3_2_MAP_XMIN, F3_2_MAP_XMIN + NX * F3_2_MAP_CELL, F3_2_MAP_XMIN, F3_2_MAP_XMIN + NY * F3_2_MAP_CELL)
+
+    note = (
+        f"one ground-truth realization (truth seed {t}; range {rng_true:g} m, nugget {nug_true:g}) shown at every "
+        f"density level; points = the conditioning samples of the rep0 sample set (sample seed "
+        f"{int(cells['sample_seed'].iloc[0])}) used by kriging and SGS in F3-2; the same truth field in every "
+        f"panel; n = actual number of distinct sample locations. Colour scale = min/max of the truth field."
+    )
+    fig, rect = _new_figure(plot_height_mm=F3_2_MAP_HEIGHT_MM, status_text=note, top_mm=6.0, right_mm=22.0)
+    gs = fig.add_gridspec(1, len(DENSITY_LEVELS), left=rect[0], bottom=rect[1], right=rect[2], top=rect[3],
+                          wspace=0.30)
+    im = None
+    for i, lvl in enumerate(DENSITY_LEVELS):
+        ax = fig.add_subplot(gs[0, i])
+        im = ax.imshow(truth, extent=ext, origin="upper", cmap=F3_2_MAP_CMAP, vmin=vmin, vmax=vmax)
+        s = samples[lvl]
+        ax.scatter(s["X"], s["Y"], s=F3_2_MAP_MARKER_S, facecolors="white", edgecolors="black",
+                   linewidths=0.4, zorder=3)
+        ax.set_title(f"{dens['pct'][lvl]:g}% (n = {len(s)})", fontsize=7)
+        ax.set_xticks([0, 500, 1000])
+        ax.set_yticks([0, 500, 1000])
+        ax.set_xlabel("X (m)")
+        if i == 0:
+            ax.set_ylabel("Y (m)")
+        else:
+            ax.set_yticklabels([])
+        ax.set_aspect("equal")
+    cax = fig.add_axes([rect[2] + 0.03, rect[1], 0.012, rect[3] - rect[1]])
+    cb = fig.colorbar(im, cax=cax)
+    cb.set_label("Porosity (%)")
+
+    lines = _status_file(
+        stem,
+        inputs=[
+            f"{_rel(PICK_CELLS)} (rows truth_seed == {t}: sample_seed, n_samples_requested, run_dir_kriging_picked)",
+            "truth regenerated with src.experiments.base_case_conditioning.get_base_case_truth(truth_seed, "
+            "hmaj1 = hmin1 = ground-truth range, nug); samples with get_conditioning_samples(truth, sample_seed, "
+            "n_samples) - asserted equal (X, Y) to each run's samples.csv",
+        ],
+        panels=[(f"{dens['pct'][lvl]:g}%", f"REAL DATA - truth seed {t} porosity map + rep0 samples "
+                 f"(n = {len(samples[lvl])}, requested {int(cells.loc[lvl, 'n_samples_requested'])})")
+                for lvl in DENSITY_LEVELS],
+        in_figure_note="DATA STATUS: " + note,
+        limits=[f"single realization (truth seed {t}) chosen as the first truth seed; the other 9 realizations "
+                "are not shown.",
+                f"colour scale vmin/vmax = truth min/max ({vmin:.2f} / {vmax:.2f} %), colormap {F3_2_MAP_CMAP}."],
     )
     return _save(fig, stem, lines)
 
@@ -2102,6 +2220,7 @@ def main():
         ("F2", figure_f2, (mt,)),
         ("F3", figure_f3, (mt,)),
         ("F3-2", figure_f3_2, (mt,)),
+        ("F3-2b", figure_f3_2_maps, (mt,)),
         ("F4", figure_f4, ()),
         ("F5", figure_f5, ()),
         ("F6", figure_f6, (dens,)),
