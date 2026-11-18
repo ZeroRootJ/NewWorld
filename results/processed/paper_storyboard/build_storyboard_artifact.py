@@ -39,6 +39,14 @@ FIGS = {
             "1행의 kriging과 SGS는 실제(oracle) variogram을 씁니다. B-2와 C-2는 kriging과 SGS를 셀마다 샘플에서 자동 적합한 spherical variogram으로 다시 돌린 결과입니다(같은 샘플, 같은 SGS seed, 수동 수정 없음). GP-MLE는 1행과 같은 값이고, y축은 각각 B, C와 같습니다. 속이 빈 마커와 점선이 inferred variogram입니다.",
             "D는 셀마다 맞춘 range를 점 하나로 찍은 것입니다(레벨당 100개, 로그 축). 빨간 점(왼쪽)은 GP-MLE practical range(상관 0.05 기준), 파란 점(오른쪽)은 kriging/SGS가 쓴 inferred spherical range(상관 0 기준)입니다. 두 range는 정의가 다릅니다. 점선은 ground-truth range 300 m입니다.",
         ]),
+    "F3-2": dict(
+        stem="F3-2_density_rep0_picked_variogram", st=REAL,
+        title="밀도별 GP와 kriging, realization 10개 × 샘플링 1개, 직접 고른 variogram",
+        body=[
+            "F3과 배치가 같습니다. 모든 패널이 같은 50셀(밀도 5개 × ground truth 10개 × 샘플셋 rep0 1개, sample seed 1001)만 씁니다. 점은 레벨 내 10셀의 평균, 막대는 ±1 표준편차입니다(SGS, RBF+bootstrap은 N = 50).",
+            "1행의 kriging과 SGS는 실제(oracle) variogram을 씁니다. B-2와 C-2는 kriging과 SGS를 Variogram Review 보드에서 셀마다 직접 고른 spherical variogram으로 다시 돌린 결과입니다(49셀은 직접 고른 값, 고르지 않은 1셀(2 %, truth 101)은 자동 적합값; 같은 샘플, 같은 SGS seed). 보드에는 각 셀의 정답 variogram 곡선이 함께 표시되어 있었습니다. GP-MLE는 1행과 같은 값이고, y축은 각각 B, C와 같습니다.",
+            "D는 셀마다 range를 점 하나로 찍은 것입니다(레벨당 10개, 선형 축). 빨간 점(왼쪽)은 GP-MLE practical range(상관 0.05 기준), 파란 점(오른쪽)은 kriging/SGS가 쓴 직접 고른 spherical range(상관 0 기준)입니다. 점선은 ground-truth range 300 m입니다.",
+        ]),
     "F4": dict(
         stem="F4_gp_fitted_vs_truth_hyperparameters", st=REAL,
         title="GP가 맞춘 range, nugget과 실제 값",
@@ -97,6 +105,14 @@ CLAIMS = {
         "MSE(그림에는 없음): inferred variogram 쪽이 모든 밀도에서 oracle보다 큽니다. kriging은 20 %에서 2.49 대 2.48, 1 %에서 7.38 대 6.56입니다.",
         "D: inferred spherical range의 중앙값은 레벨마다 293~323 m이고, 300 m를 넘는 셀은 100개 중 45~55개입니다. 범위는 20 %에서 181~414 m, 1 %에서 75~1000 m이며, 1 %에서 32개가 적합 범위 경계에 걸렸습니다.",
     ],
+    "F3-2": [
+        "B: 10×1 셀에서 UMG는 밀도 20 %에서 1 %로 갈 때 GP-MLE 0.981 → 0.873, kriging(oracle) 0.950 → 0.871, SGS(oracle) 0.950 → 0.897입니다.",
+        "C: 90% coverage는 GP-MLE 0.896 → 0.818, kriging(oracle) 0.884 → 0.844, SGS(oracle) 0.882 → 0.860입니다. GP-MLE의 셀 간 표준편차는 20 %에서 0.011, 1 %에서 0.083입니다(kriging 0.042, 0.11).",
+        "B-2: 직접 고른 variogram을 쓴 kriging의 UMG는 20 %에서 0.983, 1 %에서 0.853입니다. SGS는 0.983, 0.876입니다.",
+        "C-2: 직접 고른 variogram을 쓴 kriging의 90% coverage는 20 %에서 0.893, 1 %에서 0.829입니다. SGS는 0.891, 0.848입니다.",
+        "MSE(B-2/C-2 쪽은 그림에 없음): 직접 고른 variogram의 kriging은 20 %에서 2.44, 1 %에서 6.86입니다(oracle 2.42, 6.77).",
+        "D: GP-MLE practical range의 중앙값은 레벨마다 177~234 m이고, 300 m를 넘는 셀은 20/10/5 %에서 0개, 2 %와 1 %에서 각각 3개입니다(10개 중). 1 %에서 범위는 57~393 m입니다. 직접 고른 range의 중앙값은 271~306 m입니다.",
+    ],
     "F4": [
         "A: ground truth의 range가 길어져도 GP가 맞춘 range는 따라가지 못합니다. 실제 값이 100 m에서 800 m로 늘 때 평균은 130 m에서 337 m로만 늡니다.",
         "B: GP가 맞춘 noise variance는 모든 nugget 레벨에서 실제 nugget보다 평균 1.0~1.5만큼 큽니다. nugget이 0인 경우에도 평균 1.47을 noise로 배정합니다.",
@@ -124,7 +140,7 @@ CLAIMS = {
 
 SECTIONS = [
     ("결론 1-a", "불확실성이 모델에 없는 방법은 bootstrap으로도 평가하지 못한다", ["F1", "F2"]),
-    ("결론 1-b", "불확실성이 내재된 GP는 데이터가 희소해지면 흔들린다", ["F3", "F4", "F6"]),
+    ("결론 1-b", "불확실성이 내재된 GP는 데이터가 희소해지면 흔들린다", ["F3", "F3-2", "F4", "F6"]),
     ("결론 2", "정확도와 uncertainty goodness의 최적점은 서로 다르다", ["F7"]),
 ]
 
@@ -132,6 +148,7 @@ FLOW = [
     ("1-a", "F1", "MSE와 UMG, 3개 축, 4개 방법", REAL),
     ("1-a", "F2", "Calibration 곡선, 예측 분산", REAL),
     ("1-b", "F3", "밀도별 GP와 kriging(MSE, UMG, 90% coverage), GP가 맞춘 range", REAL),
+    ("1-b", "F3-2", "F3을 10×1(rep0) 셀로, kriging/SGS는 직접 고른 variogram", REAL),
     ("1-b", "F4", "GP가 맞춘 range, nugget 대 실제 값", REAL),
     ("1-b", "F6", "파라미터 수와 필요한 데이터 양", PART),
     ("2", "F7", "정확도와 UMG 반응면, 고정 하이퍼파라미터 grid, 4개 방법", REAL),
