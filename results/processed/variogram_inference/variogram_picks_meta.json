@@ -1,0 +1,12 @@
+{
+  "source_artifact": "https://claude.ai/artifact/BzfP9XfxxioiWpdUq6ntBC",
+  "db_collection": "picks",
+  "exported_at": "2026-11-18T18:44:41.186349+00:00",
+  "n_picks": 49,
+  "n_confirmed": 48,
+  "n_edited": 39,
+  "by_experiment": {
+    "E4": 49
+  },
+  "rule": "use range_m/nugget here when a row exists, else fit_range_m/fit_nugget from fitted_variograms.csv"
+}
