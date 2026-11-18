@@ -36,7 +36,8 @@ FIGS = {
         body=[
             "레벨당 ground truth 10개 × 샘플셋 10개 = 100셀입니다(SGS, RBF+bootstrap은 N = 50). A는 MSE, B는 UMG, C는 90% 구간 coverage입니다. kriging과 GP-MLE를 진하게, 나머지 두 방법을 옅게 그렸습니다. B와 C에서는 RBF+bootstrap을 뺐습니다(UMG 0.48~0.52, coverage 0.44~0.48). C의 점선은 공칭값 0.90입니다.",
             "90% coverage는 각 방법이 내놓은 90% 예측 구간 안에 truth가 실제로 들어간 셀의 비율입니다. UMG를 계산하는 accuracy plot에서 p = 0.90인 한 점이고, UMG와 같은 계산 경로를 씁니다(kriging은 normal-score 구간의 back-transform, 나머지는 평균 ± 표준편차의 정규분포).",
-            "D는 GP-MLE가 맞춘 practical range를 셀마다 점 하나로 찍은 것입니다(레벨당 100개, 로그 축). 점선은 ground-truth range 300 m입니다. 최소 57 m, 최대 740 m입니다.",
+            "1행의 kriging과 SGS는 실제(oracle) variogram을 씁니다. B-2와 C-2는 kriging과 SGS를 셀마다 샘플에서 자동 적합한 spherical variogram으로 다시 돌린 결과입니다(같은 샘플, 같은 SGS seed, 수동 수정 없음). GP-MLE는 1행과 같은 값이고, y축은 각각 B, C와 같습니다. 속이 빈 마커와 점선이 inferred variogram입니다.",
+            "D는 셀마다 맞춘 range를 점 하나로 찍은 것입니다(레벨당 100개, 로그 축). 빨간 점(왼쪽)은 GP-MLE practical range(상관 0.05 기준), 파란 점(오른쪽)은 kriging/SGS가 쓴 inferred spherical range(상관 0 기준)입니다. 두 range는 정의가 다릅니다. 점선은 ground-truth range 300 m입니다.",
         ]),
     "F4": dict(
         stem="F4_gp_fitted_vs_truth_hyperparameters", st=REAL,
@@ -91,6 +92,10 @@ CLAIMS = {
         "D: GP가 맞춘 range는 밀도가 낮아지면 replicate마다 크게 달라집니다. 17.8 %에서는 148~248 m에 모이고, 1 %에서는 57~740 m로 퍼집니다.",
         "따라서 이 그림이 뒷받침하는 것은 '저밀도에서 GP의 하이퍼파라미터 추정이 샘플 배치에 따라 불안정해진다'입니다. 'GP의 uncertainty가 fail한다'까지는 현재 평균 UMG로는 보이지 않습니다.",
         "밀도가 충분한 구간에서도 GP가 맞춘 range는 실제 값 300 m보다 짧은 쪽에 모여 있습니다. 300 m를 넘는 셀은 100개 중 17.8 % 0개, 9.5 % 4개, 4.8 % 16개, 2 % 26개, 1 % 38개입니다.",
+        "B-2: inferred variogram을 쓴 kriging의 UMG는 17.8 %에서 0.975, 1 %에서 0.892입니다(oracle 0.933, 0.899). SGS는 0.975, 0.925입니다(oracle 0.932, 0.926).",
+        "C-2: inferred variogram을 쓴 kriging의 90% coverage는 17.8 %에서 0.891, 1 %에서 0.845입니다(oracle 0.873, 0.850). SGS는 0.887, 0.878입니다(oracle 0.870, 0.879). 셀 간 표준편차는 17.8 %에서 kriging 0.020(oracle 0.054)입니다.",
+        "MSE(그림에는 없음): inferred variogram 쪽이 모든 밀도에서 oracle보다 큽니다. kriging은 17.8 %에서 2.49 대 2.48, 1 %에서 7.38 대 6.56입니다.",
+        "D: inferred spherical range의 중앙값은 레벨마다 293~323 m이고, 300 m를 넘는 셀은 100개 중 45~55개입니다. 범위는 17.8 %에서 181~414 m, 1 %에서 75~1000 m이며, 1 %에서 32개가 적합 범위 경계에 걸렸습니다.",
     ],
     "F4": [
         "A: ground truth의 range가 길어져도 GP가 맞춘 range는 따라가지 못합니다. 실제 값이 100 m에서 800 m로 늘 때 평균은 130 m에서 337 m로만 늡니다.",

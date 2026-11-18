@@ -8,15 +8,20 @@ INPUT FILES (read-only):
   - results/processed/multi_truth_axes/evaluation_provenance.json (source run folder, batch set)
   - results/raw/multi_truth_axes/20261116T222609599808Z/run_config.json (read-only; hmaj1 / hmin1 / nug of every cell, joined on experiment + config_key)
   - results/processed/multi_truth_axes/hyperparameters.csv (rows experiment == E4, method == gp_mle, parameter == gp_practical_range_m; column value)
+  - results/processed/inferred_variogram_density/metrics_summary.csv (kriging_inferred, sgs_inferred; pooled mean, std (ddof=1), n) - re-derived from results/processed/inferred_variogram_density/metrics.csv at run time and asserted equal
+  - results/processed/inferred_variogram_density/evaluation_cells.csv (vario_hmaj1 / vario_hmin1 / vario_nug per cell, sgs_grid_node_warnings_b1)
+  - results/processed/variogram_inference/fitted_variograms.csv (rows experiment == E4; fit_range_m, fit_nugget, range_at_* ; asserted equal to the variogram recorded per cell)
 
 PANELS:
   A: REAL DATA - MSE vs density; kriging and GP-MLE at full strength, SGS and RBF+bootstrap drawn faded (same data, alpha 0.32); mean +-1 std over 100 cells per level
   B: REAL DATA - UMG vs density, same emphasis and statistics; RBF+bootstrap NOT drawn (user request 2026-11-17; its values are listed below)
   C: REAL DATA - 90% interval coverage vs density, same emphasis and statistics; RBF+bootstrap NOT drawn (as B); dashed gray line = nominal 0.90
-  D: REAL DATA - GP-MLE fitted practical range, one point per cell (100 per level = 10 truths x 10 sample sets), dashed line = ground-truth range 300 m
+  D: REAL DATA - fitted range, one point per cell per series (100 per level = 10 truths x 10 sample sets): GP-MLE practical range (red, shifted left) and the spherical range of the sample-inferred variogram used by kriging/SGS in B-2/C-2 (blue circles, shifted right; one series - kriging and SGS use the same variogram); dashed line = ground-truth range 300 m
+  B-2: REAL DATA - UMG vs density: kriging / SGS re-run with the sample-inferred variogram (hollow markers, dashed line; SGS faded) + GP-MLE (identical to B); y axis equal to B; mean +-1 std over 100 cells per level (user request 2026-11-17)
+  C-2: REAL DATA - 90% interval coverage vs density, same series and statistics as B-2; y axis equal to C
 
 DATA STATUS note printed in the figure margin:
-  DATA STATUS: 10 ground-truth realizations × 10 sample sets = 100 cells per level (ground-truth range 300 m); A–C: points = mean, bars = ±1 std (ddof = 1) pooled over all cells of a level; C: fraction of evaluated cells inside the central 90% predictive interval (kriging: normal-score interval back-transformed; SGS, RBF+bootstrap, GP-MLE: Gaussian mean ± z·std interval); B, C: RBF+bootstrap not drawn (values in status file); D: one point per cell (100 per level; fitted practical range = RBF-kernel length scale converted at the 0.05 correlation cutoff; max/min over all points = 13.0×, log y axis). SGS and RBF+bootstrap ensemble N = 50 (batch 1); kriging and GP-MLE have no ensemble.
+  DATA STATUS: 10 ground-truth realizations × 10 sample sets = 100 cells per level (ground-truth range 300 m); A–C, B-2, C-2: points = mean, bars = ±1 std (ddof = 1) pooled over all cells of a level; row 1 kriging/SGS use the true (oracle) variogram; B-2, C-2: kriging/SGS re-run with the variogram fitted to each cell's samples (spherical, automatic fit, same samples and SGS seed), GP-MLE as in row 1; B-2/C-2 y axes equal B/C; C: fraction of evaluated cells inside the central 90% predictive interval (kriging: normal-score interval back-transformed; SGS, RBF+bootstrap, GP-MLE: Gaussian mean ± z·std interval); B, C: RBF+bootstrap not drawn (values in status file); D: one point per cell per series (100 per level); GP-MLE practical range = RBF-kernel length scale at the 0.05 correlation cutoff; kriging/SGS inferred range = spherical range (correlation 0) – the two range definitions differ; max/min over all points = 17.6×, log y axis. SGS and RBF+bootstrap ensemble N = 50 (batch 1); kriging and GP-MLE have no ensemble.
 
 DATA LIMITATIONS / FACTS ABOUT THE INPUTS:
   - evaluation: src/experiments/evaluate_multi_truth_axes.py at git 8e8c4a6 (git_dirty=True, dirty files ['results/processed/multi_truth_axes/']); 641 cells evaluated, 0 skipped; source results/raw/multi_truth_axes/20261116T222609599808Z (is_production_configuration=True).
@@ -27,7 +32,7 @@ DATA LIMITATIONS / FACTS ABOUT THE INPUTS:
   - panel C kriging: normal-score central interval back-transformed per cell (kriging_fraction_in, same tail parameters as the point back-transform).
   - panel C SGS, RBF+bootstrap and GP-MLE: Gaussian percentile method, interval = mean +- z*std from the N = 50 ensemble mean / variance (SGS, RBF+bootstrap) or the GP posterior mean / variance - NOT empirical quantiles of the SGS realizations or bootstrap replicates.
   - panel C y axis autoscaled to include every mean +-1 std bar (checked at run time; no clipping).
-  - panel D y-axis rule: log if max/min >= 10x; observed 12.99x -> log.
+  - panel D y-axis rule: log if max/min >= 10x; observed 17.55x -> log.
   - panel D per-level min / median / max (m) and count above the true range: 20%: 148 / 181 / 248, 0 of 100 above; 10%: 151 / 208 / 355, 4 of 100 above; 5%: 124 / 242 / 369, 16 of 100 above; 2%: 92 / 254 / 728, 26 of 100 above; 1%: 57 / 270 / 740, 38 of 100 above
   - panel D points are spread horizontally by a fixed (non-random) +-12% pattern ordered by (truth_seed, sample_rep), for visibility only; marker alpha 0.35.
   - truth seeds [101, 7101, 7102, 7103, 7104, 7105, 7106, 7107, 7108, 7109] x sample seeds [1001, 1002, 1003, 1004, 1005, 1006, 1007, 1008, 1009, 1010]; the same sample seeds at every truth and level.
@@ -36,3 +41,11 @@ DATA LIMITATIONS / FACTS ABOUT THE INPUTS:
   - plotted values (level mean+-std), MSE: kriging: 20% 2.48±0.71, 10% 2.92±0.79, 5% 3.69±0.93, 2% 5.2±1.2, 1% 6.56±1.5; sgs: 20% 2.52±0.72, 10% 2.95±0.79, 5% 3.7±0.94, 2% 5.2±1.2, 1% 6.59±1.5; rbf_bootstrap: 20% 2.67±0.8, 10% 3.12±0.85, 5% 3.84±1, 2% 6.2±2.3, 1% 7.99±3.9; gp_mle: 20% 2.63±0.74, 10% 3.04±0.8, 5% 3.78±0.96, 2% 5.34±1.3, 1% 6.74±1.6
   - UMG: kriging: 20% 0.933±0.053, 10% 0.935±0.049, 5% 0.928±0.061, 2% 0.926±0.065, 1% 0.899±0.089; sgs: 20% 0.932±0.054, 10% 0.937±0.048, 5% 0.931±0.056, 2% 0.938±0.054, 1% 0.926±0.068; rbf_bootstrap: 20% 0.484±0.04, 10% 0.508±0.051, 5% 0.502±0.063, 2% 0.523±0.12, 1% 0.489±0.14; gp_mle: 20% 0.977±0.017, 10% 0.97±0.024, 5% 0.962±0.033, 2% 0.927±0.07, 1% 0.89±0.1
   - coverage90: kriging: 20% 0.873±0.054, 10% 0.874±0.053, 5% 0.868±0.06, 2% 0.865±0.059, 1% 0.85±0.086; sgs: 20% 0.87±0.056, 10% 0.876±0.054, 5% 0.873±0.06, 2% 0.877±0.055, 1% 0.879±0.072; rbf_bootstrap: 20% 0.443±0.041, 10% 0.467±0.052, 5% 0.46±0.064, 2% 0.476±0.12, 1% 0.439±0.14; gp_mle: 20% 0.891±0.015, 10% 0.89±0.024, 5% 0.885±0.03, 2% 0.862±0.062, 1% 0.827±0.092
+  - B-2 / C-2 inferred-variogram runs: results/raw/inferred_variogram_density/ (runner src/experiments/inferred_variogram_density.py, evaluator src/experiments/evaluate_inferred_variogram_density.py); same truth, conditioning samples, kb2d/sgsim settings, SGS N = 50 and SGS seed as the row-1 oracle runs; only the kriging/SGS variogram differs: build_vario(hmaj1 = hmin1 = fit_range_m, nug = fit_nugget), spherical, unit sill, automatic WLS fit (no manual edits).
+  - B-2 / C-2 / D: GP-MLE values are the row-1 values (not re-run).
+  - panel D range definitions differ: GP-MLE practical range = correlation 0.05; spherical range = correlation 0 (where the spherical variogram reaches the sill).
+  - panel D inferred spherical range per-level min / median / max (m), count above the true range, fits at a range bound: 20%: 181 / 307 / 414, 53 of 100 above, 0 at bound; 10%: 184 / 304 / 444, 51 of 100 above, 0 at bound; 5%: 156 / 293 / 511, 45 of 100 above, 0 at bound; 2%: 132 / 297 / 749, 47 of 100 above, 0 at bound; 1%: 75 / 323 / 1000, 55 of 100 above, 32 at bound
+  - inferred SGS grid-node warnings (cells with >0 / total): 20%: 0 / 0; 10%: 20 / 3247; 5%: 0 / 0; 2%: 0 / 0; 1%: 0 / 0.
+  - inferred MSE (not drawn): kriging_inferred: 20% 2.49±0.72, 10% 2.93±0.79, 5% 3.76±0.97, 2% 5.48±1.3, 1% 7.37±1.5; sgs_inferred: 20% 2.53±0.73, 10% 2.98±0.81, 5% 3.79±1, 2% 5.48±1.3, 1% 7.42±1.6
+  - inferred UMG: kriging_inferred: 20% 0.975±0.018, 10% 0.969±0.022, 5% 0.962±0.035, 2% 0.946±0.049, 1% 0.892±0.092; sgs_inferred: 20% 0.975±0.017, 10% 0.972±0.02, 5% 0.965±0.031, 2% 0.954±0.037, 1% 0.925±0.075
+  - inferred coverage90: kriging_inferred: 20% 0.891±0.02, 10% 0.892±0.027, 5% 0.89±0.036, 2% 0.886±0.05, 1% 0.845±0.097; sgs_inferred: 20% 0.887±0.019, 10% 0.893±0.026, 5% 0.894±0.033, 2% 0.897±0.044, 1% 0.878±0.078

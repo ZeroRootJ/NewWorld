@@ -151,6 +151,25 @@ F3_BC_OMIT = ("rbf_bootstrap",)
 F3_D_MARKER_S = 3.0
 F3_D_ALPHA = 0.35
 F3_D_LOG_TICKS = (50, 100, 200, 300, 500, 1000, 2000)
+# F3 row 2 (B-2 UMG, C-2 coverage90) + panel D second series: kriging / SGS re-run
+# on E4 with the sample-inferred (auto-fit) variogram - user request 2026-11-17.
+INF_DIR = PROCESSED / "inferred_variogram_density"
+INF_METRICS = INF_DIR / "metrics.csv"
+INF_SUMMARY = INF_DIR / "metrics_summary.csv"
+INF_CELLS = INF_DIR / "evaluation_cells.csv"
+INF_FITS = PROCESSED / "variogram_inference" / "fitted_variograms.csv"
+INF_METHODS = ["kriging_inferred", "sgs_inferred"]
+# inferred-variogram variants: same colour/marker/x offset as the oracle method,
+# hollow marker + dashed line
+INF_BASE = {"kriging_inferred": "kriging", "sgs_inferred": "sgs"}
+INF_LABELS = {"kriging_inferred": "Simple kriging (inferred variogram)",
+              "sgs_inferred": "SGS (inferred variogram)"}
+INF_LINESTYLE = (0, (3, 1.5))
+# panel D: GP-MLE points shifted left, inferred spherical ranges shifted right
+# (multiplicative x shift), each spread +-F3_D_SPLIT_SPREAD
+F3_D_SPLIT_SHIFT = 0.10
+F3_D_SPLIT_SPREAD = 0.07
+F3_D_INF_COLOR = "tab:blue"
 
 MSE_LABEL = "MSE (porosity %²)"
 UMG_LABEL = "UMG (1 = calibrated)"
@@ -359,10 +378,14 @@ def _style_density_axis(ax, dens, xlabel=True):
 
 
 def _plot_density_metric(ax, summary, dens, metric, methods=METHODS, faded=()):
-    """mean +- 1 std across replicates, methods offset in x so bars do not overlap."""
-    for m_idx, method in enumerate(METHODS):
+    """mean +- 1 std across replicates, methods offset in x so bars do not overlap.
+    Inferred-variogram methods (INF_METHODS) take their oracle method's colour,
+    marker and x offset, drawn with a hollow marker and dashed line."""
+    for method in METHODS + INF_METHODS:
         if method not in methods:
             continue
+        base = INF_BASE.get(method, method)
+        m_idx = METHODS.index(base)
         off = (m_idx - (len(METHODS) - 1) / 2) * METHOD_X_OFFSET_FRAC
         sub = summary[(summary["method"] == method) & (summary["metric"] == metric)]
         sub = sub.set_index("axis_level").loc[DENSITY_LEVELS]
@@ -370,9 +393,11 @@ def _plot_density_metric(ax, summary, dens, metric, methods=METHODS, faded=()):
         is_faded = method in faded
         ax.errorbar(
             x, sub["mean"].values, yerr=sub["std"].values,
-            color=METHOD_COLORS[method], marker=METHOD_MARKERS[method],
+            color=METHOD_COLORS[base], marker=METHOD_MARKERS[base],
             markersize=2.6 if is_faded else 3.6,
             linewidth=0.6 if is_faded else 1.0,
+            linestyle=INF_LINESTYLE if method in INF_BASE else "-",
+            markerfacecolor="white" if method in INF_BASE else METHOD_COLORS[base],
             elinewidth=0.5, capsize=1.5, capthick=0.5,
             alpha=0.32 if is_faded else 1.0,
             zorder=2 if is_faded else 3,
@@ -380,11 +405,63 @@ def _plot_density_metric(ax, summary, dens, metric, methods=METHODS, faded=()):
 
 
 def _method_handles(methods=METHODS, faded=()):
-    return [
-        Line2D([0], [0], color=METHOD_COLORS[m], marker=METHOD_MARKERS[m], markersize=3.6,
-               linewidth=1.0, alpha=0.32 if m in faded else 1.0, label=METHOD_LABELS[m])
-        for m in methods
-    ]
+    out = []
+    for m in methods:
+        base = INF_BASE.get(m, m)
+        out.append(Line2D(
+            [0], [0], color=METHOD_COLORS[base], marker=METHOD_MARKERS[base], markersize=3.6,
+            linewidth=1.0, alpha=0.32 if m in faded else 1.0,
+            linestyle=INF_LINESTYLE if m in INF_BASE else "-",
+            markerfacecolor="white" if m in INF_BASE else METHOD_COLORS[base],
+            label=INF_LABELS.get(m, METHOD_LABELS.get(m))))
+    return out
+
+
+def _load_inferred_density(mt) -> dict:
+    """Inferred-variogram kriging / SGS on E4 (results/processed/inferred_variogram_density)
+    and the per-cell spherical fit it used. Checks: pooled summary re-derived from
+    metrics.csv; same cells / levels / counts as the oracle E4 evaluation; the
+    variogram recorded per cell equals the fitted_variograms.csv row."""
+    ed = mt["exp"]["density"]
+    metrics = read_metrics_csv(INF_METRICS)
+    summary = read_metrics_csv(INF_SUMMARY)
+    for name, df in (("metrics", metrics), ("summary", summary)):
+        if set(df["method"]) != set(INF_METHODS) or set(df["experiment"]) != {ed["experiment"]}:
+            raise ValueError(f"inferred_variogram_density {name}: unexpected methods/experiments.")
+        if set(df["axis_level"]) != set(DENSITY_LEVELS):
+            raise ValueError(f"inferred_variogram_density {name}: unexpected levels.")
+    key = ["experiment", "axis_level", "method", "metric"]
+    re_ = metrics.groupby(key)["value"].agg(mean="mean", std=lambda v: float(np.std(v, ddof=1)),
+                                            n="count")
+    chk = summary.set_index(key)[["mean", "std", "n"]].join(re_, rsuffix="_re")
+    if not (np.allclose(chk["mean"], chk["mean_re"], rtol=1e-12, atol=0)
+            and np.allclose(chk["std"], chk["std_re"], rtol=1e-9, atol=1e-15)
+            and (chk["n"] == chk["n_re"]).all() and set(chk["n"]) == {ed["n_cells"]}):
+        raise ValueError(f"{_rel(INF_SUMMARY)} does not match {_rel(INF_METRICS)} / {ed['n_cells']} cells.")
+    ens = summary[summary["method"] == "sgs_inferred"]
+    if set(ens["n_ensemble"]) != {mt["n_ens"]}:
+        raise ValueError(f"{_rel(INF_SUMMARY)}: SGS ensemble N differs from the oracle runs.")
+
+    cells = pd.read_csv(INF_CELLS, dtype={"axis_level": str, "sample_rep": str})
+    fits = pd.read_csv(INF_FITS, dtype={"axis_level": str, "sample_rep": str})
+    fits = fits[fits["experiment"] == ed["experiment"]]
+    j = cells.merge(fits[["config_key", "fit_range_m", "fit_nugget"]], on="config_key", how="left",
+                    validate="one_to_one")
+    if len(j) != len(fits) or j["fit_range_m"].isna().any():
+        raise ValueError(f"{_rel(INF_CELLS)} and {_rel(INF_FITS)} cells differ.")
+    if not (np.allclose(j["vario_hmaj1"], j["fit_range_m"], rtol=1e-12, atol=0)
+            and np.allclose(j["vario_hmin1"], j["fit_range_m"], rtol=1e-12, atol=0)
+            and np.allclose(j["vario_nug"], j["fit_nugget"], rtol=1e-12, atol=0)):
+        raise ValueError(f"{_rel(INF_CELLS)} variogram differs from {_rel(INF_FITS)}.")
+    counts = j.groupby("axis_level").size()
+    if set(counts) != {ed["n_cells"]}:
+        raise ValueError(f"inferred E4 cells per level {counts.to_dict()}")
+    warn = {lvl: (int((j.loc[j["axis_level"] == lvl, "sgs_grid_node_warnings_b1"] > 0).sum()),
+                  int(j.loc[j["axis_level"] == lvl, "sgs_grid_node_warnings_b1"].sum()))
+            for lvl in DENSITY_LEVELS}
+    bound = {lvl: int(((fits["axis_level"] == lvl) & (fits["range_at_upper"] | fits["range_at_lower"])).sum())
+             for lvl in DENSITY_LEVELS}
+    return {"summary": summary, "fits": j, "warn": warn, "range_bound_hits": bound}
 
 
 def _replicate_n_text(dens) -> str:
@@ -548,12 +625,12 @@ def _level_table(summ, metric) -> str:
     return "; ".join(parts)
 
 
-def _density_table(summ, metric) -> str:
+def _density_table(summ, metric, methods=METHODS) -> str:
     t = summ[summ["metric"] == metric].set_index(["method", "axis_level"])
     return "; ".join(
         f"{m}: " + ", ".join(f"{lvl}% {t.loc[(m, lvl), 'mean']:.3g}±{t.loc[(m, lvl), 'std']:.2g}"
                              for lvl in DENSITY_LEVELS)
-        for m in METHODS)
+        for m in methods)
 
 
 def _mt_inputs(mt, extra=()):
@@ -843,47 +920,77 @@ def figure_f3(mt):
     summ = ed["summary"]
     gp = mt["gp_range"]
     n_per = ed["n_cells"]
-    spread = float(gp["value"].max() / gp["value"].min())
+    inf = _load_inferred_density(mt)
+    fits = inf["fits"]
+    spread = float(max(gp["value"].max(), fits["fit_range_m"].max())
+                   / min(gp["value"].min(), fits["fit_range_m"].min()))
     use_log = spread >= RATIO_LOG_THRESHOLD
-    faded = ("sgs", "rbf_bootstrap")
+    faded = ("sgs", "rbf_bootstrap", "sgs_inferred")
     if "coverage90" not in set(summ["metric"]):
         raise ValueError(f"{_rel(MTA_SUMMARY)} has no coverage90 for {ed['experiment']}.")
-    cov = summ[(summ["metric"] == "coverage90") & (~summ["method"].isin(F3_BC_OMIT))]
+    # row 2 data: inferred kriging / SGS + the SAME GP-MLE rows as row 1
+    summ2 = pd.concat([summ[summ["method"] == "gp_mle"], inf["summary"]], ignore_index=True)
+    row2_methods = INF_METHODS + ["gp_mle"]
 
     note = (
-        f"{_mt_axis_text(ed)} (ground-truth range {dens['truth_range_m']:g} m); A–C: {_mt_bar_text()}; "
+        f"{_mt_axis_text(ed)} (ground-truth range {dens['truth_range_m']:g} m); A–C, B-2, C-2: {_mt_bar_text()}; "
+        f"row 1 kriging/SGS use the true (oracle) variogram; B-2, C-2: kriging/SGS re-run with the variogram "
+        f"fitted to each cell's samples (spherical, automatic fit, same samples and SGS seed), GP-MLE as in row 1; "
+        f"B-2/C-2 y axes equal B/C; "
         f"C: fraction of evaluated cells inside the central {COV90_NOMINAL:.0%} predictive interval (kriging: "
         f"normal-score interval back-transformed; SGS, RBF+bootstrap, GP-MLE: Gaussian mean ± z·std interval); "
         f"B, C: RBF+bootstrap not drawn (values in status file); "
-        f"D: one point per cell ({n_per} per level; fitted practical range = RBF-kernel length scale converted "
-        f"at the 0.05 correlation cutoff; max/min over all points = {spread:.1f}×, "
-        f"{'log' if use_log else 'linear'} y axis). {_mt_ensemble_text(mt)}."
+        f"D: one point per cell per series ({n_per} per level); GP-MLE practical range = RBF-kernel length "
+        f"scale at the 0.05 correlation cutoff; kriging/SGS inferred range = spherical range (correlation 0) – "
+        f"the two range definitions differ; max/min over all points = {spread:.1f}×, "
+        f"{'log' if use_log else 'linear'} y axis. {_mt_ensemble_text(mt)}."
     )
-    fig, rect = _new_figure(plot_height_mm=F3_PLOT_HEIGHT_MM, status_text=note, top_mm=14.0,
+    fig, rect = _new_figure(plot_height_mm=2 * F3_PLOT_HEIGHT_MM + 16.0, status_text=note, top_mm=14.0,
                             right_mm=F3_RIGHT_MM)
-    gs = fig.add_gridspec(1, 4, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3], wspace=0.42)
+    gs = fig.add_gridspec(2, 4, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3], wspace=0.42,
+                          hspace=16.0 / F3_PLOT_HEIGHT_MM)
     ax_a, ax_b, ax_c, ax_d = (fig.add_subplot(gs[0, i]) for i in range(4))
+    ax_b2, ax_c2 = fig.add_subplot(gs[1, 1]), fig.add_subplot(gs[1, 2])
+    ax_leg2 = fig.add_subplot(gs[1, 3])
+    ax_leg2.axis("off")
 
     _plot_density_metric(ax_a, summ, dens, "mse", faded=faded)
     # B and C omit RBF+bootstrap (its UMG ~0.5 / coverage ~0.45 compresses the
     # y range of the other methods); its values are in the status file.
     bc_methods = [m for m in METHODS if m not in F3_BC_OMIT]
     _plot_density_metric(ax_b, summ, dens, "umg", methods=bc_methods, faded=faded)
-    ax_b.axhline(1.0, color="gray", linestyle="--", linewidth=0.6, zorder=1)
     _plot_density_metric(ax_c, summ, dens, "coverage90", methods=bc_methods, faded=faded)
-    ax_c.axhline(COV90_NOMINAL, color="gray", linestyle="--", linewidth=0.6, zorder=1)
+    _plot_density_metric(ax_b2, summ2, dens, "umg", methods=row2_methods, faded=faded)
+    _plot_density_metric(ax_c2, summ2, dens, "coverage90", methods=row2_methods, faded=faded)
+    for ax in (ax_b, ax_b2):
+        ax.axhline(1.0, color="gray", linestyle="--", linewidth=0.6, zorder=1)
+        ax.set_ylabel(UMG_LABEL)
+    for ax in (ax_c, ax_c2):
+        ax.axhline(COV90_NOMINAL, color="gray", linestyle="--", linewidth=0.6, zorder=1)
+        ax.set_ylabel(COV90_LABEL)
     ax_a.set_ylabel(MSE_LABEL)
-    ax_b.set_ylabel(UMG_LABEL)
-    ax_c.set_ylabel(COV90_LABEL)
+    # B-2 / C-2 share B / C's y range (union of the autoscaled ranges)
+    for pair in ((ax_b, ax_b2), (ax_c, ax_c2)):
+        lo = min(a.get_ylim()[0] for a in pair)
+        hi = max(a.get_ylim()[1] for a in pair)
+        for a in pair:
+            a.set_ylim(lo, hi)
 
     # Deterministic (non-random) horizontal spread of the per-cell points,
-    # ordered by (truth_seed, sample_rep).
-    spread_frac = np.linspace(-F3_D_SPREAD_FRAC, F3_D_SPREAD_FRAC, n_per)
+    # ordered by (truth_seed, sample_rep); GP-MLE shifted left, inferred
+    # spherical range shifted right.
+    spread_frac = np.linspace(-F3_D_SPLIT_SPREAD, F3_D_SPLIT_SPREAD, n_per)
     for lvl in DENSITY_LEVELS:
         sub = gp[gp["axis_level"] == lvl].sort_values(["truth_seed", "sample_rep"])
         ax_d.scatter(
-            dens["pct"][lvl] * (1.0 + spread_frac), sub["value"],
+            dens["pct"][lvl] * (1.0 - F3_D_SPLIT_SHIFT + spread_frac), sub["value"],
             s=F3_D_MARKER_S, marker=METHOD_MARKERS["gp_mle"], facecolors=METHOD_COLORS["gp_mle"],
+            edgecolors="none", alpha=F3_D_ALPHA, zorder=3,
+        )
+        fsub = fits[fits["axis_level"] == lvl].sort_values(["truth_seed", "sample_rep"])
+        ax_d.scatter(
+            dens["pct"][lvl] * (1.0 + F3_D_SPLIT_SHIFT + spread_frac), fsub["fit_range_m"],
+            s=F3_D_MARKER_S, marker="o", facecolors=F3_D_INF_COLOR,
             edgecolors="none", alpha=F3_D_ALPHA, zorder=3,
         )
     ax_d.axhline(dens["truth_range_m"], color="black", linestyle="--", linewidth=0.7, zorder=2)
@@ -898,21 +1005,24 @@ def figure_f3(mt):
         ax_d.yaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
     else:
         ax_d.set_ylim(bottom=0)
-    ax_d.set_ylabel("GP-MLE fitted practical range (m)")
+    ax_d.set_ylabel("Fitted range (m)")
 
-    for ax, letter in zip((ax_a, ax_b, ax_c, ax_d), "ABCD"):
+    for ax, letter in zip((ax_a, ax_b, ax_c, ax_d, ax_b2, ax_c2), ("A", "B", "C", "D", "B-2", "C-2")):
         _style_density_axis(ax, dens, xlabel=False)
         ax.set_xlabel(DENSITY_XLABEL_SHORT)
         ax.grid(True)
         _panel_label(ax, letter)
 
-    # Panel C y axis is autoscaled (errorbar includes the +-1 std bars); verify
-    # nothing is clipped.
-    cov_lo = float((cov["mean"] - cov["std"]).min())
-    cov_hi = float((cov["mean"] + cov["std"]).max())
-    ylim_c = ax_c.get_ylim()
-    if ylim_c[0] > cov_lo or ylim_c[1] < cov_hi:
-        raise ValueError(f"panel C y range {ylim_c} clips the mean +-1 std range [{cov_lo}, {cov_hi}].")
+    # Panel y axes are autoscaled (errorbar includes the +-1 std bars) then
+    # unioned per pair; verify nothing is clipped.
+    for ax, s_, ms, metric, name in (
+            (ax_b, summ, bc_methods, "umg", "B"), (ax_c, summ, bc_methods, "coverage90", "C"),
+            (ax_b2, summ2, row2_methods, "umg", "B-2"), (ax_c2, summ2, row2_methods, "coverage90", "C-2")):
+        r = s_[(s_["metric"] == metric) & (s_["method"].isin(ms))]
+        lo_, hi_ = float((r["mean"] - r["std"]).min()), float((r["mean"] + r["std"]).max())
+        yl = ax.get_ylim()
+        if yl[0] > lo_ or yl[1] < hi_:
+            raise ValueError(f"panel {name} y range {yl} clips the mean +-1 std range [{lo_}, {hi_}].")
 
     handles = _method_handles(faded=faded) + [
         Line2D([0], [0], color="gray", linestyle="--", linewidth=0.6, label="Ideal (UMG = 1)"),
@@ -920,18 +1030,30 @@ def figure_f3(mt):
                label=f"Nominal ({COV90_NOMINAL:.2f})"),
         Line2D([0], [0], color="black", linestyle="--", linewidth=0.7,
                label=f"Ground-truth range ({dens['truth_range_m']:g} m)"),
+        Line2D([0], [0], color=F3_D_INF_COLOR, marker="o", linestyle="none", markersize=3.0,
+               label="D: kriging/SGS inferred range (spherical)"),
     ]
-    fig.legend(handles=handles, loc="upper center", ncol=F3_LEGEND_NCOL, bbox_to_anchor=(0.5, 1.0),
+    fig.legend(handles=handles, loc="upper center", ncol=4, bbox_to_anchor=(0.5, 1.0),
                columnspacing=1.4)
+    ax_leg2.legend(handles=_method_handles(methods=row2_methods, faded=faded),
+                   loc="center", title="B-2, C-2", frameon=False)
 
     per_level = gp.groupby("axis_level")["value"].describe(percentiles=[0.5]).loc[DENSITY_LEVELS]
     n_above = {lvl: int((gp[gp["axis_level"] == lvl]["value"] > dens["truth_range_m"]).sum())
                for lvl in DENSITY_LEVELS}
+    inf_level = fits.groupby("axis_level")["fit_range_m"].describe(percentiles=[0.5]).loc[DENSITY_LEVELS]
+    inf_above = {lvl: int((fits[fits["axis_level"] == lvl]["fit_range_m"] > dens["truth_range_m"]).sum())
+                 for lvl in DENSITY_LEVELS}
     lines = _status_file(
         stem,
         inputs=_mt_inputs(mt, extra=[
             f"{_rel(MTA_HYPER)} (rows experiment == {ed['experiment']}, method == gp_mle, parameter == "
             "gp_practical_range_m; column value)",
+            f"{_rel(INF_SUMMARY)} (kriging_inferred, sgs_inferred; pooled mean, std (ddof=1), n) - re-derived "
+            f"from {_rel(INF_METRICS)} at run time and asserted equal",
+            f"{_rel(INF_CELLS)} (vario_hmaj1 / vario_hmin1 / vario_nug per cell, sgs_grid_node_warnings_b1)",
+            f"{_rel(INF_FITS)} (rows experiment == {ed['experiment']}; fit_range_m, fit_nugget, range_at_* ; "
+            "asserted equal to the variogram recorded per cell)",
         ]),
         panels=[
             ("A", "REAL DATA - MSE vs density; kriging and GP-MLE at full strength, SGS and RBF+bootstrap "
@@ -941,9 +1063,16 @@ def figure_f3(mt):
             ("C", f"REAL DATA - 90% interval coverage vs density, same emphasis and statistics; RBF+bootstrap "
                   "NOT drawn (as B); "
                   f"dashed gray line = nominal {COV90_NOMINAL:.2f}"),
-            ("D", f"REAL DATA - GP-MLE fitted practical range, one point per cell ({n_per} per level = "
-                  f"{ed['n_truth']} truths x {ed['n_sets']} sample sets), dashed line = ground-truth range "
-                  f"{dens['truth_range_m']:g} m"),
+            ("D", f"REAL DATA - fitted range, one point per cell per series ({n_per} per level = "
+                  f"{ed['n_truth']} truths x {ed['n_sets']} sample sets): GP-MLE practical range (red, shifted "
+                  f"left) and the spherical range of the sample-inferred variogram used by kriging/SGS in B-2/C-2 "
+                  f"(blue circles, shifted right; one series - kriging and SGS use the same variogram); dashed "
+                  f"line = ground-truth range {dens['truth_range_m']:g} m"),
+            ("B-2", "REAL DATA - UMG vs density: kriging / SGS re-run with the sample-inferred variogram "
+                    "(hollow markers, dashed line; SGS faded) + GP-MLE (identical to B); y axis equal to B; "
+                    f"mean +-1 std over {n_per} cells per level (user request 2026-11-17)"),
+            ("C-2", "REAL DATA - 90% interval coverage vs density, same series and statistics as B-2; y axis "
+                    "equal to C"),
         ],
         in_figure_note="DATA STATUS: " + note,
         limits=_mt_common_limits(mt) + [
@@ -977,6 +1106,26 @@ def figure_f3(mt):
             "plotted values (level mean+-std), MSE: " + _density_table(summ, "mse"),
             "UMG: " + _density_table(summ, "umg"),
             "coverage90: " + _density_table(summ, "coverage90"),
+            "B-2 / C-2 inferred-variogram runs: results/raw/inferred_variogram_density/ (runner "
+            "src/experiments/inferred_variogram_density.py, evaluator "
+            "src/experiments/evaluate_inferred_variogram_density.py); same truth, conditioning samples, "
+            f"kb2d/sgsim settings, SGS N = {mt['n_ens']} and SGS seed as the row-1 oracle runs; only the "
+            "kriging/SGS variogram differs: build_vario(hmaj1 = hmin1 = fit_range_m, nug = fit_nugget), "
+            "spherical, unit sill, automatic WLS fit (no manual edits).",
+            "B-2 / C-2 / D: GP-MLE values are the row-1 values (not re-run).",
+            "panel D range definitions differ: GP-MLE practical range = correlation 0.05; spherical range = "
+            "correlation 0 (where the spherical variogram reaches the sill).",
+            "panel D inferred spherical range per-level min / median / max (m), count above the true range, "
+            "fits at a range bound: " + "; ".join(
+                f"{lvl}%: {inf_level.loc[lvl, 'min']:.0f} / {inf_level.loc[lvl, '50%']:.0f} / "
+                f"{inf_level.loc[lvl, 'max']:.0f}, {inf_above[lvl]} of {n_per} above, "
+                f"{inf['range_bound_hits'][lvl]} at bound"
+                for lvl in DENSITY_LEVELS),
+            "inferred SGS grid-node warnings (cells with >0 / total): " + "; ".join(
+                f"{lvl}%: {inf['warn'][lvl][0]} / {inf['warn'][lvl][1]}" for lvl in DENSITY_LEVELS) + ".",
+            "inferred MSE (not drawn): " + _density_table(inf["summary"], "mse", INF_METHODS),
+            "inferred UMG: " + _density_table(inf["summary"], "umg", INF_METHODS),
+            "inferred coverage90: " + _density_table(inf["summary"], "coverage90", INF_METHODS),
         ],
     )
     return _save(fig, stem, lines)
