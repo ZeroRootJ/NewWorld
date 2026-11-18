@@ -153,6 +153,25 @@ def build_vario(
     )
 
 
+def check_vario_override(vario: Dict[str, Any]) -> Dict[str, Any]:
+    """Validate a caller-supplied variogram dict for kriging.main /
+    sgs.main(vario_override=...) (added 2026-11-17, inferred_variogram_density
+    task) and return it unchanged.
+
+    The dict must have exactly the structure ``build_vario`` produces (one
+    structure, type IT1, azimuth AZI1, unit sill nug + cc1 = 1.0, positive
+    ranges) -- i.e. only hmaj1/hmin1/nug may differ from a true-variogram
+    call. Rebuilding it through build_vario and comparing guarantees that.
+    """
+    hmaj1, hmin1, nug = float(vario["hmaj1"]), float(vario["hmin1"]), float(vario["nug"])
+    if not (hmaj1 > 0.0 and hmin1 > 0.0):
+        raise ValueError(f"vario_override ranges must be > 0; got hmaj1={hmaj1}, hmin1={hmin1}")
+    expected = build_vario(hmaj1=hmaj1, hmin1=hmin1, nug=nug)
+    if dict(vario) != expected:
+        raise ValueError(f"vario_override {vario} is not a build_vario(...) dict (expected {expected})")
+    return vario
+
+
 def get_base_case_truth(
     truth_seed: int = TRUTH_SEED,
     hmaj1: float = HMAJ1,

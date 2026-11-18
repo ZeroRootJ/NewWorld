@@ -51,6 +51,7 @@ Run with: .venv/Scripts/python.exe -m src.experiments.kriging
 """
 
 import time
+from typing import Optional
 
 import matplotlib
 import numpy as np
@@ -84,6 +85,7 @@ from src.experiments.base_case_conditioning import (
     TRUTH_SEED,
     VCOL,
     build_vario,
+    check_vario_override as _check_vario_override,
     get_base_case_conditioning_data,
 )
 from src.io import make_run_dir, save_result
@@ -303,6 +305,7 @@ def main(
     n_samples: int = N_SAMPLES,
     nug: float = _COND_NUG,
     output_dir: str = "results/raw",
+    vario_override: Optional[dict] = None,
 ):
     """Run the simple-kriging base-case pipeline.
 
@@ -339,7 +342,13 @@ def main(
         nug=nug,
     )
     n_actual_samples = len(samples_df)
-    vario = build_vario(hmaj1=hmaj1, hmin1=hmin1, nug=nug)
+    # vario_override (added 2026-11-17, inferred_variogram_density task):
+    # None (default) -> the TRUE variogram of the ground truth, exactly as
+    # before. Otherwise this dict (built by the caller with build_vario, e.g.
+    # from a sample-inferred fit) is used for the method ONLY; hmaj1/hmin1/nug
+    # still define the ground truth (and are still recorded as such below).
+    vario = (build_vario(hmaj1=hmaj1, hmin1=hmin1, nug=nug) if vario_override is None
+             else _check_vario_override(vario_override))
 
     # --- Normal-score transform of the sample data ----------------------
     # Exact variable names per project decision (do not rename vr/vrg --
@@ -590,6 +599,9 @@ def main(
         "n_samples_actual": n_actual_samples,
         "n_samples_used_by_kb2d": n_samples_used_by_kb2d,
         "variogram": vario,
+        # Present ONLY when vario_override was passed (absent for default runs,
+        # so their manifests are unchanged).
+        **({"variogram_source": "vario_override (method variogram differs from the truth variogram given by hmaj1/hmin1/nug)"} if vario_override is not None else {}),
         "ktype": KTYPE,
         "skmean_ns": SKMEAN_NS,
         "nxdis": NXDIS,

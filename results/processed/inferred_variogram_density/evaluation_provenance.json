@@ -1,0 +1,83 @@
+{
+  "generated_by": "src/experiments/evaluate_inferred_variogram_density.py",
+  "git_commit": "876d9ba1dd6996005565749413847d22d0729abb",
+  "git_dirty": true,
+  "git_dirty_files": [
+    "src/experiments/base_case_conditioning.py",
+    "src/experiments/evaluate_multi_truth_axes.py",
+    "src/experiments/kriging.py",
+    "src/experiments/sgs.py",
+    "results/processed/inferred_variogram_density/",
+    "src/experiments/evaluate_inferred_variogram_density.py",
+    "src/experiments/inferred_variogram_density.py"
+  ],
+  "source_run": "results/raw/inferred_variogram_density/20261117T183011505737Z",
+  "source_run_status": "complete",
+  "source_run_git_commit": "876d9ba1dd6996005565749413847d22d0729abb",
+  "run_git_commits_by_method": {
+    "kriging_inferred": {
+      "067281a6b4c3d90cb5e8aae916e80348ddd0a6d3 (dirty=True)": 130,
+      "8b9031b4970f6fb6b00ae21220e4151c7e61538e (dirty=True)": 10,
+      "128602e88c895ed7a590018b0cbe0def023db5c1 (dirty=True)": 16,
+      "876d9ba1dd6996005565749413847d22d0729abb (dirty=True)": 344
+    },
+    "sgs_inferred": {
+      "067281a6b4c3d90cb5e8aae916e80348ddd0a6d3 (dirty=True)": 115,
+      "8b9031b4970f6fb6b00ae21220e4151c7e61538e (dirty=True)": 5,
+      "128602e88c895ed7a590018b0cbe0def023db5c1 (dirty=True)": 18,
+      "876d9ba1dd6996005565749413847d22d0729abb (dirty=True)": 362
+    }
+  },
+  "oracle_source_run": "results/raw/multi_truth_axes/20261116T222609599808Z",
+  "variogram_source": {
+    "file": "results/processed/variogram_inference/fitted_variograms.csv",
+    "file_sha256": "a5329fc3d23d2007080b87520b32e1d58fc365bc2e232096eb2763f46c812728",
+    "rows": "experiment == 'E4'",
+    "columns_used": {
+      "hmaj1": "fit_range_m",
+      "hmin1": "fit_range_m",
+      "nug": "fit_nugget"
+    },
+    "model": "build_vario(hmaj1=fit_range_m, hmin1=fit_range_m, nug=fit_nugget): isotropic, spherical (it1=1), unit sill (cc1 = 1 - nug), azi1 = 0",
+    "values_note": "automatic fits used as-is (user reviewed in the review UI and reset all to auto-fit)",
+    "variogram_inference_manifest": "results/processed/variogram_inference/manifest.json",
+    "variogram_inference_git_commit": "b616658330db7497b58987d96363d247ef3a5019",
+    "variogram_inference_git_dirty": true,
+    "variogram_inference_timestamp": "2026-11-17T17:56:23.729665+00:00",
+    "variogram_inference_code_entrypoint": "src/experiments/infer_variograms.py"
+  },
+  "n_cells_evaluated": 500,
+  "methods": {
+    "kriging_inferred": "simple kriging (kb2d) with the sample-inferred variogram",
+    "sgs_inferred": "SGS, N=50, sgsim seed 4101 (= oracle batch 1), inferred variogram"
+  },
+  "metrics": [
+    "mse",
+    "umg",
+    "variance_mean",
+    "coverage90"
+  ],
+  "coverage_nominal_p": 0.9,
+  "umg_bins": 20,
+  "evaluation_code_path": "evaluate_multi_truth_axes._conditioning / _verify_run / kriging_metrics / _gaussian_metrics (identical functions to the oracle evaluation)",
+  "summary_definition": "mean / std(ddof=1) / n over all (truth_seed, sample_rep) rows of a (experiment, axis_level, method, n_ensemble, batches, metric) group",
+  "batches_column": "'1' for sgs_inferred, '' for kriging_inferred; read with evaluate_multi_truth_axes.read_metrics_csv",
+  "checks": {
+    "oracle_reevaluation_vs_multi_truth_axes_metrics_csv": {
+      "reference": "results/processed/multi_truth_axes/metrics.csv",
+      "n_values_compared": 4000,
+      "max_abs_diff": 1.7763568394002505e-15,
+      "tolerance": 1e-12
+    },
+    "samples_equal_to_original_runs": true,
+    "manifest_variogram_equals_inferred_fit": true,
+    "sgs_grid_node_warnings_inferred": {
+      "total": 3247.0,
+      "runs_with_warnings": 20
+    },
+    "sgs_grid_node_warnings_oracle_same_cells": {
+      "total": 2719.0,
+      "runs_with_warnings": 20
+    }
+  }
+}

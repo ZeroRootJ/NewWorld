@@ -243,6 +243,31 @@ def _gaussian_metrics(truth_m, point_m, mean_m, var_m, label) -> dict:
     }
 
 
+def kriging_metrics(kdir: Path, truth_m: np.ndarray, mask: np.ndarray) -> dict:
+    """mse / umg / variance_mean / coverage90 of one kriging run directory,
+    evaluated on the cells selected by ``mask``. Moved verbatim out of
+    evaluate_cell (2026-11-17) so src/experiments/
+    evaluate_inferred_variogram_density.py runs the identical code path."""
+    kmap_phys = np.load(kdir / "kriging_mean_map_physical.npy")
+    kmap_ns = np.load(kdir / "kmap_ns.npy")
+    vmap_ns = np.load(kdir / "kriging_var_map_ns.npy")
+    tt = pd.read_csv(kdir / "nscore_transform_table.csv")
+    std_ns_m = safe_sqrt_variance(vmap_ns[mask], "kriging vmap_ns")
+    kp, kfrac = kriging_fraction_in(truth_m, kmap_ns[mask], std_ns_m, tt["vr"].values, tt["vrg"].values,
+                                    BACKTR_ZMIN, BACKTR_ZMAX, LTAIL, LTPAR, UTAIL, UTPAR,
+                                    p_intervals=_p_grid())
+    if not np.array_equal(kp[:DEFAULT_BINS], np.linspace(0.0, 1.0, DEFAULT_BINS)) or kp[-1] != NOMINAL_P_COVERAGE:
+        raise AssertionError("kriging p grid mismatch")
+    kvar = np.load(kdir / VARIANCE_SOURCE_FILES["kriging"])[mask]
+    safe_sqrt_variance(kvar, "kriging variance_mean")
+    return {
+        "mse": mse(truth_m, kmap_phys[mask]),
+        "umg": calc_umg(kp[:DEFAULT_BINS], kfrac[:DEFAULT_BINS]),
+        "variance_mean": float(np.mean(kvar)),
+        "coverage90": float(kfrac[-1]),
+    }
+
+
 def evaluate_cell(cell: dict, runs: Dict[Tuple[str, object], str], batch_sets: List[Tuple[int, ...]]):
     """runs: {(method, batch or None): run_dir}. Returns (metric_rows,
     hyper_rows, cell_info_row)."""
@@ -260,24 +285,7 @@ def evaluate_cell(cell: dict, runs: Dict[Tuple[str, object], str], batch_sets: L
     # --- kriging -----------------------------------------------------------
     kdir = resolve_run_dir(runs[("kriging", None)])
     _verify_run(cell, "kriging", kdir, samples_df)
-    kmap_phys = np.load(kdir / "kriging_mean_map_physical.npy")
-    kmap_ns = np.load(kdir / "kmap_ns.npy")
-    vmap_ns = np.load(kdir / "kriging_var_map_ns.npy")
-    tt = pd.read_csv(kdir / "nscore_transform_table.csv")
-    std_ns_m = safe_sqrt_variance(vmap_ns[mask], "kriging vmap_ns")
-    kp, kfrac = kriging_fraction_in(truth_m, kmap_ns[mask], std_ns_m, tt["vr"].values, tt["vrg"].values,
-                                    BACKTR_ZMIN, BACKTR_ZMAX, LTAIL, LTPAR, UTAIL, UTPAR,
-                                    p_intervals=_p_grid())
-    if not np.array_equal(kp[:DEFAULT_BINS], np.linspace(0.0, 1.0, DEFAULT_BINS)) or kp[-1] != NOMINAL_P_COVERAGE:
-        raise AssertionError("kriging p grid mismatch")
-    kvar = np.load(kdir / VARIANCE_SOURCE_FILES["kriging"])[mask]
-    safe_sqrt_variance(kvar, "kriging variance_mean")
-    add("kriging", np.nan, "", {
-        "mse": mse(truth_m, kmap_phys[mask]),
-        "umg": calc_umg(kp[:DEFAULT_BINS], kfrac[:DEFAULT_BINS]),
-        "variance_mean": float(np.mean(kvar)),
-        "coverage90": float(kfrac[-1]),
-    })
+    add("kriging", np.nan, "", kriging_metrics(kdir, truth_m, mask))
 
     # --- gp_mle --------------------------------------------------------------
     gdir = resolve_run_dir(runs[("gp_mle", None)])

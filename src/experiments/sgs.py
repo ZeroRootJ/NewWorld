@@ -81,6 +81,7 @@ from src.experiments.base_case_conditioning import (
     TRUTH_SEED,
     VCOL,
     build_vario,
+    check_vario_override as _check_vario_override,
     get_base_case_conditioning_data,
 )
 from src.experiments.rbf_bootstrap import N_BOOTSTRAP
@@ -256,6 +257,7 @@ def main(
     n_ensemble: Optional[int] = None,
     sgs_seed: int = SGS_SEED,
     output_dir: str = "results/raw",
+    vario_override: Optional[dict] = None,
 ):
     """Run the SGS base-case pipeline.
 
@@ -290,7 +292,13 @@ def main(
         nug=nug,
     )
     n_actual_samples = len(samples_df)
-    vario = build_vario(hmaj1=hmaj1, hmin1=hmin1, nug=nug)
+    # vario_override (added 2026-11-17, inferred_variogram_density task):
+    # None (default) -> the TRUE variogram of the ground truth, exactly as
+    # before. Otherwise this dict (built by the caller with build_vario, e.g.
+    # from a sample-inferred fit) is used for the method ONLY; hmaj1/hmin1/nug
+    # still define the ground truth (and are still recorded as such below).
+    vario = (build_vario(hmaj1=hmaj1, hmin1=hmin1, nug=nug) if vario_override is None
+             else _check_vario_override(vario_override))
 
     # --- Local jitter, sgsim-call copy only (see SGS_JITTER_* comment above)
     # samples_df itself (saved to samples.csv / used by every other method)
@@ -506,8 +514,8 @@ def main(
     ax6 = plt.subplot(2, 3, 6)
     ax6.plot(qc_lag, qc_gamma, "o-", label=f"realization {QC_REALIZATION_INDEX} experimental")
     ax6.axhline(1.0, color="gray", linestyle="--", label="sill (standardized=1.0)")
-    ax6.axvline(hmaj1, color="red", linestyle=":", label=f"range={hmaj1:g}m")
-    ax6.set_title(f"QC: experimental variogram vs. model range ({hmaj1:g}m)")
+    ax6.axvline(vario["hmaj1"], color="red", linestyle=":", label=f"range={vario['hmaj1']:g}m")
+    ax6.set_title(f"QC: experimental variogram vs. model range ({vario['hmaj1']:g}m)")
     ax6.set_xlabel("Lag distance (m)")
     ax6.set_ylabel("Semivariance (standardized)")
     ax6.legend(fontsize=7)
@@ -532,6 +540,9 @@ def main(
         "n_samples_requested": n_samples,
         "n_samples_actual": n_actual_samples,
         "variogram": vario,
+        # Present ONLY when vario_override was passed (absent for default runs,
+        # so their manifests are unchanged).
+        **({"variogram_source": "vario_override (method variogram differs from the truth variogram given by hmaj1/hmin1/nug)"} if vario_override is not None else {}),
         "n_realizations": n_realizations,
         "n_realizations_default": N_REALIZATIONS,
         "sgs_seed": sgs_seed,
