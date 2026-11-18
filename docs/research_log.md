@@ -27,3 +27,7 @@ reproduction 지표) 조사해 references.md에 반영 → 결과를 Sample Dens
 ## 2026-11-17
 
 **F7 response surface** — 옛 SNMS grid 코드 검토 → 현재 case용 runner 작성·검수(결정 8건) → multi_truth_axes 종료 후 smoke 게이트 거쳐 자동 실행(490/490, crosscheck PASS) → F7 실제 데이터로 교체·아티팩트 게시.
+
+## 2026-11-18
+
+**스토리라인 초안** — 연구기록·스토리보드 결과로 논리 ①–⑥ 구성 → 그림 설명을 → 연결 bullet로 재작성, 긴장 지점 T1–T4, placeholder P1/P3/P4/P5/P7 제안 → 아티팩트 게시.
