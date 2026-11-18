@@ -66,7 +66,7 @@ FIGS = {
         title="정확도와 UMG의 반응면",
         body=[
             "위 행은 MSE, 아래 행은 UMG이고, 열은 왼쪽부터 simple kriging, SGS, RBF+bootstrap, GP입니다. 색은 grid 노드마다 ground truth 10개(base case: range 300 m, nugget 0.05)에 대한 평균입니다. SGS와 RBF+bootstrap의 ensemble 크기는 N = 50입니다.",
-            "하이퍼파라미터는 grid 값으로 고정했고 자동 튜닝(CV, marginal likelihood)은 하지 않았습니다. 칸 하나가 grid 노드 하나이며 보간은 하지 않았습니다. 최적점도 grid 노드 중에서 골랐습니다(MSE 최소, UMG 최대). 색 범위는 패널마다 다르고, 두 면 모두 밝을수록 좋은 쪽입니다. RBF와 GP의 MSE는 로그 색 척도입니다.",
+            "하이퍼파라미터는 grid 값으로 고정했고 자동 튜닝(CV, marginal likelihood)은 하지 않았습니다. 색은 grid 노드 값 사이를 bilinear 보간한 등고선(14단계)이고, 노드 사이 값은 계산값이 아니라 보간값입니다. 로그 축은 로그 공간에서 보간했고, 바깥 노드 밖으로는 그리지 않았습니다. 동그라미는 실제 base case(300 m, nugget 0.05)입니다. 마름모는 RBF와 GP에 찍은 대략적인 대응점으로, 의미가 정확히 같지는 않고 비교용입니다. GP는 noise = nugget = 0.05, RBF는 λ = nugget/(1 − nugget) ≈ 0.0526(noise 대 signal 비)로 두었습니다. 최적점은 grid 노드 중에서 골랐습니다(MSE 최소, UMG 최대). 색 범위는 패널마다 다르고, 두 면 모두 밝을수록 좋은 쪽입니다. RBF와 GP의 MSE는 로그 색 척도입니다.",
             "grid 크기는 kriging 8×9, SGS 5×5, RBF 8×13, GP 8×11입니다. y축은 kriging과 SGS가 nugget(sill 대비 비율, 선형), RBF가 smoothing λ(로그), GP가 noise variance(정규화 단위의 sill 대비 비율, 로그)입니다. GP는 signal = 1 − noise로 두었습니다(unit sill).",
             "x축 range는 방법마다 같은 규칙으로 맞춘 등가값입니다. kriging과 SGS는 spherical variogram의 range 그대로입니다. RBF는 ε = √(−ln 0.05)/range, GP는 length scale = range/√(−2 ln 0.05)로, Gaussian 커널이 range 거리에서 0.05로 떨어지도록 변환했습니다. 두 covariance 함수가 같다는 뜻은 아닙니다.",
             "채운 별은 그 면의 최적점, 빈 별은 다른 면의 최적점입니다. kriging과 SGS 패널의 원은 실제 base case 값(300 m, 0.05)입니다.",
