@@ -7,7 +7,7 @@ INPUT FILES (read-only):
   - results/processed/multi_truth_axes/evaluation_cells.csv (n_samples_requested, n_samples_actual, n_cells_evaluated, sample_seed, sgs_grid_node_warnings_b1, config_key)
   - results/processed/multi_truth_axes/evaluation_provenance.json (source run folder, batch set)
   - results/raw/multi_truth_axes/20261116T222609599808Z/run_config.json (read-only; hmaj1 / hmin1 / nug of every cell, joined on experiment + config_key)
-  - results/processed/variogram_inference/fitted_variograms.csv (rows experiment == E4, all 100 cells per level; fit_range_m = panel D purple)
+  - results/processed/variogram_inference/fitted_variograms.csv (rows experiment == E4, all 100 cells per level; fit_range_m = panel C purple)
   - results/processed/multi_truth_axes/metrics_summary.csv (rows experiment == E4, method == gp_mle; 100 cells per level, pooled mean)
   - results/processed/multi_truth_axes/hyperparameters.csv (rows experiment == E4, method == gp_mle, parameter == gp_practical_range_m; all 100 cells per level)
   - results/processed/picked_variogram_density/metrics_summary.csv (kriging_picked, sgs_picked; mean, n) - re-derived from results/processed/picked_variogram_density/metrics.csv at run time and asserted equal
@@ -18,29 +18,28 @@ INPUT FILES (read-only):
 PANELS:
   A: REAL DATA - MSE vs density; level means, no error bars; kriging / SGS = oracle (true) variogram, GP-MLE; all 100 cells per level
   B: REAL DATA - UMG vs density, same series and statistics; dashed gray line = 1
-  C: REAL DATA - 90% interval coverage vs density, same series and statistics; dashed gray line = nominal 0.90
-  D: REAL DATA - range, one point per cell: GP-MLE practical range of all 100 cells per level (red diamonds, shifted left) and the spherical range of the user-picked variogram of the 10 rep0 cells used by kriging and SGS (blue circles, centre) and the automatic-fit spherical range of all 100 cells per level (purple squares, shifted right); dashed line = oracle (true-variogram) range, fixed 300 m
+  C: REAL DATA - GP-MLE practical range, one point per cell (all 100 cells per level), red diamonds; dashed line = oracle (true-variogram) range, fixed 300 m; user-picked and auto-fit ranges NOT drawn (listed below)
 
 DATA STATUS note printed in the figure margin:
-  DATA STATUS: 10 ground-truth realizations × 10 sample sets = 100 cells per level (ground-truth range 300 m); points = level means, no error bars; A–C: kriging and SGS with the oracle (true, 300 m) variogram and GP-MLE, all 100 cells per level (10 realizations × 10 samplings); D: user-picked range = variogram set by hand on the Variogram Review board for the 10 rep0 cells per level (sample seed 1001; 49 picks, automatic fit for 1 cell without a pick); C: fraction of evaluated cells inside the central 90% predictive interval (kriging: normal-score interval back-transformed; SGS, GP-MLE: Gaussian mean ± z·std interval); D: one point per cell (100 GP-MLE, 10 user-picked, 100 auto-fit per level; dashed line = oracle (true) range, fixed); GP-MLE practical range = RBF-kernel length scale at the 0.05 correlation cutoff; user-picked range = spherical range (correlation 0) – the two range definitions differ; max/min over all points = 17.6×, log y axis. SGS ensemble N = 50; kriging and GP-MLE have no ensemble.
+  DATA STATUS: 10 ground-truth realizations × 10 sample sets = 100 cells per level (ground-truth range 300 m); points = level means, no error bars; A, B: kriging and SGS with the oracle (true, 300 m) variogram and GP-MLE, all 100 cells per level (10 realizations × 10 samplings); C: one point per cell (100 GP-MLE per level), dashed line = oracle (true) range, fixed; GP-MLE practical range = RBF-kernel length scale at the 0.05 correlation cutoff; max/min over all points = 13.0×, log y axis. SGS ensemble N = 50; kriging and GP-MLE have no ensemble.
 
 DATA LIMITATIONS / FACTS ABOUT THE INPUTS:
   - user request 2026-11-18: single row, no error bars; A-C kriging / SGS = oracle variogram and GP-MLE, all over the same 100 cells per level; user-picked and auto-fit kriging / SGS runs are NOT drawn (their values are listed below); RBF+bootstrap not drawn.
   - kriging / SGS cells: sample_rep == rep0 (sample seed 1001), 10 truth seeds [101, 7101, 7102, 7103, 7104, 7105, 7106, 7107, 7108, 7109] x 5 levels. GP-MLE cells: the same truth seeds x 10 sample sets (100 per level) - the GP-MLE means are NOT on the same cell set as kriging / SGS.
   - user-picked variogram: range_m / nugget of variogram_picks.csv where a row exists, else the automatic fit (fit_range_m / fit_nugget of fitted_variograms.csv). Cells with vario_source = pick: 49; auto fallback: 1 (2% truth 101). Unconfirmed picks used as-is: 1 (20% truth 7108). The Variogram Review board showed the true (oracle) variogram curve while picking.
   - user-picked-variogram evaluation: src/experiments/evaluate_inferred_variogram_density.py at git 552f19f (git_dirty=True); source run results/raw/picked_variogram_density/20261118T185051085153Z (status complete); same samples and SGS seed as the oracle runs.
-  - panel D practical range = sqrt(-2 ln 0.05) x fitted RBF length scale (evaluate_multi_truth_axes.py, qc_nugget_axis.GP_PRACTICAL_RANGE_FACTOR); spherical range = correlation 0 - the two definitions differ.
-  - panel C coverage90 = accuracy-plot fraction_in at exactly p = 0.90 (as F3).
+  - panel C practical range = sqrt(-2 ln 0.05) x fitted RBF length scale (evaluate_multi_truth_axes.py, qc_nugget_axis.GP_PRACTICAL_RANGE_FACTOR); spherical range = correlation 0 - the two definitions differ.
+  - 90% interval coverage panel removed (user request 2026-11-18); coverage90 values listed below.
   - A/B/C y axes autoscaled to include every plotted mean (checked at run time; no clipping).
-  - panel D y-axis rule: log if max/min >= 10x; observed 17.55x -> log; points spread horizontally by a fixed (non-random) +-7% pattern ordered by (truth_seed, sample_rep); GP-MLE alpha 0.35, user-picked alpha 0.7.
-  - panel D GP-MLE practical range per-level min / median / max (m), count above the true range: 20%: 148 / 181 / 248, 0 of 100 above; 10%: 151 / 208 / 355, 4 of 100 above; 5%: 124 / 242 / 369, 16 of 100 above; 2%: 92 / 254 / 728, 26 of 100 above; 1%: 57 / 270 / 740, 38 of 100 above
-  - panel D user-picked spherical range per-level min / median / max (m), count above the true range: 20%: 218 / 271 / 352, 1 of 10 above; 10%: 217 / 289 / 383, 3 of 10 above; 5%: 251 / 304 / 336, 5 of 10 above; 2%: 262 / 305 / 370, 5 of 10 above; 1%: 239 / 306 / 384, 6 of 10 above
-  - panel D auto-fit spherical range per-level min / median / max (m), count above the true range: 20%: 181 / 307 / 414, 53 of 100 above; 10%: 184 / 304 / 444, 51 of 100 above; 5%: 156 / 293 / 511, 45 of 100 above; 2%: 132 / 297 / 749, 47 of 100 above; 1%: 75 / 323 / 1000, 55 of 100 above
+  - panel C y-axis rule: log if max/min >= 10x; observed 12.99x -> log; points spread horizontally by a fixed (non-random) +-7% pattern ordered by (truth_seed, sample_rep); GP-MLE alpha 0.35, user-picked alpha 0.7.
+  - panel C GP-MLE practical range per-level min / median / max (m), count above the true range: 20%: 148 / 181 / 248, 0 of 100 above; 10%: 151 / 208 / 355, 4 of 100 above; 5%: 124 / 242 / 369, 16 of 100 above; 2%: 92 / 254 / 728, 26 of 100 above; 1%: 57 / 270 / 740, 38 of 100 above
+  - panel C user-picked spherical range per-level min / median / max (m), count above the true range: 20%: 218 / 271 / 352, 1 of 10 above; 10%: 217 / 289 / 383, 3 of 10 above; 5%: 251 / 304 / 336, 5 of 10 above; 2%: 262 / 305 / 370, 5 of 10 above; 1%: 239 / 306 / 384, 6 of 10 above
+  - panel C auto-fit spherical range per-level min / median / max (m), count above the true range: 20%: 181 / 307 / 414, 53 of 100 above; 10%: 184 / 304 / 444, 51 of 100 above; 5%: 156 / 293 / 511, 45 of 100 above; 2%: 132 / 297 / 749, 47 of 100 above; 1%: 75 / 323 / 1000, 55 of 100 above
   - SGS grid-node warnings, user-picked (cells with >0 / total): 20%: 0 / 0; 10%: 0 / 0; 5%: 0 / 0; 2%: 0 / 0; 1%: 0 / 0.
   - x positions are the REQUESTED sample fraction; actual n per level (rep0): 20% = n 442-442 (requested 500); 10% = n 244-244 (requested 250); 5% = n 120-120 (requested 125); 2% = n 48-48 (requested 50); 1% = n 25-25 (requested 25).
   - plotted values (level mean+-std; std not drawn), oracle kriging / SGS (100 cells) MSE: kriging: 20% 2.48±0.71, 10% 2.92±0.79, 5% 3.69±0.93, 2% 5.2±1.2, 1% 6.56±1.5; sgs: 20% 2.52±0.72, 10% 2.95±0.79, 5% 3.7±0.94, 2% 5.2±1.2, 1% 6.59±1.5
   - oracle UMG: kriging: 20% 0.933±0.053, 10% 0.935±0.049, 5% 0.928±0.061, 2% 0.926±0.065, 1% 0.899±0.089; sgs: 20% 0.932±0.054, 10% 0.937±0.048, 5% 0.931±0.056, 2% 0.938±0.054, 1% 0.926±0.068
-  - oracle coverage90: kriging: 20% 0.873±0.054, 10% 0.874±0.053, 5% 0.868±0.06, 2% 0.865±0.059, 1% 0.85±0.086; sgs: 20% 0.87±0.056, 10% 0.876±0.054, 5% 0.873±0.06, 2% 0.877±0.055, 1% 0.879±0.072
+  - oracle coverage90 (not drawn): kriging: 20% 0.873±0.054, 10% 0.874±0.053, 5% 0.868±0.06, 2% 0.865±0.059, 1% 0.85±0.086; sgs: 20% 0.87±0.056, 10% 0.876±0.054, 5% 0.873±0.06, 2% 0.877±0.055, 1% 0.879±0.072
   - NOT drawn, user-picked (rep0, 10 cells) MSE: kriging_picked: 20% 2.44±0.66, 10% 2.84±0.84, 5% 3.93±0.91, 2% 5.42±1.7, 1% 6.86±1.6; sgs_picked: 20% 2.48±0.66, 10% 2.87±0.87, 5% 3.91±0.91, 2% 5.26±1.6, 1% 6.82±1.6
   - user-picked UMG: kriging_picked: 20% 0.983±0.0075, 10% 0.974±0.02, 5% 0.946±0.032, 2% 0.908±0.1, 1% 0.853±0.12; sgs_picked: 20% 0.983±0.0091, 10% 0.972±0.018, 5% 0.953±0.031, 2% 0.918±0.086, 1% 0.876±0.098
   - user-picked coverage90: kriging_picked: 20% 0.893±0.012, 10% 0.893±0.026, 5% 0.863±0.034, 2% 0.846±0.085, 1% 0.829±0.12; sgs_picked: 20% 0.891±0.013, 10% 0.894±0.026, 5% 0.871±0.033, 2% 0.858±0.086, 1% 0.848±0.11
@@ -49,4 +48,4 @@ DATA LIMITATIONS / FACTS ABOUT THE INPUTS:
   - auto-fit MSE: kriging_inferred: 20% 2.43±0.67, 10% 2.84±0.85, 5% 3.96±0.95, 2% 5.6±1.8, 1% 7.7±1.5; sgs_inferred: 20% 2.47±0.67, 10% 2.88±0.87, 5% 3.99±0.97, 2% 5.49±1.8, 1% 7.66±1.2
   - GP-MLE (100 cells) MSE: gp_mle: 20% 2.63±0.74, 10% 3.04±0.8, 5% 3.78±0.96, 2% 5.34±1.3, 1% 6.74±1.6
   - GP-MLE (100 cells) UMG: gp_mle: 20% 0.977±0.017, 10% 0.97±0.024, 5% 0.962±0.033, 2% 0.927±0.07, 1% 0.89±0.1
-  - GP-MLE (100 cells) coverage90: gp_mle: 20% 0.891±0.015, 10% 0.89±0.024, 5% 0.885±0.03, 2% 0.862±0.062, 1% 0.827±0.092
+  - GP-MLE (100 cells) coverage90 (not drawn): gp_mle: 20% 0.891±0.015, 10% 0.89±0.024, 5% 0.885±0.03, 2% 0.862±0.062, 1% 0.827±0.092
