@@ -205,7 +205,7 @@ F3_2_MAP_HEIGHT_MM = 38.0
 F3_2_MAP_MARKER_S = 3.0
 F3_2_MAP_CMAP = "viridis"
 # F3c: GP-MLE range extremes at the sparsest density (user request 2026-11-18)
-F3_EXT_LEVEL = "1"
+F3_EXT_LEVEL = "2"
 F3_EXT_HEIGHT_MM = 120.0
 F3_EXT_MARKER_S = 6.0
 
