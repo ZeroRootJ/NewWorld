@@ -1580,7 +1580,7 @@ def figure_f3_extremes(mt):
     each: ground truth + conditioning samples, and the GP-MLE posterior-mean
     porosity map, with that cell's MSE and UMG. MSE / UMG are recomputed here with
     the evaluator's own functions and asserted equal to multi_truth_axes/metrics.csv."""
-    from src.experiments.evaluate_multi_truth_axes import _conditioning, _gaussian_metrics
+    from src.experiments.evaluate_multi_truth_axes import MAP_MATCH_TOL, _conditioning, _gaussian_metrics
 
     stem = "F3c_density_gp_range_extremes"
     dens = mt["dens"]
@@ -1593,7 +1593,8 @@ def figure_f3_extremes(mt):
     picks = [("shortest", gp.iloc[0]), ("longest", gp.iloc[-1])]
     cells = ed["cells"]
     met = read_metrics_csv(MTA_METRICS)
-    met = met[(met["experiment"] == ed["experiment"]) & (met["method"] == "gp_mle") & (met["axis_level"] == lvl)]
+    met = met[(met["experiment"] == ed["experiment"]) & (met["method"].isin(["gp_mle", "sgs"]))
+              & (met["axis_level"] == lvl)]
     fits = pd.read_csv(INF_FITS, dtype={"axis_level": str, "sample_rep": str})
     fits = fits[fits["experiment"] == ed["experiment"]].set_index("config_key")
 
@@ -1616,46 +1617,70 @@ def figure_f3_extremes(mt):
         mean_map = np.load(gdir / "posterior_mean_map.npy")
         var_map = np.load(gdir / "posterior_var_map.npy")
         mm = _gaussian_metrics(truth[mask], mean_map[mask], mean_map[mask], var_map[mask], f"F3c {tag}")
-        saved = met[(met["truth_seed"] == c["truth_seed"]) & (met["sample_rep"] == c["sample_rep"])] \
-            .set_index("metric")["value"]
+        cm = met[(met["truth_seed"] == c["truth_seed"]) & (met["sample_rep"] == c["sample_rep"])]
+        saved = cm[cm["method"] == "gp_mle"].set_index("metric")["value"]
+        saved_sgs = cm[cm["method"] == "sgs"].set_index("metric")["value"]
         for k in ("mse", "umg"):
             if not np.isclose(mm[k], saved[k], rtol=1e-12, atol=1e-12):
                 raise ValueError(f"F3c {tag}: recomputed {k} {mm[k]} != metrics.csv {saved[k]}")
+        # SGS (oracle variogram, batch 1, N = 50) of the SAME cell: ensemble mean / var(ddof=1) as the evaluator
+        sdir = _REPO_ROOT / c["run_dir_sgs_b1"]
+        srec = pd.read_csv(sdir / "samples.csv")
+        if len(srec) != len(samples_df) or not np.allclose(srec[["X", "Y"]].values, samples_df[["X", "Y"]].values,
+                                                           rtol=0, atol=1e-9):
+            raise ValueError(f"F3c: {sdir}/samples.csv differs from the regenerated samples.")
+        ens = np.load(sdir / "sgs_realizations.npy")
+        sgs_mean, sgs_var = ens.mean(axis=0), ens.var(axis=0, ddof=1)
+        if not (np.allclose(sgs_mean, np.load(sdir / "sgs_mean_map.npy"), rtol=MAP_MATCH_TOL, atol=MAP_MATCH_TOL)
+                and np.allclose(sgs_var, np.load(sdir / "sgs_var_map.npy"), rtol=MAP_MATCH_TOL, atol=MAP_MATCH_TOL)):
+            raise ValueError(f"F3c: {sdir} recomputed ensemble maps differ from the saved maps.")
+        sm = _gaussian_metrics(truth[mask], sgs_mean[mask], sgs_mean[mask], sgs_var[mask], f"F3c sgs {tag}")
+        for k in ("mse", "umg"):
+            if not np.isclose(sm[k], saved_sgs[k], rtol=1e-12, atol=1e-12):
+                raise ValueError(f"F3c sgs {tag}: recomputed {k} {sm[k]} != metrics.csv {saved_sgs[k]}")
         hp = json.loads((gdir / "manifest.json").read_text(encoding="utf-8"))["params"]["fitted_hyperparameters"]
         rows.append({"tag": tag, "truth_seed": int(c["truth_seed"]), "sample_rep": c["sample_rep"],
                      "sample_seed": int(c["sample_seed"]), "range": float(g["value"]), "mse": float(saved["mse"]),
                      "umg": float(saved["umg"]), "n": len(samples_df), "truth": truth, "samples": samples_df,
                      "mean": mean_map, "run_dir": c["run_dir_gp_mle_b"],
+                     "sgs_mean": sgs_mean, "sgs_mse": float(saved_sgs["mse"]), "sgs_umg": float(saved_sgs["umg"]),
+                     "sgs_n": int(ens.shape[0]), "sgs_dir": c["run_dir_sgs_b1"],
                      "noise_norm": float(hp["noise_variance_normalized"])})
 
+    rows_n_ens = rows[0]["sgs_n"]
     vmin = min(float(np.min(r["truth"])) for r in rows)
     vmax = max(float(np.max(r["truth"])) for r in rows)
     ext = (F3_2_MAP_XMIN, F3_2_MAP_XMIN + NX * F3_2_MAP_CELL, F3_2_MAP_XMIN, F3_2_MAP_XMIN + NY * F3_2_MAP_CELL)
     note = (
         f"density {dens['pct'][lvl]:g}%: the GP-MLE cells with the shortest and the longest fitted practical range "
         f"among the {F3_2_GP_N_CELLS} cells of the level; left = ground truth with the conditioning samples, "
-        f"right = GP-MLE posterior-mean porosity map of the same cell; MSE and UMG of that cell (evaluated on the "
+        f"middle = GP-MLE posterior-mean porosity map, right = SGS ensemble-mean map (true 300 m variogram, "
+        f"N = {rows_n_ens}) of the same cell; MSE and UMG of that cell (evaluated on the "
         f"non-sample cells, as in F3); one colour scale for all panels (min/max of the two truth fields)."
     )
     fig, rect = _new_figure(plot_height_mm=F3_EXT_HEIGHT_MM, status_text=note, top_mm=8.0, right_mm=22.0,
                             left_mm=13.0)
-    gs = fig.add_gridspec(2, 2, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3], wspace=0.15, hspace=0.42)
+    gs = fig.add_gridspec(2, 3, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3], wspace=0.12, hspace=0.30)
     im = None
     for i, r in enumerate(rows):
-        for j in range(2):
+        for j in range(3):
             ax = fig.add_subplot(gs[i, j])
-            data = r["truth"] if j == 0 else r["mean"]
+            data = (r["truth"], r["mean"], r["sgs_mean"])[j]
             im = ax.imshow(data, extent=ext, origin="upper", cmap=F3_2_MAP_CMAP, vmin=vmin, vmax=vmax)
             if j == 0:
                 s = r["samples"]
                 ax.scatter(s["X"], s["Y"], s=F3_EXT_MARKER_S, facecolors="white", edgecolors="black",
                            linewidths=0.4, zorder=3)
-                ax.set_title(f"{r['tag'].capitalize()} GP range: truth {r['truth_seed']}, {r['sample_rep']} "
+                ax.set_title(f"{r['tag'].capitalize()} GP range\ntruth {r['truth_seed']}, {r['sample_rep']} "
                              f"(n = {r['n']})", fontsize=7)
                 ax.set_ylabel("Y (m)")
+            elif j == 1:
+                ax.set_title(f"GP-MLE (range {r['range']:.0f} m)\nMSE {r['mse']:.2f}, UMG {r['umg']:.3f}",
+                             fontsize=7)
+                ax.set_yticklabels([])
             else:
-                ax.set_title(f"GP-MLE prediction: range {r['range']:.0f} m, MSE {r['mse']:.2f}, "
-                             f"UMG {r['umg']:.3f}", fontsize=7)
+                ax.set_title(f"SGS mean (oracle 300 m)\nMSE {r['sgs_mse']:.2f}, UMG {r['sgs_umg']:.3f}",
+                             fontsize=7)
                 ax.set_yticklabels([])
             ax.set_xticks([0, 500, 1000])
             ax.set_yticks([0, 500, 1000])
@@ -1674,12 +1699,16 @@ def figure_f3_extremes(mt):
             "evaluate_multi_truth_axes._gaussian_metrics and asserted equal)",
             "GP-MLE run dirs: " + "; ".join(f"{r['tag']} = {r['run_dir']}" for r in rows)
             + " (posterior_mean_map.npy, posterior_var_map.npy, samples.csv)",
+            "SGS run dirs (batch 1): " + "; ".join(f"{r['tag']} = {r['sgs_dir']}" for r in rows)
+            + " (sgs_realizations.npy -> ensemble mean / var ddof=1, asserted equal to the saved maps; mse / umg "
+            "recomputed with _gaussian_metrics and asserted equal to metrics.csv)",
             "truth / samples regenerated with evaluate_multi_truth_axes._conditioning and asserted equal (X, Y) "
             "to the run's samples.csv",
         ],
         panels=[(f"{r['tag']} range", f"REAL DATA - truth seed {r['truth_seed']}, {r['sample_rep']} (sample seed "
                  f"{r['sample_seed']}), n = {r['n']}: GP-MLE practical range {r['range']:.1f} m, MSE "
-                 f"{r['mse']:.4f}, UMG {r['umg']:.4f}, fitted noise variance (normalized) {r['noise_norm']:.3g}")
+                 f"{r['mse']:.4f}, UMG {r['umg']:.4f}, fitted noise variance (normalized) {r['noise_norm']:.3g}; "
+                 f"SGS (oracle variogram, N = {r['sgs_n']}) MSE {r['sgs_mse']:.4f}, UMG {r['sgs_umg']:.4f}")
                 for r in rows],
         in_figure_note="DATA STATUS: " + note,
         limits=[f"colour scale vmin/vmax = {vmin:.2f} / {vmax:.2f} % (min/max of the two truth fields), "

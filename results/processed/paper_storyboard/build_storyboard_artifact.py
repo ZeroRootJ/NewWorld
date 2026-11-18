@@ -49,8 +49,8 @@ FIGS = {
         stem="F3c_density_gp_range_extremes", st=REAL,
         title="극단값: 밀도 1 %에서 GP range가 가장 짧은 셀과 가장 긴 셀",
         body=[
-            "밀도 1 %의 100셀 중 GP-MLE practical range가 가장 짧은 셀(위)과 가장 긴 셀(아래)입니다. 왼쪽은 정답 porosity map과 샘플 위치(n = 25), 오른쪽은 같은 셀의 GP-MLE 예측 map(posterior mean)이고, 제목에 그 셀의 range, MSE, UMG를 적었습니다.",
-            "MSE와 UMG는 F3과 같은 평가 함수로 다시 계산해 저장된 값과 같은지 확인했습니다(샘플이 없는 셀에서 평가). 네 패널은 같은 색 범위(두 정답 map의 최솟값~최댓값)를 씁니다. 두 셀은 정답 realization과 샘플셋이 모두 다릅니다.",
+            "밀도 1 %의 100셀 중 GP-MLE practical range가 가장 짧은 셀(위)과 가장 긴 셀(아래)입니다. 왼쪽은 정답 porosity map과 샘플 위치(n = 25), 가운데는 같은 셀의 GP-MLE 예측 map(posterior mean), 오른쪽은 같은 셀(같은 realization, 같은 샘플링)의 SGS realization 50개 평균 map(oracle variogram, range 300 m)이고, 제목에 MSE와 UMG를 적었습니다.",
+            "MSE와 UMG는 F3과 같은 평가 함수로 다시 계산해 저장된 값과 같은지 확인했습니다(샘플이 없는 셀에서 평가). SGS 평균·분산 map도 realization에서 다시 계산해 저장된 map과 같은지 확인했습니다. 여섯 패널은 같은 색 범위(두 정답 map의 최솟값~최댓값)를 씁니다. 두 셀은 정답 realization과 샘플셋이 모두 다릅니다.",
         ]),
     "F4": dict(
         stem="F4_gp_fitted_vs_truth_hyperparameters", st=REAL,
@@ -110,7 +110,8 @@ CLAIMS = {
     "F3c": [
         "가장 짧은 range: truth 7102, rep0, range 57 m, MSE 9.37, UMG 0.823. 적합된 noise variance(정규화)는 1e-5로 하한값입니다. 예측 map은 샘플 위치 주변에만 작은 점 모양으로 값이 바뀌고 나머지는 평균값에 가깝습니다.",
         "가장 긴 range: truth 101, rep8, range 740 m, MSE 7.51, UMG 0.787. 적합된 noise variance(정규화)는 0.326입니다. 예측 map은 위쪽이 낮고 아래쪽이 높은 완만한 경사면입니다.",
-        "비교: 밀도 1 %의 GP-MLE 100셀 평균은 MSE 6.74, UMG 0.890입니다.",
+        "같은 셀의 SGS(oracle variogram): 가장 짧은 range 셀에서 MSE 8.54, UMG 0.804, 가장 긴 range 셀에서 MSE 7.96, UMG 0.963입니다.",
+        "비교: 밀도 1 %의 100셀 평균은 GP-MLE MSE 6.74, UMG 0.890, SGS MSE 6.59, UMG 0.926입니다.",
     ],
     "F4": [
         "A: ground truth의 range가 길어져도 GP가 맞춘 range는 따라가지 못합니다. 실제 값이 100 m에서 800 m로 늘 때 평균은 130 m에서 337 m로만 늡니다.",

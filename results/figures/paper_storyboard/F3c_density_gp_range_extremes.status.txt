@@ -6,14 +6,15 @@ INPUT FILES (read-only):
   - results/processed/multi_truth_axes/hyperparameters.csv (E4, gp_mle, gp_practical_range_m, axis_level == 1; min and max of 100 cells)
   - results/processed/multi_truth_axes/metrics.csv (E4, gp_mle, mse / umg of the two cells; recomputed here with evaluate_multi_truth_axes._gaussian_metrics and asserted equal)
   - GP-MLE run dirs: shortest = results/raw/gp_mle/20261117T062500788869Z; longest = results/raw/gp_mle/20261117T061913162228Z (posterior_mean_map.npy, posterior_var_map.npy, samples.csv)
+  - SGS run dirs (batch 1): shortest = results/raw/sgs/20261117T063254057497Z; longest = results/raw/sgs/20261117T062658450658Z (sgs_realizations.npy -> ensemble mean / var ddof=1, asserted equal to the saved maps; mse / umg recomputed with _gaussian_metrics and asserted equal to metrics.csv)
   - truth / samples regenerated with evaluate_multi_truth_axes._conditioning and asserted equal (X, Y) to the run's samples.csv
 
 PANELS:
-  shortest range: REAL DATA - truth seed 7102, rep0 (sample seed 1001), n = 25: GP-MLE practical range 57.0 m, MSE 9.3669, UMG 0.8230, fitted noise variance (normalized) 1e-05
-  longest range: REAL DATA - truth seed 101, rep8 (sample seed 1009), n = 25: GP-MLE practical range 739.9 m, MSE 7.5143, UMG 0.7868, fitted noise variance (normalized) 0.326
+  shortest range: REAL DATA - truth seed 7102, rep0 (sample seed 1001), n = 25: GP-MLE practical range 57.0 m, MSE 9.3669, UMG 0.8230, fitted noise variance (normalized) 1e-05; SGS (oracle variogram, N = 50) MSE 8.5366, UMG 0.8044
+  longest range: REAL DATA - truth seed 101, rep8 (sample seed 1009), n = 25: GP-MLE practical range 739.9 m, MSE 7.5143, UMG 0.7868, fitted noise variance (normalized) 0.326; SGS (oracle variogram, N = 50) MSE 7.9597, UMG 0.9629
 
 DATA STATUS note printed in the figure margin:
-  DATA STATUS: density 1%: the GP-MLE cells with the shortest and the longest fitted practical range among the 100 cells of the level; left = ground truth with the conditioning samples, right = GP-MLE posterior-mean porosity map of the same cell; MSE and UMG of that cell (evaluated on the non-sample cells, as in F3); one colour scale for all panels (min/max of the two truth fields).
+  DATA STATUS: density 1%: the GP-MLE cells with the shortest and the longest fitted practical range among the 100 cells of the level; left = ground truth with the conditioning samples, middle = GP-MLE posterior-mean porosity map, right = SGS ensemble-mean map (true 300 m variogram, N = 50) of the same cell; MSE and UMG of that cell (evaluated on the non-sample cells, as in F3); one colour scale for all panels (min/max of the two truth fields).
 
 DATA LIMITATIONS / FACTS ABOUT THE INPUTS:
   - colour scale vmin/vmax = 5.38 / 25.35 % (min/max of the two truth fields), colormap viridis.
