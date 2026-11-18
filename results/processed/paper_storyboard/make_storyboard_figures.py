@@ -204,6 +204,10 @@ F3_2_MAP_CELL = 20.0  # == base_case XSIZ = YSIZ
 F3_2_MAP_HEIGHT_MM = 38.0
 F3_2_MAP_MARKER_S = 3.0
 F3_2_MAP_CMAP = "viridis"
+# F3c: GP-MLE range extremes at the sparsest density (user request 2026-11-18)
+F3_EXT_LEVEL = "1"
+F3_EXT_HEIGHT_MM = 120.0
+F3_EXT_MARKER_S = 6.0
 
 MSE_LABEL = "MSE (porosity %²)"
 UMG_LABEL = "UMG (1 = calibrated)"
@@ -1570,6 +1574,122 @@ def figure_f3_2_maps(mt):
     return _save(fig, stem, lines)
 
 
+def figure_f3_extremes(mt):
+    """Extreme-value check (user request 2026-11-18): at the sparsest density level,
+    the GP-MLE cells with the SHORTEST and the LONGEST fitted practical range. For
+    each: ground truth + conditioning samples, and the GP-MLE posterior-mean
+    porosity map, with that cell's MSE and UMG. MSE / UMG are recomputed here with
+    the evaluator's own functions and asserted equal to multi_truth_axes/metrics.csv."""
+    from src.experiments.evaluate_multi_truth_axes import _conditioning, _gaussian_metrics
+
+    stem = "F3c_density_gp_range_extremes"
+    dens = mt["dens"]
+    ed = mt["exp"]["density"]
+    lvl = F3_EXT_LEVEL
+    gp = mt["gp_range"]
+    gp = gp[gp["axis_level"] == lvl].sort_values("value")
+    if len(gp) != F3_2_GP_N_CELLS:
+        raise ValueError(f"F3c: expected {F3_2_GP_N_CELLS} GP-MLE ranges at {lvl}%.")
+    picks = [("shortest", gp.iloc[0]), ("longest", gp.iloc[-1])]
+    cells = ed["cells"]
+    met = read_metrics_csv(MTA_METRICS)
+    met = met[(met["experiment"] == ed["experiment"]) & (met["method"] == "gp_mle") & (met["axis_level"] == lvl)]
+    fits = pd.read_csv(INF_FITS, dtype={"axis_level": str, "sample_rep": str})
+    fits = fits[fits["experiment"] == ed["experiment"]].set_index("config_key")
+
+    rows = []
+    for tag, g in picks:
+        c = cells[(cells["axis_level"] == lvl) & (cells["truth_seed"] == g["truth_seed"])
+                  & (cells["sample_rep"] == g["sample_rep"])]
+        if len(c) != 1:
+            raise ValueError(f"F3c: no unique cell for truth {g['truth_seed']} {g['sample_rep']}.")
+        c = c.iloc[0]
+        tv = fits.loc[c["config_key"]]
+        truth, samples_df, mask = _conditioning(int(c["truth_seed"]), int(c["sample_seed"]),
+                                                float(tv["true_range_m"]), float(tv["true_range_m"]),
+                                                float(tv["true_nugget"]), int(c["n_samples_requested"]))
+        gdir = _REPO_ROOT / c["run_dir_gp_mle_b"]
+        rec = pd.read_csv(gdir / "samples.csv")
+        if len(rec) != len(samples_df) or not np.allclose(rec[["X", "Y"]].values, samples_df[["X", "Y"]].values,
+                                                          rtol=0, atol=1e-9):
+            raise ValueError(f"F3c: {gdir}/samples.csv differs from the regenerated samples.")
+        mean_map = np.load(gdir / "posterior_mean_map.npy")
+        var_map = np.load(gdir / "posterior_var_map.npy")
+        mm = _gaussian_metrics(truth[mask], mean_map[mask], mean_map[mask], var_map[mask], f"F3c {tag}")
+        saved = met[(met["truth_seed"] == c["truth_seed"]) & (met["sample_rep"] == c["sample_rep"])] \
+            .set_index("metric")["value"]
+        for k in ("mse", "umg"):
+            if not np.isclose(mm[k], saved[k], rtol=1e-12, atol=1e-12):
+                raise ValueError(f"F3c {tag}: recomputed {k} {mm[k]} != metrics.csv {saved[k]}")
+        hp = json.loads((gdir / "manifest.json").read_text(encoding="utf-8"))["params"]["fitted_hyperparameters"]
+        rows.append({"tag": tag, "truth_seed": int(c["truth_seed"]), "sample_rep": c["sample_rep"],
+                     "sample_seed": int(c["sample_seed"]), "range": float(g["value"]), "mse": float(saved["mse"]),
+                     "umg": float(saved["umg"]), "n": len(samples_df), "truth": truth, "samples": samples_df,
+                     "mean": mean_map, "run_dir": c["run_dir_gp_mle_b"],
+                     "noise_norm": float(hp["noise_variance_normalized"])})
+
+    vmin = min(float(np.min(r["truth"])) for r in rows)
+    vmax = max(float(np.max(r["truth"])) for r in rows)
+    ext = (F3_2_MAP_XMIN, F3_2_MAP_XMIN + NX * F3_2_MAP_CELL, F3_2_MAP_XMIN, F3_2_MAP_XMIN + NY * F3_2_MAP_CELL)
+    note = (
+        f"density {dens['pct'][lvl]:g}%: the GP-MLE cells with the shortest and the longest fitted practical range "
+        f"among the {F3_2_GP_N_CELLS} cells of the level; left = ground truth with the conditioning samples, "
+        f"right = GP-MLE posterior-mean porosity map of the same cell; MSE and UMG of that cell (evaluated on the "
+        f"non-sample cells, as in F3); one colour scale for all panels (min/max of the two truth fields)."
+    )
+    fig, rect = _new_figure(plot_height_mm=F3_EXT_HEIGHT_MM, status_text=note, top_mm=8.0, right_mm=22.0,
+                            left_mm=13.0)
+    gs = fig.add_gridspec(2, 2, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3], wspace=0.15, hspace=0.42)
+    im = None
+    for i, r in enumerate(rows):
+        for j in range(2):
+            ax = fig.add_subplot(gs[i, j])
+            data = r["truth"] if j == 0 else r["mean"]
+            im = ax.imshow(data, extent=ext, origin="upper", cmap=F3_2_MAP_CMAP, vmin=vmin, vmax=vmax)
+            if j == 0:
+                s = r["samples"]
+                ax.scatter(s["X"], s["Y"], s=F3_EXT_MARKER_S, facecolors="white", edgecolors="black",
+                           linewidths=0.4, zorder=3)
+                ax.set_title(f"{r['tag'].capitalize()} GP range: truth {r['truth_seed']}, {r['sample_rep']} "
+                             f"(n = {r['n']})", fontsize=7)
+                ax.set_ylabel("Y (m)")
+            else:
+                ax.set_title(f"GP-MLE prediction: range {r['range']:.0f} m, MSE {r['mse']:.2f}, "
+                             f"UMG {r['umg']:.3f}", fontsize=7)
+                ax.set_yticklabels([])
+            ax.set_xticks([0, 500, 1000])
+            ax.set_yticks([0, 500, 1000])
+            ax.set_xlabel("X (m)")
+            ax.set_aspect("equal")
+    cax = fig.add_axes([rect[2] + 0.03, rect[1], 0.015, rect[3] - rect[1]])
+    cb = fig.colorbar(im, cax=cax)
+    cb.set_label("Porosity (%)")
+
+    lines = _status_file(
+        stem,
+        inputs=[
+            f"{_rel(MTA_HYPER)} (E4, gp_mle, gp_practical_range_m, axis_level == {lvl}; min and max of "
+            f"{F3_2_GP_N_CELLS} cells)",
+            f"{_rel(MTA_METRICS)} (E4, gp_mle, mse / umg of the two cells; recomputed here with "
+            "evaluate_multi_truth_axes._gaussian_metrics and asserted equal)",
+            "GP-MLE run dirs: " + "; ".join(f"{r['tag']} = {r['run_dir']}" for r in rows)
+            + " (posterior_mean_map.npy, posterior_var_map.npy, samples.csv)",
+            "truth / samples regenerated with evaluate_multi_truth_axes._conditioning and asserted equal (X, Y) "
+            "to the run's samples.csv",
+        ],
+        panels=[(f"{r['tag']} range", f"REAL DATA - truth seed {r['truth_seed']}, {r['sample_rep']} (sample seed "
+                 f"{r['sample_seed']}), n = {r['n']}: GP-MLE practical range {r['range']:.1f} m, MSE "
+                 f"{r['mse']:.4f}, UMG {r['umg']:.4f}, fitted noise variance (normalized) {r['noise_norm']:.3g}")
+                for r in rows],
+        in_figure_note="DATA STATUS: " + note,
+        limits=[f"colour scale vmin/vmax = {vmin:.2f} / {vmax:.2f} % (min/max of the two truth fields), "
+                f"colormap {F3_2_MAP_CMAP}.",
+                "the two cells differ in truth realization AND sample set; this is a two-case illustration, "
+                "not a controlled comparison."],
+    )
+    return _save(fig, stem, lines)
+
+
 # ---------------------------------------------------------------------------
 # F4
 # ---------------------------------------------------------------------------
@@ -2202,6 +2322,7 @@ def main():
         ("F3", figure_f3, (mt,)),
         ("F3-2", figure_f3_2, (mt,)),
         ("F3-2b", figure_f3_2_maps, (mt,)),
+        ("F3c", figure_f3_extremes, (mt,)),
         ("F4", figure_f4, ()),
         ("F5", figure_f5, ()),
         ("F6", figure_f6, (dens,)),

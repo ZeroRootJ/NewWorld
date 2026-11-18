@@ -31,15 +31,6 @@ FIGS = {
             "분산은 모두 porosity %² 단위입니다. kriging 분산은 normal-score 분산을 Monte Carlo로 역변환한 값입니다.",
         ]),
     "F3": dict(
-        stem="F3_gp_vs_sample_density", st=REAL,
-        title="밀도에 따른 GP와 kriging",
-        body=[
-            "레벨당 ground truth 10개 × 샘플셋 10개 = 100셀입니다(SGS, RBF+bootstrap은 N = 50). A는 MSE, B는 UMG, C는 90% 구간 coverage입니다. kriging과 GP-MLE를 진하게, 나머지 두 방법을 옅게 그렸습니다. B와 C에서는 RBF+bootstrap을 뺐습니다(UMG 0.48~0.52, coverage 0.44~0.48). C의 점선은 공칭값 0.90입니다.",
-            "90% coverage는 각 방법이 내놓은 90% 예측 구간 안에 truth가 실제로 들어간 셀의 비율입니다. UMG를 계산하는 accuracy plot에서 p = 0.90인 한 점이고, UMG와 같은 계산 경로를 씁니다(kriging은 normal-score 구간의 back-transform, 나머지는 평균 ± 표준편차의 정규분포).",
-            "1행의 kriging과 SGS는 실제(oracle) variogram을 씁니다. B-2와 C-2는 kriging과 SGS를 셀마다 샘플에서 자동 적합한 spherical variogram으로 다시 돌린 결과입니다(같은 샘플, 같은 SGS seed, 수동 수정 없음). GP-MLE는 1행과 같은 값이고, y축은 각각 B, C와 같습니다. 속이 빈 마커와 점선이 inferred variogram입니다.",
-            "D는 셀마다 맞춘 range를 점 하나로 찍은 것입니다(레벨당 100개, 로그 축). 빨간 점(왼쪽)은 GP-MLE practical range(상관 0.05 기준), 파란 점(오른쪽)은 kriging/SGS가 쓴 inferred spherical range(상관 0 기준)입니다. 두 range는 정의가 다릅니다. 점선은 ground-truth range 300 m입니다.",
-        ]),
-    "F3-2": dict(
         stem="F3-2_density_rep0_picked_variogram", st=REAL,
         title="밀도별 oracle kriging/SGS와 GP, GP가 맞춘 range",
         body=[
@@ -47,12 +38,19 @@ FIGS = {
             "A, B의 kriging과 SGS는 oracle(정답, range 300 m) variogram으로 돌린 결과이고, GP-MLE와 같은 밀도당 100셀(ground truth 10개 × 샘플셋 10개)의 평균입니다(SGS N = 50). 직접 고른 variogram과 자동 적합 variogram으로 돌린 kriging/SGS, 그리고 90% coverage는 그리지 않았고, 값은 status 파일에 있습니다.",
             "C는 GP-MLE practical range(상관 0.05 기준)를 셀마다 점 하나로 찍은 것입니다(레벨당 100개, 로그 축). 점선은 oracle(정답 variogram)의 range로, 300 m로 고정입니다.",
         ]),
-    "F3-2b": dict(
+    "F3b": dict(
         stem="F3-2b_density_truth_and_samples", st=REAL,
         title="밀도별 실제 map과 샘플 위치, realization 1개",
         body=[
-            "F3-2에서 쓴 ground truth 중 하나(truth seed 101, range 300 m, nugget 0.05)의 porosity map입니다. 다섯 패널 모두 같은 map이고, 흰 점은 밀도마다 rep0 샘플셋(sample seed 1001)이 뽑은 위치입니다. 제목의 n은 실제 샘플 위치 수입니다.",
+            "F3에서 쓴 ground truth 중 하나(truth seed 101, range 300 m, nugget 0.05)의 porosity map입니다. 다섯 패널 모두 같은 map이고, 흰 점은 밀도마다 rep0 샘플셋(sample seed 1001)이 뽑은 위치입니다. 제목의 n은 실제 샘플 위치 수입니다.",
             "map과 샘플은 실험 코드의 생성 함수로 다시 만들었고, 샘플 위치가 각 셀의 kriging run에 저장된 samples.csv와 같은지 확인했습니다. 색 범위는 map의 최솟값~최댓값입니다.",
+        ]),
+    "F3c": dict(
+        stem="F3c_density_gp_range_extremes", st=REAL,
+        title="극단값: 밀도 1 %에서 GP range가 가장 짧은 셀과 가장 긴 셀",
+        body=[
+            "밀도 1 %의 100셀 중 GP-MLE practical range가 가장 짧은 셀(위)과 가장 긴 셀(아래)입니다. 왼쪽은 정답 porosity map과 샘플 위치(n = 25), 오른쪽은 같은 셀의 GP-MLE 예측 map(posterior mean)이고, 제목에 그 셀의 range, MSE, UMG를 적었습니다.",
+            "MSE와 UMG는 F3과 같은 평가 함수로 다시 계산해 저장된 값과 같은지 확인했습니다(샘플이 없는 셀에서 평가). 네 패널은 같은 색 범위(두 정답 map의 최솟값~최댓값)를 씁니다. 두 셀은 정답 realization과 샘플셋이 모두 다릅니다.",
         ]),
     "F4": dict(
         stem="F4_gp_fitted_vs_truth_hyperparameters", st=REAL,
@@ -102,23 +100,17 @@ CLAIMS = {
         "bootstrap은 샘플셋이 바뀔 때 생기는 변동만 잡고, 샘플이 없는 곳의 공간적 불확실성은 잡지 못한다는 결론 1-a의 근거입니다.",
     ],
     "F3": [
-        "A, B: 평균만 보면 GP-MLE는 모든 밀도에서 kriging과 MSE, UMG가 비슷합니다. 저밀도에서도 평균 UMG 차이는 작습니다(1 %에서 0.89 대 0.90).",
-        "C: 90% coverage는 밀도가 20 %에서 1 %로 줄 때 GP-MLE가 0.89에서 0.83으로, kriging이 0.87에서 0.85로 떨어집니다. 5 % 이상에서는 GP-MLE가 kriging보다 높고, 2 %와 1 %에서는 낮습니다. GP-MLE의 셀 간 표준편차는 20 %에서 0.015, 1 %에서 0.092입니다(kriging 0.054, 0.086).",
-        "D: GP가 맞춘 range는 밀도가 낮아지면 replicate마다 크게 달라집니다. 20 %에서는 148~248 m에 모이고, 1 %에서는 57~740 m로 퍼집니다.",
-        "따라서 이 그림이 뒷받침하는 것은 '저밀도에서 GP의 하이퍼파라미터 추정이 샘플 배치에 따라 불안정해진다'입니다. 'GP의 uncertainty가 fail한다'까지는 현재 평균 UMG로는 보이지 않습니다.",
-        "밀도가 충분한 구간에서도 GP가 맞춘 range는 실제 값 300 m보다 짧은 쪽에 모여 있습니다. 300 m를 넘는 셀은 100개 중 20 % 0개, 10 % 4개, 5 % 16개, 2 % 26개, 1 % 38개입니다.",
-        "B-2: inferred variogram을 쓴 kriging의 UMG는 20 %에서 0.975, 1 %에서 0.892입니다(oracle 0.933, 0.899). SGS는 0.975, 0.925입니다(oracle 0.932, 0.926).",
-        "C-2: inferred variogram을 쓴 kriging의 90% coverage는 20 %에서 0.891, 1 %에서 0.845입니다(oracle 0.873, 0.850). SGS는 0.887, 0.878입니다(oracle 0.870, 0.879). 셀 간 표준편차는 20 %에서 kriging 0.020(oracle 0.054)입니다.",
-        "MSE(그림에는 없음): inferred variogram 쪽이 모든 밀도에서 oracle보다 큽니다. kriging은 20 %에서 2.49 대 2.48, 1 %에서 7.38 대 6.56입니다.",
-        "D: inferred spherical range의 중앙값은 레벨마다 293~323 m이고, 300 m를 넘는 셀은 100개 중 45~55개입니다. 범위는 20 %에서 181~414 m, 1 %에서 75~1000 m이며, 1 %에서 32개가 적합 범위 경계에 걸렸습니다.",
-    ],
-    "F3-2": [
         "A: MSE는 밀도 20 %에서 1 %로 갈 때 kriging 2.48 → 6.56, SGS 2.52 → 6.59, GP-MLE 2.63 → 6.74입니다(모두 100셀).",
         "B: UMG는 kriging 0.933 → 0.899, SGS 0.932 → 0.926, GP-MLE 0.977 → 0.890입니다. 20, 10, 5 %에서는 GP-MLE가 kriging/SGS보다 높고, 2 %에서는 kriging 0.926, GP-MLE 0.927, SGS 0.938, 1 %에서는 GP-MLE가 가장 낮습니다.",
         "C: GP-MLE practical range(100셀)의 중앙값은 20 %에서 181 m, 1 %에서 270 m이고, 범위는 20 %에서 148~248 m, 1 %에서 57~740 m입니다. 300 m를 넘는 셀은 100개 중 20 % 0개, 10 % 4개, 5 % 16개, 2 % 26개, 1 % 38개입니다. oracle range는 300 m 고정입니다.",
     ],
-    "F3-2b": [
+    "F3b": [
         "밀도 20, 10, 5, 2, 1 %에서 샘플 위치 수는 442, 244, 120, 48, 25개입니다.",
+    ],
+    "F3c": [
+        "가장 짧은 range: truth 7102, rep0, range 57 m, MSE 9.37, UMG 0.823. 적합된 noise variance(정규화)는 1e-5로 하한값입니다. 예측 map은 샘플 위치 주변에만 작은 점 모양으로 값이 바뀌고 나머지는 평균값에 가깝습니다.",
+        "가장 긴 range: truth 101, rep8, range 740 m, MSE 7.51, UMG 0.787. 적합된 noise variance(정규화)는 0.326입니다. 예측 map은 위쪽이 낮고 아래쪽이 높은 완만한 경사면입니다.",
+        "비교: 밀도 1 %의 GP-MLE 100셀 평균은 MSE 6.74, UMG 0.890입니다.",
     ],
     "F4": [
         "A: ground truth의 range가 길어져도 GP가 맞춘 range는 따라가지 못합니다. 실제 값이 100 m에서 800 m로 늘 때 평균은 130 m에서 337 m로만 늡니다.",
@@ -147,16 +139,16 @@ CLAIMS = {
 
 SECTIONS = [
     ("결론 1-a", "불확실성이 모델에 없는 방법은 bootstrap으로도 평가하지 못한다", ["F1", "F2"]),
-    ("결론 1-b", "불확실성이 내재된 GP는 데이터가 희소해지면 흔들린다", ["F3", "F3-2", "F3-2b", "F4", "F6"]),
+    ("결론 1-b", "불확실성이 내재된 GP는 데이터가 희소해지면 흔들린다", ["F3", "F3b", "F3c", "F4", "F6"]),
     ("결론 2", "정확도와 uncertainty goodness의 최적점은 서로 다르다", ["F7"]),
 ]
 
 FLOW = [
     ("1-a", "F1", "MSE와 UMG, 3개 축, 4개 방법", REAL),
     ("1-a", "F2", "Calibration 곡선, 예측 분산", REAL),
-    ("1-b", "F3", "밀도별 GP와 kriging(MSE, UMG, 90% coverage), GP가 맞춘 range", REAL),
-    ("1-b", "F3-2", "밀도별 oracle kriging/SGS와 GP-MLE(100셀) MSE, UMG, GP가 맞춘 range", REAL),
-    ("1-b", "F3-2b", "밀도별 실제 map과 샘플 위치(realization 1개)", REAL),
+    ("1-b", "F3", "밀도별 oracle kriging/SGS와 GP-MLE(100셀) MSE, UMG, GP가 맞춘 range", REAL),
+    ("1-b", "F3b", "밀도별 실제 map과 샘플 위치(realization 1개)", REAL),
+    ("1-b", "F3c", "극단값: 밀도 1 %에서 GP range 최소·최대 셀의 예측 map, MSE, UMG", REAL),
     ("1-b", "F4", "GP가 맞춘 range, nugget 대 실제 값", REAL),
     ("1-b", "F6", "파라미터 수와 필요한 데이터 양", PART),
     ("2", "F7", "정확도와 UMG 반응면, 고정 하이퍼파라미터 grid, 4개 방법", REAL),
