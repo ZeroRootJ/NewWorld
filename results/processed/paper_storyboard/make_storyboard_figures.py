@@ -196,6 +196,7 @@ F3_2_D_ALPHA = 0.7
 F3_2_D_SHIFT = 0.15
 F3_2_D_SPREAD = 0.05
 F3_2_D_AUTO_COLOR = "tab:purple"
+F3_2_ORACLE_LINESTYLE = ":"  # B, C oracle-variogram kriging / SGS
 # F3-2b: one-realization truth map + rep0 samples per density (user request 2026-11-18)
 F3_2_MAP_TRUTH_SEED = 101
 F3_2_MAP_XMIN = 0.0
@@ -1317,15 +1318,16 @@ def figure_f3_2(mt):
         f"{n_src.get('pick', 0)} cells; automatic fit for {n_src.get('auto', 0)} cell without a pick), "
         f"{a['n_truth']} realizations × 1 sampling ({PICK_SAMPLE_REP}, sample seed {a['sample_seed']}) = "
         f"{n_pick} cells per level; GP-MLE: all {F3_2_GP_N_CELLS} cells per level (10 realizations × 10 "
-        f"samplings); B, C dashed / hollow: kriging and SGS with the automatic-fit variogram on the same "
-        f"{n_pick} {PICK_SAMPLE_REP} cells; C: fraction of evaluated cells inside the central {COV90_NOMINAL:.0%} predictive interval "
+        f"samplings); B, C dashed / hollow: kriging and SGS with the automatic-fit variogram, dotted / "
+        f"half-filled: kriging and SGS with the oracle (true, {dens['truth_range_m']:g} m) variogram, both on the "
+        f"same {n_pick} {PICK_SAMPLE_REP} cells; C: fraction of evaluated cells inside the central {COV90_NOMINAL:.0%} predictive interval "
         f"(kriging: normal-score interval back-transformed; SGS, GP-MLE: Gaussian mean ± z·std interval); "
         f"D: one point per cell ({F3_2_GP_N_CELLS} GP-MLE, {n_pick} user-picked, {F3_2_GP_N_CELLS} auto-fit per level; dashed line = oracle (true) range, fixed); GP-MLE practical "
         f"range = RBF-kernel length scale at the 0.05 correlation cutoff; user-picked range = spherical range "
         f"(correlation 0) – the two range definitions differ; max/min over all points = {spread:.1f}×, "
         f"{ax_scale} y axis. SGS ensemble N = {mt['n_ens']}; kriging and GP-MLE have no ensemble."
     )
-    fig, rect = _new_figure(plot_height_mm=F3_PLOT_HEIGHT_MM, status_text=note, top_mm=19.0,
+    fig, rect = _new_figure(plot_height_mm=F3_PLOT_HEIGHT_MM, status_text=note, top_mm=23.0,
                             right_mm=F3_RIGHT_MM)
     gs = fig.add_gridspec(1, 4, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3], wspace=0.42)
     ax_a, ax_b, ax_c, ax_d = (fig.add_subplot(gs[0, i]) for i in range(4))
@@ -1333,6 +1335,18 @@ def figure_f3_2(mt):
     _plot_density_metric(ax_a, summ, dens, "mse", methods=methods, errorbars=False)
     _plot_density_metric(ax_b, summ_bc, dens, "umg", methods=methods_bc, errorbars=False)
     _plot_density_metric(ax_c, summ_bc, dens, "coverage90", methods=methods_bc, errorbars=False)
+    # B, C: oracle (true 300 m variogram) kriging / SGS on the SAME rep0 cells (user request 2026-11-18)
+    oracle = r0["summary"][r0["summary"]["method"].isin(["kriging", "sgs"])]
+    if set(oracle["n"]) != {n_pick}:
+        raise ValueError(f"F3-2: oracle rep0 summary is not {n_pick} cells per level.")
+    for ax, metric in ((ax_b, "umg"), (ax_c, "coverage90")):
+        for m in ("kriging", "sgs"):
+            off = (METHODS.index(m) - (len(METHODS) - 1) / 2) * METHOD_X_OFFSET_FRAC
+            sub = oracle[(oracle["method"] == m) & (oracle["metric"] == metric)].set_index("axis_level")
+            sub = sub.loc[DENSITY_LEVELS]
+            ax.plot([dens["pct"][lvl] * (1.0 + off) for lvl in DENSITY_LEVELS], sub["mean"].values,
+                    color=METHOD_COLORS[m], marker=METHOD_MARKERS[m], markersize=3.6, linewidth=1.0,
+                    linestyle=F3_2_ORACLE_LINESTYLE, fillstyle="bottom", markerfacecoloralt="white", zorder=3)
     ax_b.axhline(1.0, color="gray", linestyle="--", linewidth=0.6, zorder=1)
     ax_c.axhline(COV90_NOMINAL, color="gray", linestyle="--", linewidth=0.6, zorder=1)
     ax_a.set_ylabel(MSE_LABEL)
@@ -1384,7 +1398,7 @@ def figure_f3_2(mt):
         _panel_label(ax, letter)
 
     for ax, metric, name in ((ax_a, "mse", "A"), (ax_b, "umg", "B"), (ax_c, "coverage90", "C")):
-        r = (summ if name == "A" else summ_bc)
+        r = (summ if name == "A" else pd.concat([summ_bc, oracle], ignore_index=True))
         r = r[r["metric"] == metric]
         lo_, hi_ = float(r["mean"].min()), float(r["mean"].max())
         yl = ax.get_ylim()
@@ -1392,27 +1406,33 @@ def figure_f3_2(mt):
             raise ValueError(f"panel {name} y range {yl} clips the means [{lo_}, {hi_}].")
 
     labels = {
-        "kriging": f"Simple kriging (user-picked variogram, {n_pick} cells/level)",
-        "sgs": f"SGS (user-picked variogram, {n_pick} cells/level)",
-        "gp_mle": f"GP-MLE ({F3_2_GP_N_CELLS} cells/level)",
-        "kriging_inferred": f"B, C: Simple kriging (auto-fit variogram, {n_pick} cells/level)",
-        "sgs_inferred": f"B, C: SGS (auto-fit variogram, {n_pick} cells/level)",
+        "kriging": f"Simple kriging, user-picked variogram ({n_pick}/level)",
+        "sgs": f"SGS, user-picked variogram ({n_pick}/level)",
+        "gp_mle": f"GP-MLE ({F3_2_GP_N_CELLS}/level)",
+        "kriging_inferred": f"B, C: Simple kriging, auto-fit variogram ({n_pick}/level)",
+        "sgs_inferred": f"B, C: SGS, auto-fit variogram ({n_pick}/level)",
     }
     leg_methods = ["kriging", "kriging_inferred", "sgs", "sgs_inferred", "gp_mle"]
     handles = _method_handles(methods=leg_methods)
     for h, m in zip(handles, leg_methods):
         h.set_label(labels[m])
     handles += [
-        Line2D([0], [0], color="gray", linestyle="--", linewidth=0.6,
-               label=f"Ideal UMG (1) / nominal coverage ({COV90_NOMINAL:.2f})"),
-        Line2D([0], [0], color="black", linestyle="--", linewidth=0.7,
-               label=f"D: oracle range (true variogram, fixed {dens['truth_range_m']:g} m)"),
-        Line2D([0], [0], color=F3_D_INF_COLOR, marker="o", linestyle="none", markersize=3.0,
-               label=f"D: user-picked range (spherical, {n_pick} cells/level)"),
-        Line2D([0], [0], color=F3_2_D_AUTO_COLOR, marker="s", linestyle="none", markersize=3.0,
-               label=f"D: auto-fit range (spherical, {F3_2_GP_N_CELLS} cells/level)"),
+        Line2D([0], [0], color=METHOD_COLORS[m], marker=METHOD_MARKERS[m], markersize=3.6, linewidth=1.0,
+               linestyle=F3_2_ORACLE_LINESTYLE, fillstyle="bottom", markerfacecoloralt="white",
+               label=f"B, C: {METHOD_LABELS[m]}, oracle variogram ({n_pick}/level)")
+        for m in ("kriging", "sgs")
     ]
-    fig.legend(handles=handles, loc="upper center", ncol=3, bbox_to_anchor=(0.5, 1.0), columnspacing=1.4)
+    handles += [
+        Line2D([0], [0], color="gray", linestyle="--", linewidth=0.6,
+               label=f"Ideal UMG / nominal coverage ({COV90_NOMINAL:.2f})"),
+        Line2D([0], [0], color="black", linestyle="--", linewidth=0.7,
+               label=f"D: oracle range (fixed {dens['truth_range_m']:g} m)"),
+        Line2D([0], [0], color=F3_D_INF_COLOR, marker="o", linestyle="none", markersize=3.0,
+               label=f"D: user-picked range ({n_pick}/level)"),
+        Line2D([0], [0], color=F3_2_D_AUTO_COLOR, marker="s", linestyle="none", markersize=3.0,
+               label=f"D: auto-fit range ({F3_2_GP_N_CELLS}/level)"),
+    ]
+    fig.legend(handles=handles, loc="upper center", ncol=3, bbox_to_anchor=(0.5, 1.0), columnspacing=1.0)
 
     gp_level = gp_all.groupby("axis_level")["value"].describe(percentiles=[0.5]).loc[DENSITY_LEVELS]
     gp_above = {lvl: int((gp_all[gp_all["axis_level"] == lvl]["value"] > dens["truth_range_m"]).sum())
@@ -1443,7 +1463,9 @@ def figure_f3_2(mt):
         panels=[
             ("A", f"REAL DATA - MSE vs density; level means, no error bars; kriging / SGS = user-picked variogram "
                   f"({n_pick} rep0 cells per level), GP-MLE = all {F3_2_GP_N_CELLS} cells per level"),
-            ("B", "REAL DATA - UMG vs density, same series and statistics; dashed gray line = 1"),
+            ("B", "REAL DATA - UMG vs density, same series and statistics, plus kriging / SGS with the "
+                  "automatic-fit variogram (dashed, hollow) and with the oracle variogram (dotted, half-filled), "
+                  f"both on the same {n_pick} rep0 cells; dashed gray line = 1"),
             ("C", "REAL DATA - 90% interval coverage vs density, same series and statistics; dashed gray line = "
                   f"nominal {COV90_NOMINAL:.2f}"),
             ("D", f"REAL DATA - range, one point per cell: GP-MLE practical range of all {F3_2_GP_N_CELLS} cells "
@@ -1503,6 +1525,10 @@ def figure_f3_2(mt):
             "UMG: " + _density_table(inf_summ, "umg", INF_METHODS),
             "auto-fit coverage90: " + _density_table(inf_summ, "coverage90", INF_METHODS),
             "auto-fit MSE (not drawn): " + _density_table(inf_summ, "mse", INF_METHODS),
+            f"B, C oracle variogram ({_rel(MTA_METRICS)} rows E4, sample_rep == {PICK_SAMPLE_REP}, re-summarized) "
+            "UMG: " + _density_table(oracle, "umg", ["kriging", "sgs"]),
+            "oracle coverage90: " + _density_table(oracle, "coverage90", ["kriging", "sgs"]),
+            "oracle MSE (not drawn): " + _density_table(oracle, "mse", ["kriging", "sgs"]),
             f"GP-MLE ({F3_2_GP_N_CELLS} cells) MSE: " + _density_table(gp_summ, "mse", ["gp_mle"]),
             f"GP-MLE ({F3_2_GP_N_CELLS} cells) UMG: " + _density_table(gp_summ, "umg", ["gp_mle"]),
             f"GP-MLE ({F3_2_GP_N_CELLS} cells) coverage90: " + _density_table(gp_summ, "coverage90", ["gp_mle"]),
