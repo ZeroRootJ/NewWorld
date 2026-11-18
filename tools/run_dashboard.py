@@ -1,4 +1,6 @@
-"""Local progress dashboard for a multi_truth_axes run (stdlib only).
+"""Local progress dashboard for a multi_truth_axes run, or a kriging/SGS re-run
+that reuses its run_config layout (inferred_variogram_density,
+picked_variogram_density) (stdlib only).
 
 Reads, never writes, the run folder produced by src/experiments/multi_truth_axes.py:
 run_config.json (planned cells), run_registry.jsonl (completed tasks),
@@ -6,7 +8,7 @@ failures.jsonl, progress.log, and each completed SGS run's manifest.json
 (for the sgsim near-singular warning count).
 
 Usage (from the repo root):
-    .venv/Scripts/python.exe tools/run_dashboard.py                 # latest run folder
+    .venv/Scripts/python.exe tools/run_dashboard.py                 # latest run folder (any of RUN_KINDS)
     .venv/Scripts/python.exe tools/run_dashboard.py --run-dir results/raw/multi_truth_axes/<ts>
     then open http://127.0.0.1:8765
 
@@ -32,6 +34,11 @@ EXPERIMENT_LABELS = {
     "E2": "E2 range axis",
     "E3": "E3 nugget axis",
     "E4": "E4 density axis",
+}
+RUN_KINDS = {
+    "multi_truth_axes": "Multi-truth axes run",
+    "inferred_variogram_density": "Density axis · kriging/SGS with auto-fit variogram",
+    "picked_variogram_density": "Density axis 10×1 (rep0) · kriging/SGS with user-picked variogram",
 }
 METHOD_ORDER = ["kriging", "sgs", "rbf_bootstrap", "gp_mle"]
 # Smoke-test SGS seconds per realization by n_samples requested (coder report, 20 workers).
@@ -105,7 +112,7 @@ class RunState:
                 d = sum(1 for k in keys if (k, m) in done)
                 row[m] = {"done": d, "total": tot}
             exp_tbl[exp] = {
-                "label": EXPERIMENT_LABELS.get(exp, exp),
+                "label": EXPERIMENT_LABELS.get(exp, exp) + (" · rep0 · user-picked variogram" if self.run_dir.parent.name == "picked_variogram_density" else ""),
                 "methods": row,
                 "done": sum(v["done"] for v in row.values()),
                 "total": sum(v["total"] for v in row.values()),
@@ -180,7 +187,17 @@ class RunState:
         except (OSError, json.JSONDecodeError):
             pass
 
+        vsrc = defaultdict(int)
+        for c in cells:
+            if "vario_source" in c:
+                vsrc[c["vario_source"]] += 1
+        unconf = sum(1 for c in cells if c.get("vario_source") == "pick" and c.get("pick_confirmed") is False)
+        kind = self.run_dir.parent.name
         return {
+            "title": RUN_KINDS.get(kind, kind),
+            "vario_sources": dict(vsrc),
+            "picks_unconfirmed": unconf,
+            "n_cells": len(cells),
             "run_dir": str(self.run_dir.relative_to(REPO_ROOT)).replace("\\", "/"),
             "batch": cfg.get("batch"),
             "n_ensemble": n_ens,
@@ -239,7 +256,7 @@ pre{margin:0;font:12px/1.55 var(--mono);white-space:pre-wrap;overflow-wrap:anywh
 h2{font-size:14px;margin:0 0 10px;font-weight:600}
 .row{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between}
 </style></head><body><div class="wrap">
-<div class="row"><div><h1>Multi-truth axes run</h1><div class="sub" id="rundir"></div></div>
+<div class="row"><div><h1 id="title">Run progress</h1><div class="sub" id="rundir"></div></div>
 <span class="pill" id="state">loading</span></div>
 <div class="card"><div class="row" style="margin-bottom:8px"><strong id="pct"></strong><span class="sub" id="counts"></span></div>
 <div class="bar big"><i id="mainbar" style="width:0"></i></div></div>
@@ -263,7 +280,9 @@ const bar=(d,t)=>`<div class="cellbar"><div class="bar"><i style="width:${t?100*
 async function tick(){
  let s;try{s=await (await fetch("/api/status",{cache:"no-store"})).json()}catch(e){document.getElementById("state").textContent="server offline";document.getElementById("state").className="pill bad";return}
  const $=id=>document.getElementById(id);
- $("rundir").textContent=`${s.run_dir} · batch ${s.batch} · N=${s.n_ensemble} · workers ${s.workers}`;
+ $("title").textContent=s.title;document.title=s.title;
+ const vs=Object.entries(s.vario_sources||{}).map(([k,v])=>`${k} ${v}`).join(" / ");
+ $("rundir").textContent=`${s.run_dir} · ${s.n_cells} cells · SGS N=${s.n_ensemble} · workers ${s.workers}`+(vs?` · variogram: ${vs}${s.picks_unconfirmed?` (미확정 pick ${s.picks_unconfirmed})`:""}`:"");
  const p=s.total?s.done/s.total:0;$("pct").textContent=(100*p).toFixed(1)+" %";
  $("counts").textContent=`${s.done} / ${s.total} tasks`;$("mainbar").style.width=(100*p)+"%";
  const complete=s.done>=s.total, stale=s.last_update_age_s!=null&&s.last_update_age_s>1800;
@@ -315,7 +334,7 @@ def make_handler(state: RunState):
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--run-dir", help="multi_truth_axes run folder (default: latest)")
+    ap.add_argument("--run-dir", help="run folder (default: latest across RUN_KINDS)")
     ap.add_argument("--port", type=int, default=8765)
     args = ap.parse_args()
     if args.run_dir:
@@ -323,9 +342,10 @@ def main():
         if not run_dir.is_absolute():
             run_dir = REPO_ROOT / run_dir
     else:
-        cands = sorted((REPO_ROOT / "results/raw/multi_truth_axes").glob("*/run_config.json"))
+        cands = sorted((p for k in RUN_KINDS for p in (REPO_ROOT / "results/raw" / k).glob("*/run_config.json")),
+                       key=lambda p: p.parent.name)  # folder names are UTC timestamps
         if not cands:
-            raise SystemExit("no multi_truth_axes run folder found")
+            raise SystemExit("no run folder found")
         run_dir = cands[-1].parent
     state = RunState(run_dir.resolve())
     srv = ThreadingHTTPServer(("127.0.0.1", args.port), make_handler(state))
