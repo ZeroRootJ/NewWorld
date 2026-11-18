@@ -1298,8 +1298,16 @@ def figure_f3_2(mt):
     n_src = pc["vario_source"].value_counts().to_dict()
     auto_cells = pc[pc["vario_source"] == "auto"]
     unconf = pc[pc["pick_confirmed"].astype(str) == "False"]
-    spread = float(max(gp_all["value"].max(), pc["vario_hmaj1"].max(), pc["auto_fit_range_m"].max())
-                   / min(gp_all["value"].min(), pc["vario_hmaj1"].min(), pc["auto_fit_range_m"].min()))
+    # D purple: automatic-fit range of ALL cells per level (user request 2026-11-18)
+    fits = pd.read_csv(INF_FITS, dtype={"axis_level": str, "sample_rep": str})
+    fits = fits[fits["experiment"] == a["experiment"]]
+    if set(fits.groupby("axis_level").size()) != {F3_2_GP_N_CELLS} or set(fits["axis_level"]) != set(DENSITY_LEVELS):
+        raise ValueError(f"{_rel(INF_FITS)}: expected {F3_2_GP_N_CELLS} E4 fits per density level.")
+    if not np.allclose(pc["auto_fit_range_m"].values,
+                       fits.set_index("config_key").loc[pc["config_key"], "fit_range_m"].values, rtol=1e-12, atol=0):
+        raise ValueError(f"{_rel(PICK_CELLS)} auto_fit_range_m differs from {_rel(INF_FITS)} fit_range_m.")
+    spread = float(max(gp_all["value"].max(), pc["vario_hmaj1"].max(), fits["fit_range_m"].max())
+                   / min(gp_all["value"].min(), pc["vario_hmaj1"].min(), fits["fit_range_m"].min()))
     use_log = spread >= RATIO_LOG_THRESHOLD
     ax_scale = "log" if use_log else "linear"
 
@@ -1312,7 +1320,7 @@ def figure_f3_2(mt):
         f"samplings); B, C dashed / hollow: kriging and SGS with the automatic-fit variogram on the same "
         f"{n_pick} {PICK_SAMPLE_REP} cells; C: fraction of evaluated cells inside the central {COV90_NOMINAL:.0%} predictive interval "
         f"(kriging: normal-score interval back-transformed; SGS, GP-MLE: Gaussian mean ± z·std interval); "
-        f"D: one point per cell ({F3_2_GP_N_CELLS} GP-MLE, {n_pick} user-picked, {n_pick} auto-fit per level); GP-MLE practical "
+        f"D: one point per cell ({F3_2_GP_N_CELLS} GP-MLE, {n_pick} user-picked, {F3_2_GP_N_CELLS} auto-fit per level; dashed line = oracle (true) range, fixed); GP-MLE practical "
         f"range = RBF-kernel length scale at the 0.05 correlation cutoff; user-picked range = spherical range "
         f"(correlation 0) – the two range definitions differ; max/min over all points = {spread:.1f}×, "
         f"{ax_scale} y axis. SGS ensemble N = {mt['n_ens']}; kriging and GP-MLE have no ensemble."
@@ -1348,12 +1356,16 @@ def figure_f3_2(mt):
             s=F3_2_D_MARKER_S, marker="o", facecolors=F3_D_INF_COLOR,
             edgecolors="none", alpha=F3_2_D_ALPHA, zorder=3,
         )
+        fsub = fits[fits["axis_level"] == lvl].sort_values(["truth_seed", "sample_rep"])
         ax_d.scatter(
-            dens["pct"][lvl] * (1.0 + F3_2_D_SHIFT + sp_pk), psub["auto_fit_range_m"],
-            s=F3_2_D_MARKER_S, marker="s", facecolors=F3_2_D_AUTO_COLOR,
-            edgecolors="none", alpha=F3_2_D_ALPHA, zorder=3,
+            dens["pct"][lvl] * (1.0 + F3_2_D_SHIFT + sp_gp), fsub["fit_range_m"],
+            s=F3_D_MARKER_S, marker="s", facecolors=F3_2_D_AUTO_COLOR,
+            edgecolors="none", alpha=F3_D_ALPHA, zorder=3,
         )
     ax_d.axhline(dens["truth_range_m"], color="black", linestyle="--", linewidth=0.7, zorder=2)
+    ax_d.text(0.97, 0.97, f"dashed: oracle {dens['truth_range_m']:g} m (fixed)", transform=ax_d.transAxes,
+              ha="right", va="top", fontsize=6, zorder=5,
+              bbox=dict(boxstyle="square,pad=0.2", facecolor="white", edgecolor="none", alpha=0.85))
     if use_log:
         ax_d.set_yscale("log")
         lo, hi = ax_d.get_ylim()
@@ -1394,11 +1406,11 @@ def figure_f3_2(mt):
         Line2D([0], [0], color="gray", linestyle="--", linewidth=0.6,
                label=f"Ideal UMG (1) / nominal coverage ({COV90_NOMINAL:.2f})"),
         Line2D([0], [0], color="black", linestyle="--", linewidth=0.7,
-               label=f"Ground-truth range ({dens['truth_range_m']:g} m)"),
+               label=f"D: oracle range (true variogram, fixed {dens['truth_range_m']:g} m)"),
         Line2D([0], [0], color=F3_D_INF_COLOR, marker="o", linestyle="none", markersize=3.0,
-               label="D: user-picked range (spherical)"),
+               label=f"D: user-picked range (spherical, {n_pick} cells/level)"),
         Line2D([0], [0], color=F3_2_D_AUTO_COLOR, marker="s", linestyle="none", markersize=3.0,
-               label="D: auto-fit range (spherical)"),
+               label=f"D: auto-fit range (spherical, {F3_2_GP_N_CELLS} cells/level)"),
     ]
     fig.legend(handles=handles, loc="upper center", ncol=3, bbox_to_anchor=(0.5, 1.0), columnspacing=1.4)
 
@@ -1408,20 +1420,15 @@ def figure_f3_2(mt):
     pk_level = pc.groupby("axis_level")["vario_hmaj1"].describe(percentiles=[0.5]).loc[DENSITY_LEVELS]
     pk_above = {lvl: int((pc[pc["axis_level"] == lvl]["vario_hmaj1"] > dens["truth_range_m"]).sum())
                 for lvl in DENSITY_LEVELS}
-    fits = pd.read_csv(INF_FITS, dtype={"axis_level": str, "sample_rep": str})
-    fits = fits[fits["experiment"] == a["experiment"]].set_index("config_key")
-    if not np.allclose(pc["auto_fit_range_m"].values, fits.loc[pc["config_key"], "fit_range_m"].values,
-                       rtol=1e-12, atol=0):
-        raise ValueError(f"{_rel(PICK_CELLS)} auto_fit_range_m differs from {_rel(INF_FITS)} fit_range_m.")
-    au_level = pc.groupby("axis_level")["auto_fit_range_m"].describe(percentiles=[0.5]).loc[DENSITY_LEVELS]
-    au_above = {lvl: int((pc[pc["axis_level"] == lvl]["auto_fit_range_m"] > dens["truth_range_m"]).sum())
+    au_level = fits.groupby("axis_level")["fit_range_m"].describe(percentiles=[0.5]).loc[DENSITY_LEVELS]
+    au_above = {lvl: int((fits[fits["axis_level"] == lvl]["fit_range_m"] > dens["truth_range_m"]).sum())
                 for lvl in DENSITY_LEVELS}
     prov = r0["prov"]
     lines = _status_file(
         stem,
         inputs=_mt_inputs(mt, extra=[
-            f"{_rel(PICK_CELLS)} auto_fit_range_m (panel D purple; asserted equal to {_rel(INF_FITS)} "
-            "fit_range_m)",
+            f"{_rel(INF_FITS)} (rows experiment == {a['experiment']}, all {F3_2_GP_N_CELLS} cells per level; "
+            "fit_range_m = panel D purple)",
             f"{_rel(MTA_SUMMARY)} (rows experiment == {a['experiment']}, method == gp_mle; {F3_2_GP_N_CELLS} "
             "cells per level, pooled mean)",
             f"{_rel(MTA_HYPER)} (rows experiment == {a['experiment']}, method == gp_mle, parameter == "
@@ -1442,8 +1449,8 @@ def figure_f3_2(mt):
             ("D", f"REAL DATA - range, one point per cell: GP-MLE practical range of all {F3_2_GP_N_CELLS} cells "
                   f"per level (red diamonds, shifted left) and the spherical range of the user-picked variogram "
                   f"of the {n_pick} rep0 cells used by kriging and SGS (blue circles, centre) and the automatic-fit "
-                  f"spherical range of the same cells (purple squares, shifted right); dashed line = "
-                  f"ground-truth range {dens['truth_range_m']:g} m"),
+                  f"spherical range of all {F3_2_GP_N_CELLS} cells per level (purple squares, shifted right); "
+                  f"dashed line = oracle (true-variogram) range, fixed {dens['truth_range_m']:g} m"),
         ],
         in_figure_note="DATA STATUS: " + note,
         limits=[
@@ -1482,7 +1489,7 @@ def figure_f3_2(mt):
                       f"{pk_level.loc[lvl, 'max']:.0f}, {pk_above[lvl]} of {n_pick} above" for lvl in DENSITY_LEVELS),
             "panel D auto-fit spherical range per-level min / median / max (m), count above the true range: " +
             "; ".join(f"{lvl}%: {au_level.loc[lvl, 'min']:.0f} / {au_level.loc[lvl, '50%']:.0f} / "
-                      f"{au_level.loc[lvl, 'max']:.0f}, {au_above[lvl]} of {n_pick} above" for lvl in DENSITY_LEVELS),
+                      f"{au_level.loc[lvl, 'max']:.0f}, {au_above[lvl]} of {F3_2_GP_N_CELLS} above" for lvl in DENSITY_LEVELS),
             "SGS grid-node warnings, user-picked (cells with >0 / total): " + "; ".join(
                 f"{lvl}%: {r0['warn_picked'][lvl][0]} / {r0['warn_picked'][lvl][1]}" for lvl in DENSITY_LEVELS) + ".",
             "x positions are the REQUESTED sample fraction; actual n per level (rep0): " + "; ".join(
