@@ -45,6 +45,7 @@ FIGS = {
         body=[
             "한 행 그림입니다. A는 MSE, B는 UMG, C는 90% 구간 coverage, D는 range입니다. 점은 레벨 평균이고 error bar는 없습니다.",
             "kriging과 SGS는 Variogram Review 보드에서 셀마다 직접 고른 spherical variogram으로 돌린 결과이고, 밀도당 ground truth 10개 × 샘플셋 rep0 1개(sample seed 1001) = 10셀입니다(49셀은 직접 고른 값, 고르지 않은 1셀(2 %, truth 101)은 자동 적합값; SGS N = 50). 보드에는 각 셀의 정답 variogram 곡선이 함께 표시되어 있었습니다. GP-MLE는 밀도당 100셀(ground truth 10개 × 샘플셋 10개) 전체의 평균입니다. 따라서 GP-MLE와 kriging/SGS는 같은 셀 집합이 아닙니다.",
+            "B와 C의 점선과 속이 빈 마커(파랑 kriging, 초록 SGS)는 같은 10셀에서 셀마다 자동 적합한 variogram으로 돌린 결과입니다.",
             "D는 셀마다 range를 점 하나로 찍은 것입니다(로그 축). 빨간 점(왼쪽)은 GP-MLE practical range(상관 0.05 기준, 레벨당 100개), 파란 점(오른쪽)은 kriging과 SGS가 쓴 직접 고른 spherical range(상관 0 기준, 레벨당 10개)입니다. 점선은 ground-truth range 300 m입니다.",
         ]),
     "F4": dict(
@@ -109,6 +110,7 @@ CLAIMS = {
         "A: MSE는 밀도 20 %에서 1 %로 갈 때 kriging 2.44 → 6.86, SGS 2.48 → 6.82(직접 고른 variogram, 10셀), GP-MLE 2.63 → 6.74(100셀)입니다.",
         "B: UMG는 kriging 0.983 → 0.853, SGS 0.983 → 0.876, GP-MLE 0.977 → 0.890입니다.",
         "C: 90% coverage는 kriging 0.893 → 0.829, SGS 0.891 → 0.848, GP-MLE 0.891 → 0.827입니다.",
+        "B, C 점선(자동 적합 variogram, 같은 10셀): UMG는 kriging 0.985 → 0.869, SGS 0.986 → 0.902이고, 90% coverage는 kriging 0.894 → 0.847, SGS 0.892 → 0.870입니다.",
         "D: GP-MLE practical range(100셀)의 중앙값은 20 %에서 181 m, 1 %에서 270 m이고, 범위는 20 %에서 148~248 m, 1 %에서 57~740 m입니다. 300 m를 넘는 셀은 100개 중 20 % 0개, 10 % 4개, 5 % 16개, 2 % 26개, 1 % 38개입니다. 직접 고른 range(10셀)의 중앙값은 271~306 m입니다.",
     ],
     "F4": [

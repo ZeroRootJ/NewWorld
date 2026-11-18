@@ -1271,6 +1271,19 @@ def figure_f3_2(mt):
     pk["method"] = pk["method"].map({"kriging_picked": "kriging", "sgs_picked": "sgs"})
     summ = pd.concat([pk, gp_summ[pk.columns.intersection(gp_summ.columns)]], ignore_index=True)
     methods = ["kriging", "sgs", "gp_mle"]
+    # B, C extra series (user request 2026-11-18): kriging / SGS with the AUTOMATIC-fit
+    # variogram on the SAME rep0 cells (dashed, hollow markers)
+    im = read_metrics_csv(INF_METRICS)
+    im = im[(im["experiment"] == a["experiment"]) & (im["sample_rep"] == PICK_SAMPLE_REP)]
+    if set(im["method"]) != set(INF_METHODS) or \
+            set(zip(im["axis_level"], im["truth_seed"], im["sample_seed"])) != \
+            set(zip(pc["axis_level"], pc["truth_seed"], pc["sample_seed"])):
+        raise ValueError(f"{_rel(INF_METRICS)}: rep0 auto-fit cells differ from the user-picked cells.")
+    inf_summ = _summarize(im)
+    if set(inf_summ["n"]) != {n_pick}:
+        raise ValueError(f"{_rel(INF_METRICS)}: expected {n_pick} rep0 cells per level.")
+    summ_bc = pd.concat([summ, inf_summ[summ.columns.intersection(inf_summ.columns)]], ignore_index=True)
+    methods_bc = ["kriging", "kriging_inferred", "sgs", "sgs_inferred", "gp_mle"]
     n_src = pc["vario_source"].value_counts().to_dict()
     auto_cells = pc[pc["vario_source"] == "auto"]
     unconf = pc[pc["pick_confirmed"].astype(str) == "False"]
@@ -1285,21 +1298,22 @@ def figure_f3_2(mt):
         f"{n_src.get('pick', 0)} cells; automatic fit for {n_src.get('auto', 0)} cell without a pick), "
         f"{a['n_truth']} realizations × 1 sampling ({PICK_SAMPLE_REP}, sample seed {a['sample_seed']}) = "
         f"{n_pick} cells per level; GP-MLE: all {F3_2_GP_N_CELLS} cells per level (10 realizations × 10 "
-        f"samplings); C: fraction of evaluated cells inside the central {COV90_NOMINAL:.0%} predictive interval "
+        f"samplings); B, C dashed / hollow: kriging and SGS with the automatic-fit variogram on the same "
+        f"{n_pick} {PICK_SAMPLE_REP} cells; C: fraction of evaluated cells inside the central {COV90_NOMINAL:.0%} predictive interval "
         f"(kriging: normal-score interval back-transformed; SGS, GP-MLE: Gaussian mean ± z·std interval); "
         f"D: one point per cell ({F3_2_GP_N_CELLS} GP-MLE, {n_pick} kriging/SGS per level); GP-MLE practical "
         f"range = RBF-kernel length scale at the 0.05 correlation cutoff; user-picked range = spherical range "
         f"(correlation 0) – the two range definitions differ; max/min over all points = {spread:.1f}×, "
         f"{ax_scale} y axis. SGS ensemble N = {mt['n_ens']}; kriging and GP-MLE have no ensemble."
     )
-    fig, rect = _new_figure(plot_height_mm=F3_PLOT_HEIGHT_MM, status_text=note, top_mm=14.0,
+    fig, rect = _new_figure(plot_height_mm=F3_PLOT_HEIGHT_MM, status_text=note, top_mm=19.0,
                             right_mm=F3_RIGHT_MM)
     gs = fig.add_gridspec(1, 4, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3], wspace=0.42)
     ax_a, ax_b, ax_c, ax_d = (fig.add_subplot(gs[0, i]) for i in range(4))
 
     _plot_density_metric(ax_a, summ, dens, "mse", methods=methods, errorbars=False)
-    _plot_density_metric(ax_b, summ, dens, "umg", methods=methods, errorbars=False)
-    _plot_density_metric(ax_c, summ, dens, "coverage90", methods=methods, errorbars=False)
+    _plot_density_metric(ax_b, summ_bc, dens, "umg", methods=methods_bc, errorbars=False)
+    _plot_density_metric(ax_c, summ_bc, dens, "coverage90", methods=methods_bc, errorbars=False)
     ax_b.axhline(1.0, color="gray", linestyle="--", linewidth=0.6, zorder=1)
     ax_c.axhline(COV90_NOMINAL, color="gray", linestyle="--", linewidth=0.6, zorder=1)
     ax_a.set_ylabel(MSE_LABEL)
@@ -1341,7 +1355,8 @@ def figure_f3_2(mt):
         _panel_label(ax, letter)
 
     for ax, metric, name in ((ax_a, "mse", "A"), (ax_b, "umg", "B"), (ax_c, "coverage90", "C")):
-        r = summ[summ["metric"] == metric]
+        r = (summ if name == "A" else summ_bc)
+        r = r[r["metric"] == metric]
         lo_, hi_ = float(r["mean"].min()), float(r["mean"].max())
         yl = ax.get_ylim()
         if yl[0] > lo_ or yl[1] < hi_:
@@ -1351,9 +1366,12 @@ def figure_f3_2(mt):
         "kriging": f"Simple kriging (user-picked variogram, {n_pick} cells/level)",
         "sgs": f"SGS (user-picked variogram, {n_pick} cells/level)",
         "gp_mle": f"GP-MLE ({F3_2_GP_N_CELLS} cells/level)",
+        "kriging_inferred": f"B, C: Simple kriging (auto-fit variogram, {n_pick} cells/level)",
+        "sgs_inferred": f"B, C: SGS (auto-fit variogram, {n_pick} cells/level)",
     }
-    handles = _method_handles(methods=methods)
-    for h, m in zip(handles, methods):
+    leg_methods = ["kriging", "kriging_inferred", "sgs", "sgs_inferred", "gp_mle"]
+    handles = _method_handles(methods=leg_methods)
+    for h, m in zip(handles, leg_methods):
         h.set_label(labels[m])
     handles += [
         Line2D([0], [0], color="gray", linestyle="--", linewidth=0.6,
@@ -1441,6 +1459,10 @@ def figure_f3_2(mt):
             + _density_table(r0["pick_summary"], "mse", PICK_METHODS),
             "user-picked UMG: " + _density_table(r0["pick_summary"], "umg", PICK_METHODS),
             "user-picked coverage90: " + _density_table(r0["pick_summary"], "coverage90", PICK_METHODS),
+            f"B, C auto-fit variogram ({_rel(INF_METRICS)} rows sample_rep == {PICK_SAMPLE_REP}, re-summarized) "
+            "UMG: " + _density_table(inf_summ, "umg", INF_METHODS),
+            "auto-fit coverage90: " + _density_table(inf_summ, "coverage90", INF_METHODS),
+            "auto-fit MSE (not drawn): " + _density_table(inf_summ, "mse", INF_METHODS),
             f"GP-MLE ({F3_2_GP_N_CELLS} cells) MSE: " + _density_table(gp_summ, "mse", ["gp_mle"]),
             f"GP-MLE ({F3_2_GP_N_CELLS} cells) UMG: " + _density_table(gp_summ, "umg", ["gp_mle"]),
             f"GP-MLE ({F3_2_GP_N_CELLS} cells) coverage90: " + _density_table(gp_summ, "coverage90", ["gp_mle"]),
