@@ -206,8 +206,17 @@ F3_2_MAP_MARKER_S = 3.0
 F3_2_MAP_CMAP = "viridis"
 # F3c: GP-MLE range extremes at the sparsest density (user request 2026-11-18)
 F3_EXT_LEVEL = "2"
-F3_EXT_HEIGHT_MM = 120.0
 F3_EXT_MARKER_S = 6.0
+# F3c columns 3-5 (user request 2026-11-18): one SGS realization instead of the ensemble mean,
+# + experimental variogram and histogram of truth / GP-MLE mean / that realization.
+F3_EXT_SGS_REAL = 0       # index into sgs_realizations.npy
+F3_EXT_HIST_BINS = 30     # identical bins for the three maps of a row
+F3_EXT_TOP_MM = 8.0       # top strip holding the shared legend of columns 4-5
+# horizontal / vertical placement (mm) of the 2 x (3 maps + colourbar + variogram + histogram) grid
+F3_EXT_LAYOUT_MM = dict(left=12.0, map=26.0, map_gap=5.0, cbar_gap=1.5, cbar_w=2.5, cbar_to_plot=22.0,
+                        plot_w=25.0, plot_gap=12.0, row_title=7.5, row_gap=8.5, bottom=8.5)
+F3_EXT_HEIGHT_MM = (2 * (F3_EXT_LAYOUT_MM["row_title"] + F3_EXT_LAYOUT_MM["map"])
+                    + F3_EXT_LAYOUT_MM["row_gap"] + F3_EXT_LAYOUT_MM["bottom"])
 
 MSE_LABEL = "MSE (porosity %²)"
 UMG_LABEL = "UMG (1 = calibrated)"
@@ -1575,17 +1584,29 @@ def figure_f3_2_maps(mt):
 
 
 def figure_f3_extremes(mt):
-    """Extreme-value check (user request 2026-11-18): at the sparsest density level,
-    the GP-MLE cells with the SHORTEST and the LONGEST fitted practical range. For
-    each: ground truth + conditioning samples, and the GP-MLE posterior-mean
-    porosity map, with that cell's MSE and UMG. MSE / UMG are recomputed here with
-    the evaluator's own functions and asserted equal to multi_truth_axes/metrics.csv."""
+    """Extreme-value check (user requests 2026-11-18): at density F3_EXT_LEVEL, the
+    GP-MLE cells with the SHORTEST and the LONGEST fitted practical range. Per row
+    (one cell): ground truth + conditioning samples, GP-MLE posterior-mean map, ONE
+    SGS realization (index F3_EXT_SGS_REAL of the oracle-variogram batch-1 ensemble),
+    the experimental variograms of those three maps with the true spherical model,
+    and their histograms. MSE / UMG are recomputed here with the evaluator's own
+    functions and asserted equal to multi_truth_axes/metrics.csv (SGS: ensemble of
+    N realizations, not the single realization drawn)."""
     from src.experiments.evaluate_multi_truth_axes import MAP_MATCH_TOL, _conditioning, _gaussian_metrics
+    # variogram estimator / model / constants REUSED from the variogram-reproduction figures
+    # (imported here: that module chain pulls in sklearn, only this figure needs it)
+    from src.experiments.base_case import CC1, HMAJ1, NUG, POR_STDEV
+    from results.processed.sample_replicate_axis.make_length_case_study_figures import (
+        CURVE_COLORS, DIST_STD_DDOF)
+    from results.processed.sample_replicate_axis.make_variogram_reproduction_figure import (
+        LAG_BIN_WIDTH_M, LAG_MAX_M, MIN_PAIRS_PER_BIN, N_PAIRS_DRAWN, REPORT_LAG_M, VARIOGRAM_PAIR_SEED, Y_MAX,
+        quiet_variogram, semivariance_at, spherical_semivariance)
 
     stem = "F3c_density_gp_range_extremes"
     dens = mt["dens"]
     ed = mt["exp"]["density"]
     lvl = F3_EXT_LEVEL
+    k_real = F3_EXT_SGS_REAL
     gp = mt["gp_range"]
     gp = gp[gp["axis_level"] == lvl].sort_values("value")
     if len(gp) != F3_2_GP_N_CELLS:
@@ -1598,6 +1619,7 @@ def figure_f3_extremes(mt):
     fits = pd.read_csv(INF_FITS, dtype={"axis_level": str, "sample_rep": str})
     fits = fits[fits["experiment"] == ed["experiment"]].set_index("config_key")
 
+    series = ("truth", "gp", "sgs")   # columns 1-3 and the curves of columns 4-5, in this order
     rows = []
     for tag, g in picks:
         c = cells[(cells["axis_level"] == lvl) & (cells["truth_seed"] == g["truth_seed"])
@@ -1606,9 +1628,13 @@ def figure_f3_extremes(mt):
             raise ValueError(f"F3c: no unique cell for truth {g['truth_seed']} {g['sample_rep']}.")
         c = c.iloc[0]
         tv = fits.loc[c["config_key"]]
+        rng_true, nug_true = float(tv["true_range_m"]), float(tv["true_nugget"])
+        # spherical_semivariance takes the range as an argument but the nugget / structured sill are the
+        # base-case constants NUG, CC1 (x POR_STDEV**2) -> only valid if this cell's nugget is NUG.
+        if not np.isclose(nug_true, NUG, rtol=0, atol=1e-12):
+            raise ValueError(f"F3c {tag}: true nugget {nug_true} != base-case NUG {NUG}; model curve invalid.")
         truth, samples_df, mask = _conditioning(int(c["truth_seed"]), int(c["sample_seed"]),
-                                                float(tv["true_range_m"]), float(tv["true_range_m"]),
-                                                float(tv["true_nugget"]), int(c["n_samples_requested"]))
+                                                rng_true, rng_true, nug_true, int(c["n_samples_requested"]))
         gdir = _REPO_ROOT / c["run_dir_gp_mle_b"]
         rec = pd.read_csv(gdir / "samples.csv")
         if len(rec) != len(samples_df) or not np.allclose(rec[["X", "Y"]].values, samples_df[["X", "Y"]].values,
@@ -1638,81 +1664,200 @@ def figure_f3_extremes(mt):
         for k in ("mse", "umg"):
             if not np.isclose(sm[k], saved_sgs[k], rtol=1e-12, atol=1e-12):
                 raise ValueError(f"F3c sgs {tag}: recomputed {k} {sm[k]} != metrics.csv {saved_sgs[k]}")
+        sgs_real = ens[k_real]
+        maps = {"truth": truth, "gp": mean_map, "sgs": sgs_real}
+        for key, arr in maps.items():
+            if arr.shape != (NY, NX):
+                raise ValueError(f"F3c {tag}: {key} map shape {arr.shape} != {(NY, NX)}")
+        # experimental variograms over the full grid (same estimator, same pair draw for all three maps)
+        vario = {key: quiet_variogram(arr) for key, arr in maps.items()}
+        for key in ("gp", "sgs"):
+            if not (np.array_equal(vario[key]["lag_bin_center_m"].values, vario["truth"]["lag_bin_center_m"].values)
+                    and np.array_equal(vario[key]["n_pairs"].values, vario["truth"]["n_pairs"].values)):
+                raise ValueError(f"F3c {tag}: {key} variogram not on the truth's lag bins / pair set.")
+        n_sparse = int((vario["truth"]["n_pairs"] < MIN_PAIRS_PER_BIN).sum())
+        if n_sparse:
+            raise ValueError(f"F3c {tag}: {n_sparse} lag bins with < {MIN_PAIRS_PER_BIN} pairs.")
         hp = json.loads((gdir / "manifest.json").read_text(encoding="utf-8"))["params"]["fitted_hyperparameters"]
         rows.append({"tag": tag, "truth_seed": int(c["truth_seed"]), "sample_rep": c["sample_rep"],
                      "sample_seed": int(c["sample_seed"]), "range": float(g["value"]), "mse": float(saved["mse"]),
-                     "umg": float(saved["umg"]), "n": len(samples_df), "truth": truth, "samples": samples_df,
-                     "mean": mean_map, "run_dir": c["run_dir_gp_mle_b"],
-                     "sgs_mean": sgs_mean, "sgs_mse": float(saved_sgs["mse"]), "sgs_umg": float(saved_sgs["umg"]),
+                     "umg": float(saved["umg"]), "n": len(samples_df), "samples": samples_df, "maps": maps,
+                     "vario": vario, "run_dir": c["run_dir_gp_mle_b"], "rng_true": rng_true, "nug_true": nug_true,
+                     "sgs_mse": float(saved_sgs["mse"]), "sgs_umg": float(saved_sgs["umg"]),
                      "sgs_n": int(ens.shape[0]), "sgs_dir": c["run_dir_sgs_b1"],
+                     "var": {key: float(np.var(arr, ddof=DIST_STD_DDOF)) for key, arr in maps.items()},
+                     "gam": {key: semivariance_at(vario[key], REPORT_LAG_M) for key in series},
+                     "gam_model": float(spherical_semivariance(REPORT_LAG_M, range_m=rng_true)),
                      "noise_norm": float(hp["noise_variance_normalized"])})
 
     rows_n_ens = rows[0]["sgs_n"]
-    vmin = min(float(np.min(r["truth"])) for r in rows)
-    vmax = max(float(np.max(r["truth"])) for r in rows)
+    if any(r["sgs_n"] != rows_n_ens for r in rows) or any(r["rng_true"] != rows[0]["rng_true"] for r in rows):
+        raise ValueError("F3c: the two cells differ in SGS ensemble size or true range.")
+    rng_true = rows[0]["rng_true"]
+    if not np.isclose(abs(REPORT_LAG_M - rng_true), LAG_BIN_WIDTH_M / 2.0, rtol=0, atol=1e-9):
+        raise ValueError(f"F3c: REPORT_LAG_M {REPORT_LAG_M} is not a bin adjacent to the true range {rng_true}.")
+    vmin = min(float(np.min(r["maps"]["truth"])) for r in rows)
+    vmax = max(float(np.max(r["maps"]["truth"])) for r in rows)
     ext = (F3_2_MAP_XMIN, F3_2_MAP_XMIN + NX * F3_2_MAP_CELL, F3_2_MAP_XMIN, F3_2_MAP_XMIN + NY * F3_2_MAP_CELL)
+    colors = {"truth": CURVE_COLORS["truth"], "gp": METHOD_COLORS["gp_mle"], "sgs": METHOD_COLORS["sgs"]}
+    labels = {"truth": "Ground truth", "gp": "GP-MLE mean", "sgs": f"SGS realization {k_real}"}
+    model_label = f"True model (sph., {rng_true:g} m)"
+    h_smooth = np.linspace(0.0, LAG_MAX_M, 301)
+    model_smooth = spherical_semivariance(h_smooth, range_m=rng_true)
+    n_above = {r["tag"]: {key: int((r["vario"][key]["semivariance_empirical"] > Y_MAX).sum()) for key in series}
+               for r in rows}
+    sgs_out = {r["tag"]: int(((r["maps"]["sgs"] < vmin) | (r["maps"]["sgs"] > vmax)).sum()) for r in rows}
+    gp_out = {r["tag"]: int(((r["maps"]["gp"] < vmin) | (r["maps"]["gp"] > vmax)).sum()) for r in rows}
+    hist_edges = {r["tag"]: np.histogram_bin_edges(np.concatenate([r["maps"][key].ravel() for key in series]),
+                                                    bins=F3_EXT_HIST_BINS) for r in rows}
+
     note = (
         f"density {dens['pct'][lvl]:g}%: the GP-MLE cells with the shortest and the longest fitted practical range "
-        f"among the {F3_2_GP_N_CELLS} cells of the level; left = ground truth with the conditioning samples, "
-        f"middle = GP-MLE posterior-mean porosity map, right = SGS ensemble-mean map (true 300 m variogram, "
-        f"N = {rows_n_ens}) of the same cell; MSE and UMG of that cell (evaluated on the "
-        f"non-sample cells, as in F3); one colour scale for all panels (min/max of the two truth fields)."
+        f"among the {F3_2_GP_N_CELLS} cells of the level (one row each). Columns: ground truth with the conditioning "
+        f"samples; GP-MLE posterior-mean map (title: MSE, UMG of that cell on the non-sample cells, as in F3); ONE SGS "
+        f"realization (index {k_real} of N = {rows_n_ens}, true {rng_true:g} m variogram) of the same cell (its ensemble "
+        f"MSE / UMG are in the status file); experimental variograms of these three maps over all {NX * NY} grid cells "
+        f"({N_PAIRS_DRAWN:,} random pairs, {LAG_BIN_WIDTH_M:g} m bins) with the true spherical model (dashed); "
+        f"histograms of all grid cells (same bins within a row). One colour scale for all maps (min/max of the two "
+        f"truth fields)."
     )
-    fig, rect = _new_figure(plot_height_mm=F3_EXT_HEIGHT_MM, status_text=note, top_mm=8.0, right_mm=22.0,
-                            left_mm=13.0)
-    gs = fig.add_gridspec(2, 3, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3], wspace=0.12, hspace=0.30)
+    fig, _rect = _new_figure(plot_height_mm=F3_EXT_HEIGHT_MM, status_text=note, top_mm=F3_EXT_TOP_MM,
+                             bottom_axis_mm=0.0)
+    fw_mm, fh_mm = FULL_WIDTH_MM, fig.get_figheight() / MM
+
+    def _ax(x_mm, y_top_mm, w_mm, h_mm):
+        """axes placed in mm from the left edge / from the top edge of the canvas"""
+        return fig.add_axes([x_mm / fw_mm, 1.0 - (y_top_mm + h_mm) / fh_mm, w_mm / fw_mm, h_mm / fh_mm])
+
+    L = F3_EXT_LAYOUT_MM
+    map_x = [L["left"] + j * (L["map"] + L["map_gap"]) for j in range(3)]
+    cbar_x = map_x[2] + L["map"] + L["cbar_gap"]
+    vario_x = cbar_x + L["cbar_w"] + L["cbar_to_plot"]
+    hist_x = vario_x + L["plot_w"] + L["plot_gap"]
+    if hist_x + L["plot_w"] > fw_mm - 1.0:
+        raise ValueError(f"F3c: layout exceeds the {fw_mm:g} mm canvas ({hist_x + L['plot_w']:.1f} mm).")
     im = None
     for i, r in enumerate(rows):
-        for j in range(3):
-            ax = fig.add_subplot(gs[i, j])
-            data = (r["truth"], r["mean"], r["sgs_mean"])[j]
-            im = ax.imshow(data, extent=ext, origin="upper", cmap=F3_2_MAP_CMAP, vmin=vmin, vmax=vmax)
-            if j == 0:
+        y_top = F3_EXT_TOP_MM + L["row_title"] + i * (L["map"] + L["row_title"] + L["row_gap"])
+        for j, key in enumerate(series):
+            ax = _ax(map_x[j], y_top, L["map"], L["map"])
+            im = ax.imshow(r["maps"][key], extent=ext, origin="upper", cmap=F3_2_MAP_CMAP, vmin=vmin, vmax=vmax)
+            if key == "truth":
                 s = r["samples"]
                 ax.scatter(s["X"], s["Y"], s=F3_EXT_MARKER_S, facecolors="white", edgecolors="black",
                            linewidths=0.4, zorder=3)
                 ax.set_title(f"{r['tag'].capitalize()} GP range\ntruth {r['truth_seed']}, {r['sample_rep']} "
-                             f"(n = {r['n']})", fontsize=7)
+                             f"(n = {r['n']})", fontsize=FONT_PT)
                 ax.set_ylabel("Y (m)")
-            elif j == 1:
-                ax.set_title(f"GP-MLE (range {r['range']:.0f} m)\nMSE {r['mse']:.2f}, UMG {r['umg']:.3f}",
-                             fontsize=7)
+            elif key == "gp":
+                ax.set_title(f"GP-MLE mean ({r['range']:.0f} m)\nMSE {r['mse']:.2f}, UMG {r['umg']:.3f}",
+                             fontsize=FONT_PT)
                 ax.set_yticklabels([])
             else:
-                ax.set_title(f"SGS mean (oracle 300 m)\nMSE {r['sgs_mse']:.2f}, UMG {r['sgs_umg']:.3f}",
-                             fontsize=7)
+                ax.set_title(f"SGS realization {k_real}\n(oracle {rng_true:g} m)", fontsize=FONT_PT)
                 ax.set_yticklabels([])
             ax.set_xticks([0, 500, 1000])
             ax.set_yticks([0, 500, 1000])
             ax.set_xlabel("X (m)")
-            ax.set_aspect("equal")
-    cax = fig.add_axes([rect[2] + 0.03, rect[1], 0.015, rect[3] - rect[1]])
-    cb = fig.colorbar(im, cax=cax)
-    cb.set_label("Porosity (%)")
+        cax = _ax(cbar_x, y_top, L["cbar_w"], L["map"])
+        cb = fig.colorbar(im, cax=cax)
+        cb.set_label("Porosity (%)")
+
+        axv = _ax(vario_x, y_top, L["plot_w"], L["map"])
+        axv.plot(h_smooth, model_smooth, color=CURVE_COLORS["model"], linestyle="--", linewidth=0.8, zorder=2)
+        for key in series:
+            v = r["vario"][key]
+            axv.plot(v["lag_bin_center_m"], v["semivariance_empirical"], color=colors[key], linewidth=1.0, zorder=3)
+        axv.set_xlim(0.0, LAG_MAX_M)
+        axv.set_ylim(0.0, Y_MAX)
+        axv.set_xticks([0, 250, 500, 750])
+        axv.set_xlabel("Lag (m)")
+        axv.set_ylabel("Semivariance γ (porosity %²)")
+        axv.grid(True)
+        if i == 0:
+            axv.set_title("Experimental variogram", fontsize=FONT_PT)
+
+        axh = _ax(hist_x, y_top, L["plot_w"], L["map"])
+        for key in series:
+            axh.hist(r["maps"][key].ravel(), bins=hist_edges[r["tag"]], density=True, histtype="step",
+                     color=colors[key], linewidth=1.0)
+        axh.set_xlabel("Porosity (%)")
+        axh.set_ylabel("Density (1/%)")
+        if i == 0:
+            axh.set_title("Histogram (all cells)", fontsize=FONT_PT)
+    handles = [Line2D([], [], color=colors[key], linewidth=1.0, label=labels[key]) for key in series]
+    handles.append(Line2D([], [], color=CURVE_COLORS["model"], linestyle="--", linewidth=0.8, label=model_label))
+    fig.legend(handles=handles, loc="upper center", ncol=2, columnspacing=1.2, handlelength=2.0,
+               bbox_to_anchor=((vario_x + (hist_x + L["plot_w"])) / 2.0 / fw_mm, 1.0 - 0.6 / fh_mm),
+               borderaxespad=0.0)
+
+    def _per_series(r, d, fmt):
+        return ", ".join(f"{key} {fmt.format(d[key])}" for key in series)
 
     lines = _status_file(
         stem,
         inputs=[
             f"{_rel(MTA_HYPER)} (E4, gp_mle, gp_practical_range_m, axis_level == {lvl}; min and max of "
             f"{F3_2_GP_N_CELLS} cells)",
-            f"{_rel(MTA_METRICS)} (E4, gp_mle, mse / umg of the two cells; recomputed here with "
+            f"{_rel(MTA_METRICS)} (E4, gp_mle and sgs, mse / umg of the two cells; recomputed here with "
             "evaluate_multi_truth_axes._gaussian_metrics and asserted equal)",
+            f"{_rel(INF_FITS)} (true_range_m, true_nugget of the two cells; true_nugget asserted == base-case NUG)",
             "GP-MLE run dirs: " + "; ".join(f"{r['tag']} = {r['run_dir']}" for r in rows)
             + " (posterior_mean_map.npy, posterior_var_map.npy, samples.csv)",
             "SGS run dirs (batch 1): " + "; ".join(f"{r['tag']} = {r['sgs_dir']}" for r in rows)
-            + " (sgs_realizations.npy -> ensemble mean / var ddof=1, asserted equal to the saved maps; mse / umg "
-            "recomputed with _gaussian_metrics and asserted equal to metrics.csv)",
+            + f" (sgs_realizations.npy: realization index {k_real} drawn; ensemble mean / var ddof=1 of all "
+            "realizations asserted equal to the saved maps; mse / umg recomputed with _gaussian_metrics and "
+            "asserted equal to metrics.csv)",
             "truth / samples regenerated with evaluate_multi_truth_axes._conditioning and asserted equal (X, Y) "
             "to the run's samples.csv",
+            "variogram estimator / model reused (not reimplemented): results/processed/sample_replicate_axis/"
+            "make_variogram_reproduction_figure.quiet_variogram (= sample_density_axis/"
+            "make_length_and_variogram_figures.compute_experimental_variogram) and spherical_semivariance",
         ],
         panels=[(f"{r['tag']} range", f"REAL DATA - truth seed {r['truth_seed']}, {r['sample_rep']} (sample seed "
                  f"{r['sample_seed']}), n = {r['n']}: GP-MLE practical range {r['range']:.1f} m, MSE "
                  f"{r['mse']:.4f}, UMG {r['umg']:.4f}, fitted noise variance (normalized) {r['noise_norm']:.3g}; "
-                 f"SGS (oracle variogram, N = {r['sgs_n']}) MSE {r['sgs_mse']:.4f}, UMG {r['sgs_umg']:.4f}")
-                for r in rows],
+                 f"SGS (oracle variogram) ENSEMBLE of N = {r['sgs_n']} MSE {r['sgs_mse']:.4f}, UMG "
+                 f"{r['sgs_umg']:.4f} (ensemble metrics, not those of realization {k_real}); "
+                 f"variance over all {NX * NY} cells (ddof={DIST_STD_DDOF}, porosity %²): "
+                 f"{_per_series(r, r['var'], '{:.3f}')}; semivariance at the lag bin centred at {REPORT_LAG_M:g} m "
+                 f"(porosity %²): {_per_series(r, r['gam'], '{:.3f}')}, true model {r['gam_model']:.3f}")
+                for r in rows]
+        + [("columns", f"1 truth map + samples; 2 GP-MLE posterior-mean map; 3 SGS realization {k_real}; "
+                       f"4 experimental variograms (truth black, GP-MLE {colors['gp']}, SGS {colors['sgs']}) + true "
+                       f"spherical model ({CURVE_COLORS['model']}, dashed); 5 step histograms, density=True, "
+                       f"{F3_EXT_HIST_BINS} identical bins per row spanning the min-max of the three maps of the row"),
+           ("series key", "truth = ground truth, gp = GP-MLE posterior mean, "
+                          f"sgs = SGS realization {k_real}")],
         in_figure_note="DATA STATUS: " + note,
-        limits=[f"colour scale vmin/vmax = {vmin:.2f} / {vmax:.2f} % (min/max of the two truth fields), "
-                f"colormap {F3_2_MAP_CMAP}.",
+        limits=[f"column 2 is a posterior MEAN (a conditional-expectation estimate) while column 3 is a single "
+                f"conditional SIMULATION (realization {k_real}); the two are different object types.",
+                f"the SGS MSE / UMG reported here are those of the N = {rows_n_ens} ensemble (ensemble mean / "
+                f"variance), as in F3; realization {k_real} has no MSE / UMG of its own in this figure.",
+                f"realization index {k_real} = the first realization in sgs_realizations.npy; the other "
+                f"{rows_n_ens - 1} are not drawn.",
+                f"colour scale vmin/vmax = {vmin:.2f} / {vmax:.2f} % (min/max of the two truth fields), colormap "
+                f"{F3_2_MAP_CMAP}; map cells outside this range are drawn at the end colours: SGS realization "
+                + ", ".join(f"{t} {n}" for t, n in sgs_out.items()) + "; GP-MLE mean "
+                + ", ".join(f"{t} {n}" for t, n in gp_out.items()) + f" of {NX * NY} cells.",
+                f"variograms: subsampled estimator ({N_PAIRS_DRAWN:,} random cell pairs, RandomState("
+                f"{VARIOGRAM_PAIR_SEED}), identical pairs for every map), {LAG_BIN_WIDTH_M:g} m bins to "
+                f"{LAG_MAX_M:g} m, computed on the full {NX}x{NY} grid of each map (sample cells included); all "
+                f"bins have >= {MIN_PAIRS_PER_BIN} pairs.",
+                f"true model = spherical_semivariance(h, range_m = {rng_true:g}): nugget NUG x POR_STDEV² = "
+                f"{NUG * POR_STDEV ** 2:g}, structured sill CC1 x POR_STDEV² = {CC1 * POR_STDEV ** 2:g} (base-case "
+                f"default range HMAJ1 = {HMAJ1:g} m), the same physical-unit scaling as the variogram-reproduction "
+                "figures; it is the ground-truth input model, not a fit to the drawn truth field.",
+                f"variogram y-axis fixed at 0-{Y_MAX:g} (Y_MAX of the variogram-reproduction figures); bins above it "
+                "(cut off, not altered): " + "; ".join(
+                    f"{t}: " + ", ".join(f"{key} {n}" for key, n in d.items()) for t, d in n_above.items()) + ".",
+                f"'lag bin nearest {rng_true:g} m': {rng_true:g} m is the edge between the bins centred at "
+                f"{REPORT_LAG_M:g} and {REPORT_LAG_M + LAG_BIN_WIDTH_M:g} m (equidistant); the {REPORT_LAG_M:g} m "
+                "bin (REPORT_LAG_M of the variogram-reproduction figures) is reported.",
+                "truth-field variance with ddof=0 over all cells: " + ", ".join(
+                    f"{r['tag']} {float(np.var(r['maps']['truth'])):.6f}" for r in rows)
+                + f" (POR_STDEV² = {POR_STDEV ** 2:g}); the two truth fields are different maps with the same "
+                "variance, so the identical truth variance in both rows is not a copy error.",
                 "the two cells differ in truth realization AND sample set; this is a two-case illustration, "
                 "not a controlled comparison."],
     )
@@ -2340,12 +2485,14 @@ def figure_f7():
     return _save(fig, stem, lines)
 
 
-def main():
+def main(only=None):
+    """Draw all figures, or only those named in ``only`` (e.g. ["F3c"]; command line:
+    ``... make_storyboard_figures F3c``)."""
     _setup_style()
     dens = _density_info()   # F6 (single-truth replicate axis)
     mt = _load_multi_truth()  # F1-F3 (multi_truth_axes E2-E5)
     written = []
-    for name, fn, args in (
+    jobs = (
         ("F1", figure_f1, (mt,)),
         ("F2", figure_f2, (mt,)),
         ("F3", figure_f3, (mt,)),
@@ -2356,7 +2503,14 @@ def main():
         ("F5", figure_f5, ()),
         ("F6", figure_f6, (dens,)),
         ("F7", figure_f7, ()),
-    ):
+    )
+    if only:
+        unknown = set(only) - {name for name, _, _ in jobs}
+        if unknown:
+            raise ValueError(f"unknown figure name(s): {sorted(unknown)}")
+    for name, fn, args in jobs:
+        if only and name not in only:
+            continue
         print(name)
         written += fn(*args)
     print(f"{len(written)} files written to {_rel(FIGURES_DIR)}")
@@ -2364,4 +2518,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1:] or None)

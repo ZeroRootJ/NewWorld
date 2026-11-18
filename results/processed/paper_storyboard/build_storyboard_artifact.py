@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """Build the Paper Storyboard artifact HTML (embeds the storyboard PNGs)."""
 import base64
 import sys
@@ -49,8 +50,11 @@ FIGS = {
         stem="F3c_density_gp_range_extremes", st=REAL,
         title="극단값: 밀도 2 %에서 GP range가 가장 짧은 셀과 가장 긴 셀",
         body=[
-            "밀도 2 %의 100셀 중 GP-MLE practical range가 가장 짧은 셀(위)과 가장 긴 셀(아래)입니다. 왼쪽은 정답 porosity map과 샘플 위치(n = 49, 50), 가운데는 같은 셀의 GP-MLE 예측 map(posterior mean), 오른쪽은 같은 셀(같은 realization, 같은 샘플링)의 SGS realization 50개 평균 map(oracle variogram, range 300 m)이고, 제목에 MSE와 UMG를 적었습니다.",
-            "MSE와 UMG는 F3과 같은 평가 함수로 다시 계산해 저장된 값과 같은지 확인했습니다(샘플이 없는 셀에서 평가). SGS 평균·분산 map도 realization에서 다시 계산해 저장된 map과 같은지 확인했습니다. 여섯 패널은 같은 색 범위(두 정답 map의 최솟값~최댓값)를 씁니다. 두 셀은 정답 realization과 샘플셋이 모두 다릅니다.",
+            "밀도 2 %의 100셀 중 GP-MLE practical range가 가장 짧은 셀(위)과 가장 긴 셀(아래)입니다. 열은 왼쪽부터 정답 porosity map과 샘플 위치(n = 49, 50), 같은 셀의 GP-MLE 예측 map(posterior mean, 제목에 MSE와 UMG), 같은 셀(같은 realization, 같은 샘플링)의 SGS realization 1개(50개 중 0번, oracle variogram, range 300 m), 이 세 map의 실험 variogram, 히스토그램입니다.",
+            "가운데 열은 posterior 평균(추정값)이고 오른쪽 map 열은 시뮬레이션 1개라서 서로 종류가 다른 map입니다. SGS의 MSE, UMG는 realization 50개 ensemble 기준 값이고 그림에는 적지 않았습니다(아래 목록과 status 파일).",
+            "variogram은 각 map의 전체 50×50 grid에서 무작위 셀 쌍 200,000개(모든 map에 같은 쌍), 25 m 구간으로 계산했고, 기존 variogram 재현 그림의 계산 함수를 그대로 썼습니다. 점선은 정답 모델(spherical, range 300 m, nugget 0.45, 구조 sill 8.55, porosity %² 단위)입니다. "
+            "y축은 0~11.7로 고정했고, 위쪽 행 SGS 곡선의 6개 구간이 이 위로 잘렸습니다. 히스토그램은 행마다 세 map에 같은 구간 30개를 쓴 밀도 히스토그램입니다.",
+            "MSE와 UMG는 F3과 같은 평가 함수로 다시 계산해 저장된 값과 같은지 확인했습니다(샘플이 없는 셀에서 평가). SGS 평균·분산 map도 realization에서 다시 계산해 저장된 map과 같은지 확인했습니다. map 여섯 개는 같은 색 범위(두 정답 map의 최솟값~최댓값)를 쓰고, 이 범위를 벗어난 SGS realization 셀(위 63개, 아래 10개, 2,500개 중)은 끝 색으로 그려집니다. 두 셀은 정답 realization과 샘플셋이 모두 다릅니다.",
         ]),
     "F4": dict(
         stem="F4_gp_fitted_vs_truth_hyperparameters", st=REAL,
@@ -110,7 +114,9 @@ CLAIMS = {
     "F3c": [
         "가장 짧은 range: truth 7108, rep2(n = 49), range 92 m, MSE 8.21, UMG 0.878. 적합된 noise variance(정규화)는 1e-5로 하한값입니다. 예측 map은 샘플 위치 주변에서 둥근 점 모양으로 값이 바뀌고 그 사이는 평균값에 가깝습니다.",
         "가장 긴 range: truth 101, rep7(n = 50), range 728 m, MSE 5.66, UMG 0.856. 적합된 noise variance(정규화)는 0.37입니다. 예측 map은 위쪽이 낮고 아래쪽이 높은 완만한 경사면입니다.",
-        "같은 셀의 SGS(oracle variogram): 가장 짧은 range 셀에서 MSE 6.69, UMG 0.831, 가장 긴 range 셀에서 MSE 4.87, UMG 0.923입니다.",
+        "같은 셀의 SGS(oracle variogram, realization 50개 ensemble 기준): 가장 짧은 range 셀에서 MSE 6.69, UMG 0.831, 가장 긴 range 셀에서 MSE 4.87, UMG 0.923입니다.",
+        "전체 2,500셀 분산(porosity %²): 가장 짧은 range 셀에서 정답 9.00, GP-MLE 평균 1.26, SGS realization 0번 10.62, 가장 긴 range 셀에서 정답 9.00, GP-MLE 평균 3.91, SGS realization 0번 8.62입니다.",
+        "287.5 m 구간(300 m에 가장 가까운 구간)의 semivariance: 가장 짧은 range 셀에서 정답 8.87, GP-MLE 평균 1.27, SGS 10.01, 가장 긴 range 셀에서 정답 8.09, GP-MLE 평균 1.47, SGS 7.63입니다. 정답 모델 값은 8.98입니다.",
         "비교: 밀도 2 %의 100셀 평균은 GP-MLE MSE 5.34, UMG 0.927, SGS MSE 5.20, UMG 0.938입니다.",
     ],
     "F4": [
@@ -149,7 +155,7 @@ FLOW = [
     ("1-a", "F2", "Calibration 곡선, 예측 분산", REAL),
     ("1-b", "F3", "밀도별 oracle kriging/SGS와 GP-MLE(100셀) MSE, UMG, GP가 맞춘 range", REAL),
     ("1-b", "F3b", "밀도별 실제 map과 샘플 위치(realization 1개)", REAL),
-    ("1-b", "F3c", "극단값: 밀도 2 %에서 GP range 최소·최대 셀의 예측 map(GP-MLE, SGS), MSE, UMG", REAL),
+    ("1-b", "F3c", "극단값: 밀도 2 %에서 GP range 최소·최대 셀의 map(정답, GP-MLE 평균, SGS realization 1개), variogram, 히스토그램, MSE, UMG", REAL),
     ("1-b", "F4", "GP가 맞춘 range, nugget 대 실제 값", REAL),
     ("1-b", "F6", "파라미터 수와 필요한 데이터 양", PART),
     ("2", "F7", "정확도와 UMG 반응면, 고정 하이퍼파라미터 grid, 4개 방법", REAL),
