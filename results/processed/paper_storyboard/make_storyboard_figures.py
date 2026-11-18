@@ -340,7 +340,8 @@ def _load_summary() -> pd.DataFrame:
 def _density_info() -> dict:
     """ACTUAL (post grid-cell dedup) sample counts per density level, per
     replicate, from the replicate axis's own records. x positions on every
-    density axis are the replicate-MEAN actual fraction of the nx*ny grid."""
+    density axis are the REQUESTED fraction of the nx*ny grid
+    (user decision 2026-11-18; actual post-dedup counts are reported in status files)."""
     seeds = json.loads(REPL_SEEDS.read_text(encoding="utf-8"))
     extra = json.loads(REPL_EXTRA.read_text(encoding="utf-8"))["replicate_axis"]
     n_actual = {}
@@ -358,7 +359,7 @@ def _density_info() -> dict:
     src["axis_level"] = src["axis_level"].astype(str)
     one = src[(src["axis_level"] == "20") & (src["replicate"] == "rep0")]["n_cells_averaged"].iloc[0]
     n_grid = int(one) + int(extra["n_samples_actual"]["20"]["rep0"])
-    pct = {lvl: 100.0 * float(np.mean(n_actual[lvl])) / n_grid for lvl in DENSITY_LEVELS}
+    pct = {lvl: 100.0 * n_requested[lvl] / n_grid for lvl in DENSITY_LEVELS}  # requested density
     return {
         "n_actual": n_actual, "n_requested": n_requested, "n_grid": n_grid, "pct": pct,
         "truth_seed": int(seeds["truth_seed"]), "truth_range_m": float(seeds["hmaj1"]),
@@ -371,7 +372,7 @@ def _style_density_axis(ax, dens, xlabel=True):
     ax.set_xscale("log")
     ax.set_xlim(max(xs) * 1.4, min(xs) / 1.4)  # dense -> sparse, as in the existing figure
     ax.set_xticks(xs)
-    ax.set_xticklabels([f"{x:.1f}" for x in xs])
+    ax.set_xticklabels([f"{x:g}" for x in xs])
     ax.minorticks_off()
     if xlabel:
         ax.set_xlabel(DENSITY_XLABEL)
@@ -466,7 +467,7 @@ def _load_inferred_density(mt) -> dict:
 
 def _replicate_n_text(dens) -> str:
     return "; ".join(
-        f"{dens['pct'][lvl]:.1f}% = n {min(dens['n_actual'][lvl])}-{max(dens['n_actual'][lvl])} "
+        f"{dens['pct'][lvl]:g}% = n {min(dens['n_actual'][lvl])}-{max(dens['n_actual'][lvl])} "
         f"(requested {dens['n_requested'][lvl]})"
         for lvl in DENSITY_LEVELS
     )
@@ -543,7 +544,7 @@ def _load_multi_truth() -> dict:
             "nug": sorted(float(v) for v in c["nug"].unique()),
         }
 
-    # density axis: x = cell-MEAN actual (post grid-cell dedup) sample fraction
+    # density axis: x = REQUESTED sample fraction (user decision 2026-11-18)
     d = exp["density"]["cells"]
     if set(d["axis_level"]) != set(DENSITY_LEVELS):
         raise ValueError(f"E4 levels {sorted(set(d['axis_level']))} != {DENSITY_LEVELS}")
@@ -560,7 +561,7 @@ def _load_multi_truth() -> dict:
         raise ValueError("E4 ground truth is not a single isotropic range.")
     dens = {
         "n_actual": n_actual, "n_requested": n_requested, "n_grid": n_grid,
-        "pct": {lvl: 100.0 * float(np.mean(n_actual[lvl])) / n_grid for lvl in DENSITY_LEVELS},
+        "pct": {lvl: 100.0 * n_requested[lvl] / n_grid for lvl in DENSITY_LEVELS},
         "truth_range_m": exp["density"]["hmaj1"][0], "sgs_warnings": warn,
     }
 
@@ -749,8 +750,8 @@ def figure_f1(mt):
             f"density axis {ed['experiment']}: truth range {ed['hmaj1']} m, nug {ed['nug']}; truth seeds "
             f"{ed['truth_seeds']} x sample seeds {ed['sample_seeds']} (the same sample seeds at every truth "
             "and level).",
-            "density x positions are the cell-MEAN actual sample fraction of the "
-            f"{NX}x{NY} = {dens['n_grid']} grid, from evaluation_cells.csv n_samples_actual: "
+            "density x positions are the REQUESTED sample fraction of the "
+            f"{NX}x{NY} = {dens['n_grid']} grid (actual post-dedup n per level, evaluation_cells.csv): "
             + _replicate_n_text(dens) + ".",
             "methods are offset in x only so error bars do not overlap (range / nugget: additive "
             f"+-{METHOD_X_OFFSET_FRAC:g} x level spacing steps; density: multiplicative +-"
@@ -888,7 +889,7 @@ def figure_f2(mt):
             "ensemble (ddof=1) and asserted equal to the saved map. Monte Carlo back-transform "
             f"approximation: {mc_methods}. Units are not stored in the multi_truth_axes outputs; "
             "porosity %² follows those source definitions.",
-            "panel B x positions are the cell-MEAN actual sample fraction: " + _replicate_n_text(dens) + ".",
+            "panel B x positions are the REQUESTED sample fraction (actual n): " + _replicate_n_text(dens) + ".",
             "panel B y axis is linear and autoscaled; an error bar (mean - 1 std) may extend below 0 "
             "where std > mean - this is the plotted +-1 std, not a negative variance.",
             "panel B plotted values (level mean+-std): " + _density_table(ed["summary"], "variance_mean"),
@@ -1102,7 +1103,7 @@ def figure_f3(mt):
             "warnings / cells without the field): " + "; ".join(
                 f"{lvl}%: {dens['sgs_warnings'][lvl][0]} / {dens['sgs_warnings'][lvl][1]} / "
                 f"{dens['sgs_warnings'][lvl][2]}" for lvl in DENSITY_LEVELS) + ".",
-            "x positions are the cell-MEAN actual sample fraction: " + _replicate_n_text(dens) + ".",
+            "x positions are the REQUESTED sample fraction (actual n): " + _replicate_n_text(dens) + ".",
             "plotted values (level mean+-std), MSE: " + _density_table(summ, "mse"),
             "UMG: " + _density_table(summ, "umg"),
             "coverage90: " + _density_table(summ, "coverage90"),
@@ -1500,7 +1501,7 @@ def figure_f6(dens):
             f"{dens['truth_range_m']:g} m); variation is across sample-location replicates only.",
             "the real and placeholder series were split into separate panels (A real / B placeholder) "
             "instead of sharing one axis.",
-            "x positions (panel A) are the replicate-MEAN actual sample fraction: " + _replicate_n_text(dens) + ".",
+            "x positions (panel A) are the REQUESTED sample fraction (actual n): " + _replicate_n_text(dens) + ".",
         ],
         needed=[
             "GP-MLE with (i) an axis-aligned anisotropic (ARD) kernel and (ii) a rotated anisotropic kernel, "

@@ -19,7 +19,7 @@ DATA LIMITATIONS / FACTS ABOUT THE INPUTS:
   - panel A: mean/std cross-checked (rtol 1e-9) against metrics_summary.csv's length_scale_practical_range_m rows.
   - panel A: single ground-truth realization (truth_seed 101, isotropic, range 300 m); variation is across sample-location replicates only.
   - the real and placeholder series were split into separate panels (A real / B placeholder) instead of sharing one axis.
-  - x positions (panel A) are the replicate-MEAN actual sample fraction: 17.8% = n 434-453 (requested 500); 9.5% = n 227-244 (requested 250); 4.8% = n 118-124 (requested 125); 2.0% = n 47-50 (requested 50); 1.0% = n 24-25 (requested 25).
+  - x positions (panel A) are the REQUESTED sample fraction (actual n): 20% = n 434-453 (requested 500); 10% = n 227-244 (requested 250); 5% = n 118-124 (requested 125); 2% = n 47-50 (requested 50); 1% = n 24-25 (requested 25).
 
 EXPERIMENT NEEDED TO REPLACE PLACEHOLDER(S):
   - GP-MLE with (i) an axis-aligned anisotropic (ARD) kernel and (ii) a rotated anisotropic kernel, fitted over the same sample-location replicates and density levels (and on anisotropic ground truths), recording every fitted hyperparameter per replicate so its CV can be computed.
