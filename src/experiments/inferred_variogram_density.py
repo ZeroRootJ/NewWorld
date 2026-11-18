@@ -25,6 +25,19 @@ run_config.json and asserted equal to multi_truth_axes.build_cells(("E4",)).
 
 GP-MLE and RBF+bootstrap do not use a variogram and are NOT re-run.
 
+--variogram-source picks (added 2026-11-18)
+-------------------------------------------
+Same pipeline restricted to the 50 sample_rep == "rep0" cells (10 truth seeds
+x 5 levels, sample_seed 1001), with the variogram the user set by hand on the
+Variogram Review board: range_m / nugget of
+results/processed/variogram_inference/variogram_picks.csv (cell_id =
+experiment + "_" + config_key) where a row exists, else the automatic fit
+above. Unconfirmed picks are used as-is. Per cell, run_config records
+vario_source ("pick" / "auto"), pick_confirmed / pick_edited (None for auto)
+and auto_fit_range_m / auto_fit_nugget; variogram_source records both CSVs'
+sha256. Experiment name / raw folder: picked_variogram_density. The default
+(--variogram-source auto) config is unchanged (no new keys).
+
 Output layout (results/raw convention)
 --------------------------------------
 results/raw/inferred_variogram_density/<timestamp>/
@@ -41,6 +54,7 @@ Usage
 -----
   .venv/Scripts/python.exe -m src.experiments.inferred_variogram_density --max-workers 20
   .venv/Scripts/python.exe -m src.experiments.inferred_variogram_density --resume results/raw/inferred_variogram_density/<ts> --max-workers 20
+  .venv/Scripts/python.exe -m src.experiments.inferred_variogram_density --variogram-source picks --max-workers 20
 Smoke (scratch output only): add --raw-root <scratch dir> --limit-cells K
 """
 
@@ -53,6 +67,7 @@ import traceback
 from pathlib import Path
 from typing import Dict, List
 
+import numpy as np
 import pandas as pd
 
 from src.experiments._axis_parallel import default_max_workers, run_levels_parallel
@@ -78,16 +93,26 @@ SOURCE_EXPERIMENT = "E4"
 SOURCE_BATCH = 1
 FITTED_VARIOGRAMS_CSV = "results/processed/variogram_inference/fitted_variograms.csv"
 VARIOGRAM_INFERENCE_MANIFEST = "results/processed/variogram_inference/manifest.json"
+# --variogram-source picks (user's Variogram Review picks, rep0 cells only; added 2026-11-18)
+PICKED_EXPERIMENT_NAME = "picked_variogram_density"
+VARIOGRAM_PICKS_CSV = "results/processed/variogram_inference/variogram_picks.csv"
+VARIOGRAM_PICKS_META = "results/processed/variogram_inference/variogram_picks_meta.json"
+PICKS_SAMPLE_REP = "rep0"
 
 METHODS = ("kriging", "sgs")
 N_ENSEMBLE = 50  # == source batch-1 n_ensemble_this_batch (asserted)
+
+
+def experiment_name(config: dict) -> str:
+    """auto-fit configs carry no experiment_name key (kept bit-for-bit as before)."""
+    return config.get("experiment_name", EXPERIMENT_NAME)
 
 
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def make_config(raw_root: str, limit_cells=None) -> dict:
+def make_config(raw_root: str, limit_cells=None, variogram_source: str = "auto") -> dict:
     src = resolve_run_dir(SOURCE_RUN)
     src_cfg = json.loads((src / "run_config.json").read_text(encoding="utf-8"))
     if src_cfg["batch"] != SOURCE_BATCH or src_cfg["n_ensemble_this_batch"] != N_ENSEMBLE:
@@ -148,12 +173,17 @@ def make_config(raw_root: str, limit_cells=None) -> dict:
             "orig_run_dir_kriging": orig[c["config_key"]]["kriging"]["run_dir"],
             "orig_run_dir_sgs_b1": orig[c["config_key"]]["sgs"]["run_dir"],
         })
+    picks_meta = None
+    if variogram_source == "picks":
+        out_cells, picks_meta = _apply_picks(out_cells)
+    elif variogram_source != "auto":
+        raise ValueError(f"unknown variogram_source {variogram_source!r}")
     if limit_cells is not None:
         # smoke only: the K cheapest cells (smallest n_samples)
         out_cells = sorted(out_cells, key=lambda c: c["n_samples"])[: int(limit_cells)]
 
     vi_manifest = json.loads(resolve_run_dir(VARIOGRAM_INFERENCE_MANIFEST).read_text(encoding="utf-8"))
-    return {
+    config = {
         "source_run": SOURCE_RUN,
         "source_experiment": SOURCE_EXPERIMENT,
         "source_batch": SOURCE_BATCH,
@@ -190,6 +220,95 @@ def make_config(raw_root: str, limit_cells=None) -> dict:
         "n_tasks_total": len(out_cells) * len(METHODS),
         "cells": out_cells,
     }
+    if picks_meta is not None:
+        # The 'auto' config above is left bit-for-bit as before (no new keys);
+        # the picks run adds its own keys and replaces variogram_source.
+        config["variogram_source"] = picks_meta
+        config["experiment_name"] = PICKED_EXPERIMENT_NAME
+        config["variogram_source_option"] = "picks"
+        config["cell_filter"] = f"sample_rep == '{PICKS_SAMPLE_REP}'"
+        config["unchanged_vs_source"] = config["unchanged_vs_source"].replace(
+            "only the method variogram differs", "only the method variogram differs (user-picked, else auto fit)")
+    return config
+
+
+def _apply_picks(cells: list):
+    """Restrict to the rep0 cells and replace the auto-fit variogram by the
+    user's Variogram Review pick where one exists (else keep the auto fit).
+    Returns (cells, variogram_source dict)."""
+    cells = [c for c in cells if c["sample_rep"] == PICKS_SAMPLE_REP]
+    levels = sorted({c["axis_level"] for c in cells}, key=float)
+    truths = sorted({c["truth_seed"] for c in cells})
+    if (len(cells) != 50 or len(levels) != 5 or len(truths) != 10
+            or len({(c["axis_level"], c["truth_seed"]) for c in cells}) != 50):
+        raise ValueError(f"expected 50 rep0 cells (10 truth seeds x 5 levels), got {len(cells)}")
+
+    picks_path = resolve_run_dir(VARIOGRAM_PICKS_CSV)
+    picks = pd.read_csv(picks_path, dtype={"axis_level": str, "sample_rep": str})
+    if picks["cell_id"].duplicated().any():
+        raise ValueError("duplicate cell_id in variogram_picks.csv")
+    by_id = {c["experiment"] + "_" + c["config_key"]: c for c in cells}
+    unknown = sorted(set(picks["cell_id"]) - set(by_id))
+    if unknown:
+        raise ValueError(f"picks without a rep0 E4 cell: {unknown}")
+    picks = picks.set_index("cell_id")
+    fits = pd.read_csv(resolve_run_dir(FITTED_VARIOGRAMS_CSV), dtype={"axis_level": str, "sample_rep": str})
+    fits = fits[fits["experiment"] == SOURCE_EXPERIMENT].set_index("config_key")
+
+    out = []
+    for cid, c in by_id.items():
+        c = dict(c)
+        f = fits.loc[c["config_key"]]
+        c["auto_fit_range_m"], c["auto_fit_nugget"] = float(f["fit_range_m"]), float(f["fit_nugget"])
+        if cid in picks.index:
+            p = picks.loc[cid]
+            for k in ("experiment", "axis_level", "sample_rep"):
+                if str(p[k]) != str(c[k]):
+                    raise ValueError(f"{cid}: pick {k}={p[k]} != {c[k]}")
+            for k in ("truth_seed", "sample_seed"):
+                if int(p[k]) != int(c[k]):
+                    raise ValueError(f"{cid}: pick {k}={p[k]} != {c[k]}")
+            if int(p["n_samples"]) != int(f["n_samples"]):
+                raise ValueError(f"{cid}: pick n_samples {p['n_samples']} != fitted n_samples {f['n_samples']}")
+            if not (float(p["true_range_m"]) == c["hmaj1"] and float(p["true_nugget"]) == c["nug"]):
+                raise ValueError(f"{cid}: pick true_range/true_nugget do not match the cell")
+            if not (np.isclose(float(p["auto_range_m"]), c["auto_fit_range_m"], rtol=1e-9, atol=1e-9)
+                    and np.isclose(float(p["auto_nugget"]), c["auto_fit_nugget"], rtol=1e-9, atol=1e-6)):
+                raise ValueError(f"{cid}: pick auto_range_m/auto_nugget != fitted_variograms.csv")
+            rng, nug = float(p["range_m"]), float(p["nugget"])
+            if not (np.isfinite(rng) and rng > 0):
+                raise ValueError(f"{cid}: picked range {rng}")
+            c.update(vario_hmaj1=rng, vario_hmin1=rng, vario_nug=nug, vario_source="pick",
+                     pick_confirmed=bool(p["confirmed"]), pick_edited=bool(p["edited"]),
+                     pick_updated=str(p["updated"]))
+        else:
+            c.update(vario_source="auto", pick_confirmed=None, pick_edited=None, pick_updated=None)
+        build_vario(hmaj1=c["vario_hmaj1"], hmin1=c["vario_hmin1"], nug=c["vario_nug"])  # validates nug
+        out.append(c)
+
+    meta_path = resolve_run_dir(VARIOGRAM_PICKS_META)
+    n_pick = sum(c["vario_source"] == "pick" for c in out)
+    meta = {
+        "file": VARIOGRAM_PICKS_CSV,
+        "file_sha256": _sha256(picks_path),
+        "picks_meta_file": VARIOGRAM_PICKS_META,
+        "picks_meta_file_sha256": _sha256(meta_path),
+        "picks_meta": json.loads(meta_path.read_text(encoding="utf-8")),
+        "fallback_file": FITTED_VARIOGRAMS_CSV,
+        "fallback_file_sha256": _sha256(resolve_run_dir(FITTED_VARIOGRAMS_CSV)),
+        "rule": "use variogram_picks.csv range_m/nugget when a row exists (cell_id == experiment + '_' + "
+                "config_key), else fitted_variograms.csv fit_range_m/fit_nugget; unconfirmed picks are used "
+                "as-is (per-cell pick_confirmed recorded)",
+        "columns_used": {"pick": {"hmaj1": "range_m", "hmin1": "range_m", "nug": "nugget"},
+                         "auto": {"hmaj1": "fit_range_m", "hmin1": "fit_range_m", "nug": "fit_nugget"}},
+        "model": "build_vario(hmaj1=range, hmin1=range, nug=nugget): isotropic, spherical (it1=1), unit sill "
+                 "(cc1 = 1 - nug), azi1 = 0",
+        "n_cells_pick": n_pick,
+        "n_cells_auto_fallback": len(out) - n_pick,
+        "auto_fallback_cells": [c["config_key"] for c in out if c["vario_source"] == "auto"],
+        "unconfirmed_pick_cells": [c["config_key"] for c in out if c["pick_confirmed"] is False],
+    }
+    return out, meta
 
 
 def _write_manifest(exp_dir: Path, config: dict, status: str, sessions: list, n_done: int, n_failures: int,
@@ -203,7 +322,7 @@ def _write_manifest(exp_dir: Path, config: dict, status: str, sessions: list, n_
         "sgs_seed": config["sgs_seed"],
         "fixed_in_method_code": "sgs jitter seed 70, kriging MC seed 80, backtr validation seed 85",
     }
-    return save_result(experiment=EXPERIMENT_NAME, params=params, seed_or_seeds=seeds, run_dir=exp_dir,
+    return save_result(experiment=experiment_name(config), params=params, seed_or_seeds=seeds, run_dir=exp_dir,
                        code_entrypoint=CODE_ENTRYPOINT, output_files=output_files)
 
 
@@ -314,15 +433,22 @@ def main(argv=None):
     ap.add_argument("--max-workers", type=int, default=None)
     ap.add_argument("--resume", default=None)
     ap.add_argument("--limit-cells", type=int, default=None, help="smoke tests only: the K cells with the smallest n_samples")
+    ap.add_argument("--variogram-source", choices=("auto", "picks"), default="auto",
+                    help="auto: automatic fits, all 500 E4 cells (original behaviour); picks: the 50 rep0 cells "
+                         "with the user's Variogram Review picks (auto fit where no pick), experiment "
+                         f"'{PICKED_EXPERIMENT_NAME}'")
     args = ap.parse_args(argv)
     max_workers = args.max_workers if args.max_workers is not None else default_max_workers()
     if args.resume:
         exp_dir = resolve_run_dir(args.resume)
         config = json.loads((exp_dir / "run_config.json").read_text(encoding="utf-8"))
+        if config.get("variogram_source_option", "auto") != args.variogram_source:
+            raise ValueError(f"--variogram-source {args.variogram_source} does not match the resumed run "
+                             f"({config.get('variogram_source_option', 'auto')})")
         print(f"resuming {exp_dir}")
     else:
-        config = make_config(args.raw_root, args.limit_cells)
-        exp_dir = make_run_dir(EXPERIMENT_NAME, args.raw_root)
+        config = make_config(args.raw_root, args.limit_cells, args.variogram_source)
+        exp_dir = make_run_dir(experiment_name(config), args.raw_root)
         print(f"new run folder {exp_dir}")
     return run(config, exp_dir, max_workers)
 

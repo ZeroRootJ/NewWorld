@@ -34,6 +34,15 @@ column conventions of results/processed/multi_truth_axes/:
                        sgs grid-node warnings, new and original run dirs
   evaluation_provenance.json
 
+Picked-variogram run (inferred_variogram_density.py --variogram-source picks,
+added 2026-11-18): detected from run_config.variogram_source_option == "picks";
+methods kriging_picked | sgs_picked, default out dir
+results/processed/picked_variogram_density/; evaluation_cells.csv additionally
+carries vario_source / pick_confirmed / pick_edited / auto_fit_*. The variogram
+check always compares against the per-cell variogram recorded in run_config
+(= the automatic fit for the original run). Auto-run outputs are unchanged.
+For the picked run pass --source results/raw/picked_variogram_density/<ts>.
+
 Usage:
   .venv/Scripts/python.exe -m src.experiments.evaluate_inferred_variogram_density \
       --source results/raw/inferred_variogram_density/<ts>
@@ -71,6 +80,15 @@ _REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 DEFAULT_OUT_DIR = _REPO_ROOT / "results" / "processed" / "inferred_variogram_density"
 ORACLE_METRICS_CSV = _REPO_ROOT / "results" / "processed" / "multi_truth_axes" / "metrics.csv"
 METHOD_LABEL = {"kriging": "kriging_inferred", "sgs": "sgs_inferred"}
+# Per-run variant, selected from the source run_config (variogram_source_option,
+# absent = "auto" for the original inferred_variogram_density run).
+VARIANTS = {
+    "auto": {"labels": {"kriging": "kriging_inferred", "sgs": "sgs_inferred"},
+             "out_dir": DEFAULT_OUT_DIR, "vario_desc": "sample-inferred variogram (automatic fit)"},
+    "picks": {"labels": {"kriging": "kriging_picked", "sgs": "sgs_picked"},
+              "out_dir": _REPO_ROOT / "results" / "processed" / "picked_variogram_density",
+              "vario_desc": "user-picked variogram (Variogram Review board; auto fit where no pick)"},
+}
 SGS_BATCH = 1
 N_ENSEMBLE = 50
 ORACLE_REPRO_ATOL = 1e-12
@@ -88,7 +106,8 @@ def _sgs_metrics(rdir: Path, p: dict, truth_m, mask, label) -> dict:
     return _gaussian_metrics(truth_m, mean_map[mask], mean_map[mask], var_map[mask], label)
 
 
-def evaluate_cell(cell: dict, runs: Dict[str, str]):
+def evaluate_cell(cell: dict, runs: Dict[str, str], labels: Dict[str, str] = None):
+    labels = labels or METHOD_LABEL
     truth, samples_df, mask = _conditioning(cell["truth_seed"], cell["sample_seed"], cell["hmaj1"],
                                             cell["hmin1"], cell["nug"], cell["n_samples"])
     truth_m = truth[mask]
@@ -101,7 +120,7 @@ def evaluate_cell(cell: dict, runs: Dict[str, str]):
         batch = SGS_BATCH if method == "sgs" else None
         p = _verify_run(cell, method, rdir, samples_df, batch=batch)
         if p["variogram"] != expected_vario or "variogram_source" not in p:
-            raise ValueError(f"{rdir}: variogram {p['variogram']} != inferred {expected_vario}")
+            raise ValueError(f"{rdir}: variogram {p['variogram']} != run_config cell variogram {expected_vario}")
         odir = resolve_run_dir(cell["orig_run_dir_kriging"] if method == "kriging" else cell["orig_run_dir_sgs_b1"])
         a, b = pd.read_csv(rdir / "samples.csv"), pd.read_csv(odir / "samples.csv")
         if len(a) != len(b) or not np.allclose(a[["X", "Y", VCOL]].values, b[["X", "Y", VCOL]].values,
@@ -116,41 +135,49 @@ def evaluate_cell(cell: dict, runs: Dict[str, str]):
             if p["n_realizations"] != N_ENSEMBLE:
                 raise ValueError(f"{rdir}: n_realizations {p['n_realizations']} != {N_ENSEMBLE}")
             op = _verify_run({**cell}, "sgs", odir, samples_df, batch=SGS_BATCH)
-            vals = _sgs_metrics(rdir, p, truth_m, mask, label + " inferred")
+            vals = _sgs_metrics(rdir, p, truth_m, mask, label + " " + labels[method])
             ovals = _sgs_metrics(odir, op, truth_m, mask, label + " oracle")
             n_ens, batches = N_ENSEMBLE, str(SGS_BATCH)
             info["sgs_grid_node_warnings_b1"] = (p.get("sgsim_warnings") or {}).get("n_grid_node_warnings", np.nan)
             info["orig_sgs_grid_node_warnings_b1"] = (op.get("sgsim_warnings") or {}).get("n_grid_node_warnings",
                                                                                          np.nan)
         for metric in METRICS:
-            rows.append({**ident, "method": METHOD_LABEL[method], "n_ensemble": n_ens, "batches": batches,
+            rows.append({**ident, "method": labels[method], "n_ensemble": n_ens, "batches": batches,
                          "metric": metric, "value": float(vals[metric])})
             oracle_rows.append({**ident, "method": method, "metric": metric, "value": float(ovals[metric])})
-        info[f"run_dir_{METHOD_LABEL[method]}" + ("_b1" if method == "sgs" else "")] = runs[method]
+        info[f"run_dir_{labels[method]}" + ("_b1" if method == "sgs" else "")] = runs[method]
 
     info = {**ident, "n_samples_requested": cell["n_samples"], "n_samples_actual": int(len(samples_df)),
             "n_cells_evaluated": int(mask.sum()), "config_key": cell["config_key"],
             "vario_hmaj1": cell["vario_hmaj1"], "vario_hmin1": cell["vario_hmin1"], "vario_nug": cell["vario_nug"],
+            **({k: cell[k] for k in ("vario_source", "pick_confirmed", "pick_edited", "auto_fit_range_m",
+                                     "auto_fit_nugget")} if "vario_source" in cell else {}),
             **info, "orig_run_dir_kriging": cell["orig_run_dir_kriging"],
             "orig_run_dir_sgs_b1": cell["orig_run_dir_sgs_b1"]}
     return rows, oracle_rows, info
 
 
 def _evaluate_group(args):
-    cells, runs_by_key = args
-    return [evaluate_cell(c, runs_by_key[c["config_key"]]) for c in cells]
+    cells, runs_by_key, labels = args
+    return [evaluate_cell(c, runs_by_key[c["config_key"]], labels) for c in cells]
 
 
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--source", required=True)
-    ap.add_argument("--out-dir", default=str(DEFAULT_OUT_DIR))
+    ap.add_argument("--out-dir", default=None,
+                    help="default: results/processed/inferred_variogram_density (auto run) or "
+                         "results/processed/picked_variogram_density (--variogram-source picks run)")
     ap.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2) // 2))
     args = ap.parse_args(argv)
 
     src = resolve_run_dir(args.source)
     cfg = json.loads((src / "run_config.json").read_text(encoding="utf-8"))
     src_manifest = json.loads((src / "manifest.json").read_text(encoding="utf-8"))
+    variant_key = cfg.get("variogram_source_option", "auto")
+    variant = VARIANTS[variant_key]
+    labels = variant["labels"]
+    out_dir_default = variant["out_dir"]
     reg = read_jsonl(src / "run_registry.jsonl")
     runs: Dict[str, Dict[str, str]] = {}
     for r in reg:
@@ -168,7 +195,7 @@ def main(argv=None):
     tasks = []
     for g in groups.values():
         g = sorted(g, key=lambda c: (c["sample_seed"], c["n_samples"]))
-        tasks.append((g, {c["config_key"]: runs[c["config_key"]] for c in g}))
+        tasks.append((g, {c["config_key"]: runs[c["config_key"]] for c in g}, labels))
     results = []
     if args.workers <= 1:
         for t in tasks:
@@ -208,7 +235,7 @@ def main(argv=None):
                .agg(mean="mean", std=lambda v: float(np.std(v, ddof=1)) if len(v) > 1 else np.nan, n="count")
                .reset_index())
 
-    out_dir = Path(args.out_dir)
+    out_dir = Path(args.out_dir) if args.out_dir else out_dir_default
     out_dir.mkdir(parents=True, exist_ok=True)
     metrics.to_csv(out_dir / "metrics.csv", index=False)
     summary.to_csv(out_dir / "metrics_summary.csv", index=False)
@@ -219,8 +246,8 @@ def main(argv=None):
         for m in ("kriging", "sgs"):
             man = json.loads((resolve_run_dir(runs[c["config_key"]][m]) / "manifest.json").read_text(encoding="utf-8"))
             k = f"{man.get('git_commit')} (dirty={man.get('git_dirty')})"
-            run_commits.setdefault(METHOD_LABEL[m], {})
-            run_commits[METHOD_LABEL[m]][k] = run_commits[METHOD_LABEL[m]].get(k, 0) + 1
+            run_commits.setdefault(labels[m], {})
+            run_commits[labels[m]][k] = run_commits[labels[m]].get(k, 0) + 1
     w = info["sgs_grid_node_warnings_b1"]
     prov = {
         "generated_by": "src/experiments/evaluate_inferred_variogram_density.py",
@@ -232,9 +259,16 @@ def main(argv=None):
         "oracle_source_run": cfg["source_run"],
         "variogram_source": cfg["variogram_source"],
         "n_cells_evaluated": len(cells),
-        "methods": {"kriging_inferred": "simple kriging (kb2d) with the sample-inferred variogram",
-                    "sgs_inferred": f"SGS, N={N_ENSEMBLE}, sgsim seed {cfg['sgs_seed']} (= oracle batch 1), "
-                                    "inferred variogram"},
+        **({"variogram_source_option": variant_key, "cell_filter": cfg.get("cell_filter"),
+            "vario_source_counts": info["vario_source"].value_counts().to_dict(),
+            "unconfirmed_pick_cells": cfg["variogram_source"].get("unconfirmed_pick_cells")}
+           if variant_key != "auto" else {}),
+        "methods": ({"kriging_inferred": "simple kriging (kb2d) with the sample-inferred variogram",
+                     "sgs_inferred": f"SGS, N={N_ENSEMBLE}, sgsim seed {cfg['sgs_seed']} (= oracle batch 1), "
+                                     "inferred variogram"} if variant_key == "auto" else
+                    {labels["kriging"]: f"simple kriging (kb2d) with the {variant['vario_desc']}",
+                     labels["sgs"]: f"SGS, N={N_ENSEMBLE}, sgsim seed {cfg['sgs_seed']} (= oracle batch 1), "
+                                    f"{variant['vario_desc']}"}),
         "metrics": list(METRICS),
         "coverage_nominal_p": NOMINAL_P_COVERAGE,
         "umg_bins": DEFAULT_BINS,
@@ -242,15 +276,16 @@ def main(argv=None):
                                 "_gaussian_metrics (identical functions to the oracle evaluation)",
         "summary_definition": "mean / std(ddof=1) / n over all (truth_seed, sample_rep) rows of a "
                               "(experiment, axis_level, method, n_ensemble, batches, metric) group",
-        "batches_column": "'1' for sgs_inferred, '' for kriging_inferred; read with "
+        "batches_column": f"'1' for {labels['sgs']}, '' for {labels['kriging']}; read with "
                           "evaluate_multi_truth_axes.read_metrics_csv",
         "checks": {
             "oracle_reevaluation_vs_multi_truth_axes_metrics_csv": {
                 "reference": rel_or_abs(ORACLE_METRICS_CSV), "n_values_compared": int(len(merged)),
                 "max_abs_diff": oracle_max_abs_diff, "tolerance": ORACLE_REPRO_ATOL},
             "samples_equal_to_original_runs": True,
-            "manifest_variogram_equals_inferred_fit": True,
-            "sgs_grid_node_warnings_inferred": {"total": float(np.nansum(w)), "runs_with_warnings": int((w > 0).sum())},
+            ("manifest_variogram_equals_inferred_fit" if variant_key == "auto"
+             else "manifest_variogram_equals_run_config_cell_variogram"): True,
+            ("sgs_grid_node_warnings_inferred" if variant_key == "auto" else "sgs_grid_node_warnings_picked"): {"total": float(np.nansum(w)), "runs_with_warnings": int((w > 0).sum())},
             "sgs_grid_node_warnings_oracle_same_cells": {
                 "total": float(np.nansum(info["orig_sgs_grid_node_warnings_b1"])),
                 "runs_with_warnings": int((info["orig_sgs_grid_node_warnings_b1"] > 0).sum())},
