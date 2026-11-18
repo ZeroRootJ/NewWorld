@@ -1583,7 +1583,7 @@ def figure_f3_2_maps(mt):
     return _save(fig, stem, lines)
 
 
-def figure_f3_extremes(mt):
+def figure_f3_extremes(mt, lvl=F3_EXT_LEVEL, stem="F3c_density_gp_range_extremes"):
     """Extreme-value check (user requests 2026-11-18): at density F3_EXT_LEVEL, the
     GP-MLE cells with the SHORTEST and the LONGEST fitted practical range. Per row
     (one cell): ground truth + conditioning samples, GP-MLE posterior-mean map, ONE
@@ -1602,10 +1602,8 @@ def figure_f3_extremes(mt):
         LAG_BIN_WIDTH_M, LAG_MAX_M, MIN_PAIRS_PER_BIN, N_PAIRS_DRAWN, REPORT_LAG_M, VARIOGRAM_PAIR_SEED, Y_MAX,
         quiet_variogram, semivariance_at, spherical_semivariance)
 
-    stem = "F3c_density_gp_range_extremes"
     dens = mt["dens"]
     ed = mt["exp"]["density"]
-    lvl = F3_EXT_LEVEL
     k_real = F3_EXT_SGS_REAL
     gp = mt["gp_range"]
     gp = gp[gp["axis_level"] == lvl].sort_values("value")
@@ -2502,6 +2500,7 @@ def main(only=None):
         ("F3-2", figure_f3_2, (mt,)),
         ("F3-2b", figure_f3_2_maps, (mt,)),
         ("F3c", figure_f3_extremes, (mt,)),
+        ("F3d", figure_f3_extremes, (mt, "1", "F3d_density_gp_range_extremes_1pct")),
         ("F4", figure_f4, ()),
         ("F5", figure_f5, ()),
         ("F6", figure_f6, (dens,)),

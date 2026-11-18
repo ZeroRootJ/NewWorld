@@ -56,6 +56,13 @@ FIGS = {
             "y축은 0~11.7로 고정했고, 위쪽 행 SGS 곡선의 6개 구간이 이 위로 잘렸습니다. 히스토그램은 두 행의 map 6개에 같은 구간 30개(같은 x축)를 쓴 밀도 히스토그램입니다.",
             "MSE와 UMG는 F3과 같은 평가 함수로 다시 계산해 저장된 값과 같은지 확인했습니다(샘플이 없는 셀에서 평가). SGS 평균·분산 map도 realization에서 다시 계산해 저장된 map과 같은지 확인했습니다. map 여섯 개는 같은 색 범위(두 정답 map의 최솟값~최댓값)를 쓰고, 이 범위를 벗어난 SGS realization 셀(위 63개, 아래 10개, 2,500개 중)은 끝 색으로 그려집니다. 두 셀은 정답 realization과 샘플셋이 모두 다릅니다.",
         ]),
+    "F3d": dict(
+        stem="F3d_density_gp_range_extremes_1pct", st=REAL,
+        title="극단값: 밀도 1 %에서 GP range가 가장 짧은 셀과 가장 긴 셀",
+        body=[
+            "F3c와 같은 그림을 밀도 1 %(100셀)에 대해 그린 것입니다. 가장 짧은 range 셀(위)과 가장 긴 range 셀(아래)이고, 샘플 위치는 두 셀 모두 n = 25입니다. 열 구성, variogram 계산, 히스토그램 구간(두 행 공통 30개), 색 범위 규칙, 검증 방법은 F3c와 같습니다.",
+            "variogram y축은 0~11.7로 고정했고, 아래쪽 행 SGS 곡선의 19개 구간이 이 위로 잘렸습니다. 색 범위(두 정답 map의 최솟값~최댓값)를 벗어난 SGS realization 셀은 위 33개, 아래 51개(2,500개 중)입니다.",
+        ]),
     "F4": dict(
         stem="F4_gp_fitted_vs_truth_hyperparameters", st=REAL,
         title="GP가 맞춘 range, nugget과 실제 값",
@@ -119,6 +126,13 @@ CLAIMS = {
         "287.5 m 구간(300 m에 가장 가까운 구간)의 semivariance: 가장 짧은 range 셀에서 정답 8.87, GP-MLE 평균 1.27, SGS 10.01, 가장 긴 range 셀에서 정답 8.09, GP-MLE 평균 1.47, SGS 7.63입니다. 정답 모델 값은 8.98입니다.",
         "비교: 밀도 2 %의 100셀 평균은 GP-MLE MSE 5.34, UMG 0.927, SGS MSE 5.20, UMG 0.938입니다.",
     ],
+    "F3d": [
+        "가장 짧은 range: truth 7102, rep0(n = 25), range 57 m, MSE 9.37, UMG 0.823. 적합된 noise variance(정규화)는 1e-5입니다.",
+        "가장 긴 range: truth 101, rep8(n = 25), range 740 m, MSE 7.51, UMG 0.787. 적합된 noise variance(정규화)는 0.33입니다.",
+        "같은 셀의 SGS(oracle variogram, realization 50개 ensemble 기준): 가장 짧은 range 셀에서 MSE 8.54, UMG 0.804, 가장 긴 range 셀에서 MSE 7.96, UMG 0.963입니다.",
+        "전체 2,500셀 분산(porosity %²): 가장 짧은 range 셀에서 정답 9.00, GP-MLE 평균 0.19, SGS realization 0번 7.53, 가장 긴 range 셀에서 정답 9.00, GP-MLE 평균 3.91, SGS realization 0번 13.26입니다.",
+        "287.5 m 구간의 semivariance: 가장 짧은 range 셀에서 정답 9.35, GP-MLE 평균 0.22, SGS 7.26, 가장 긴 range 셀에서 정답 8.09, GP-MLE 평균 1.42, SGS 11.60입니다. 정답 모델 값은 8.98입니다.",
+    ],
     "F4": [
         "A: ground truth의 range가 길어져도 GP가 맞춘 range는 따라가지 못합니다. 실제 값이 100 m에서 800 m로 늘 때 평균은 130 m에서 337 m로만 늡니다.",
         "B: GP가 맞춘 noise variance는 모든 nugget 레벨에서 실제 nugget보다 평균 1.0~1.5만큼 큽니다. nugget이 0인 경우에도 평균 1.47을 noise로 배정합니다.",
@@ -146,7 +160,7 @@ CLAIMS = {
 
 SECTIONS = [
     ("결론 1-a", "불확실성이 모델에 없는 방법은 bootstrap으로도 평가하지 못한다", ["F1", "F2"]),
-    ("결론 1-b", "불확실성이 내재된 GP는 데이터가 희소해지면 흔들린다", ["F3", "F3b", "F3c", "F4", "F6"]),
+    ("결론 1-b", "불확실성이 내재된 GP는 데이터가 희소해지면 흔들린다", ["F3", "F3b", "F3c", "F3d", "F4", "F6"]),
     ("결론 2", "정확도와 uncertainty goodness의 최적점은 서로 다르다", ["F7"]),
 ]
 
@@ -156,6 +170,7 @@ FLOW = [
     ("1-b", "F3", "밀도별 oracle kriging/SGS와 GP-MLE(100셀) MSE, UMG, GP가 맞춘 range", REAL),
     ("1-b", "F3b", "밀도별 실제 map과 샘플 위치(realization 1개)", REAL),
     ("1-b", "F3c", "극단값: 밀도 2 %에서 GP range 최소·최대 셀의 map(정답, GP-MLE 평균, SGS realization 1개), variogram, 히스토그램, MSE, UMG", REAL),
+    ("1-b", "F3d", "극단값: 밀도 1 %에서 같은 구성(F3c와 동일 패널)", REAL),
     ("1-b", "F4", "GP가 맞춘 range, nugget 대 실제 값", REAL),
     ("1-b", "F6", "파라미터 수와 필요한 데이터 양", PART),
     ("2", "F7", "정확도와 UMG 반응면, 고정 하이퍼파라미터 grid, 4개 방법", REAL),
