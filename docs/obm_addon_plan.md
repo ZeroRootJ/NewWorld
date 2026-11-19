@@ -24,14 +24,12 @@
 - **샘플 위치**: 본문 density 축(E4)과 같은 sampling seed 1001–1010을 써서, 같은 밀도·같은 샘플 위치를 그대로 재사용합니다. 4개 방법 모두 같은 위치를 씁니다.
 - **밀도**: 20, 10, 5, 2, 1 % 다섯 단계입니다. 본문 F3, P3와 x축이 같아 그림 코드를 그대로 씁니다.
 - **방법**: simple kriging, SGS, RBF+bootstrap, GP-MLE. 설정은 본문과 같고 N = 50입니다. facies는 어떤 방법에도 주지 않습니다.
-- **kriging/SGS의 variogram — "analog variogram"**:
-  - OBM에는 정답 variogram이 없습니다.
-  - 그래서 테스트에 쓰지 않는 seed 10–29의 전체 map(20개)으로 실험 variogram을 계산해 한 번만 fit하고, 그 모델을 모든 테스트 셀에 같이 씁니다.
-  - 이렇게 하면 본문 oracle(앙상블 기준 모델, P1 참고)과 성격이 같습니다.
-  - 테스트 truth를 보지 않으므로 brief의 "전체 truth로 variogram을 추정하지 말 것"에도 걸리지 않습니다.
-  - 의미는 "같은 지질 개념의 analog에서 얻은 geoparameter"입니다.
+- **kriging/SGS의 variogram — 사용자가 직접 그림 (2026-11-19 사용자 결정)**:
+  - OBM에는 정답 variogram이 없으므로, 사용자가 실험 variogram을 보고 직접 모델을 그립니다(본문 range·nugget을 사람이 정한다는 주장과 같은 방식).
+  - 기존 Variogram Review 화면을 재사용합니다. OBM에는 정답 곡선이 없으므로 화면에 표시할 것도 없습니다.
+  - 무엇을 보고 몇 번 그릴지(D2)는 아직 정하지 않았습니다.
   - GP-MLE는 지금처럼 샘플만으로 하이퍼파라미터를 맞춥니다.
-- **normal-score 기준 분포**: 본문 파이프라인이 쓰는 방식과 같은 원칙을 analog 20개 map에 적용합니다. 구현할 때 본문 방식을 확인합니다.
+- **normal-score 기준 분포**: 본문 파이프라인과 같은 원칙을 씁니다. 구현할 때 본문 방식을 확인합니다.
 - **지표**: MSE, UMG, coverage90, variance_mean. 평가 함수는 본문과 같습니다. CRPS, interval width는 2026-10-05 결정대로 계산하지 않습니다.
 - **규모**:
   - 10 truth × 10 샘플셋 × 5 밀도 = 500셀, 실행은 500 × 4 방법 = 2,000회입니다.
@@ -42,7 +40,7 @@
 - **V1**: 모든 밀도에서 RBF+bootstrap의 평균 UMG가 나머지 세 방법보다 낮은가.
 - **V2-a**: UMG 평균 감소폭(20 % → 1 %)이 GP-MLE가 SGS보다 큰가.
 - **V2-b**: 1 %에서 셀별 UMG의 P10이 GP-MLE < SGS인가.
-- **위험**: channelized, non-Gaussian truth에서는 analog variogram을 쓴 SGS 자체가 잘 calibrate되지 않을 수 있습니다. 그 경우도 결과로 보고하며, 그림이나 설정을 바꿔 맞추지 않습니다.
+- **위험**: channelized, non-Gaussian truth에서는 사용자가 그린 variogram을 쓴 SGS 자체가 잘 calibrate되지 않을 수 있습니다. 그 경우도 결과로 보고하며, 그림이나 설정을 바꿔 맞추지 않습니다.
 
 ## 5. 그림 (1장, O1)
 - A: 테스트 truth 2개의 map과 1 % 샘플 위치(facies 경계 윤곽 포함)
@@ -54,7 +52,7 @@ layout과 색은 본문 F3, P3와 같게 합니다. 아티팩트에는 마지막
 
 ## 6. 순서 (coder → reviewer)
 1. OBM 커밋 4개를 master로 가져오고, main checkout에서 `.venv-obm`으로 truth를 재생성합니다. 결정론적이라 1분이면 되고, 기존 run과 sha256이 같은지 확인합니다.
-2. analog variogram을 계산하고 fit합니다(seed 10–29). fit 그림을 보여드리고 확인을 받습니다.
+2. D2 범위에 맞춰 OBM용 Variogram Review 화면을 만들고, 사용자가 variogram을 그립니다. 고른 값은 기존처럼 CSV로 내보냅니다.
 3. runner를 만듭니다. multi_truth_axes runner를 그대로 쓰고 truth 로더와 variogram 출처만 바꿉니다. 그다음 smoke test(1셀 × 4 방법)를 합니다.
 4. 본 실행을 합니다(백그라운드, 약 7시간).
 5. 같은 evaluator로 평가하고, O1 그림과 status 파일을 만든 뒤 아티팩트에 넣습니다.
@@ -63,8 +61,8 @@ layout과 색은 본문 F3, P3와 같게 합니다. 아티팩트에는 마지막
 | # | 항목 | 선택지 | 제안 |
 |---|---|---|---|
 | D1 | truth 종류 | 기본 / mud_sd | mud_sd. 기본판은 56 %가 같은 값이라 normal-score 변환에서 동률 처리가 결과를 좌우할 수 있습니다 |
-| D2 | kriging/SGS variogram | analog(seed 10–29) / 샘플마다 자동 fit | analog. 본문 oracle과 성격이 같습니다 |
-| D3 | analog variogram 방향성 | 등방(omni) / 이방 | 등방. F5(이방성)가 보류 중이라 본문과 조건을 맞춥니다. 2단계 fit에서 이방성이 뚜렷하면 다시 묻겠습니다 |
+| D2 | 사용자가 그릴 variogram의 근거와 횟수 | (a) 셀별 샘플 variogram, rep0만 50개(실행도 그 50셀로 축소) / (b) 셀별 500개 / (c) seed 10–29 전체 map의 analog variogram 1개를 모든 셀에 적용 | 미정. (a)는 밀도당 10셀이라 P10 같은 꼬리 통계가 약해지고, (c)는 한 번만 그리면 되고 본문 oracle과 성격이 같습니다 |
+| D3 | variogram 방향성 | 등방(omni) / 이방 | 그리실 때 판단. 본문은 등방이고 F5(이방성)는 보류 중입니다 |
 | D4 | 밀도 | 5단계 / 20, 5, 1 % 3단계 | 5단계(약 7시간). 3단계로 줄이면 약 4시간입니다 |
-| D5 | 테스트 truth 수 | 10 / 30(brief 최소) | 10. analog에 20개가 필요합니다 |
+| D5 | 테스트 truth 수 | 10 / 30(brief 최소) | 10(본문 축과 같음) |
 | D6 | OBM 코드 가져오기 | 커밋 4개 cherry-pick | 진행 |
