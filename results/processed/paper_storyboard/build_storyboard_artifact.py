@@ -134,22 +134,23 @@ CHIP[PROP] = "제안(placeholder)"
 
 # Storyline draft 2026-11-18: one chain from F1 to F7; each figure's last bullet hands off to the next.
 STORY = [
+    ("⓪", "대부분의 정확도 기반 모델(RBF 보간부터 최신 ML 회귀 모델까지)은 불확실성을 내장하지 않는다. 필요하면 bootstrap 같은 사후 방법을 덧붙인다. RBF+bootstrap은 그 가장 단순한 대표다.", "문제 제기"),
     ("①", "정확도로는 방법이 구분되지 않는다. 불확실성은 따로 평가해야 한다.", "F1"),
-    ("②", "불확실성이 모델 밖에 있는 RBF+bootstrap은 구간이 체계적으로 좁고, 하이퍼파라미터를 바꿔도 정확도를 버려야만 고쳐진다.", "F2 · F7 RBF 열"),
-    ("③", "불확실성이 내재된 GP는 데이터가 충분하면 잘 calibrate되지만, 그 하이퍼파라미터는 range·nugget이 아니다. 지질 지식으로 검증할 손잡이가 없다.", "F4"),
-    ("④", "데이터가 희소해지면 그 하이퍼파라미터가 흩어지고, 정확도는 conventional과 같이 나빠지는데 calibration만 GP에서 따로 무너진다. 평균보다 하위 꼬리에서 먼저 나빠지고, 손실은 range 오차보다 noise가 하한값까지 떨어진 셀에 몰린다.", "F3 · F6 · F3c/d · P3 · P4"),
-    ("⑤", "range·nugget을 올바르게 정한 conventional 방법(oracle variogram)은 같은 희소 조건에서 calibration을 유지한다. 데이터에서 variogram을 정하는 과정의 검증은 OBM 기반 ground truth 후속 연구로 남긴다.", "F3 · P3 · 후속(OBM)"),
-    ("⑥", "grid search로 고르면 정확도 최적점과 UQ 최적점이 다르다. 다만 그 간격의 비용은 방법마다 다르다(판단 필요: T3).", "F7 · P7 · P7b"),
+    ("②", "사후로 붙인 불확실성(RBF+bootstrap)은 구간이 체계적으로 좁다. 밀도를 바꿔도 좁혀지지 않고, ground truth를 아는 grid search로 골라도 정확도를 버려야만 맞춰진다.", "F2 · F7 · P7 · P7b"),
+    ("③", "같은 grid에서 불확실성이 내장된 kriging, SGS, GP는 MSE와 UMG를 거의 동시에 맞추는 노드가 있다.", "P7b"),
+    ("④", "그러나 실제로는 ground truth 없이 데이터 적합으로 파라미터를 정해야 한다. GP-MLE의 하이퍼파라미터는 range·nugget이 아니라서 지질 지식으로 검증할 손잡이가 없다.", "F4"),
+    ("⑤", "데이터가 희소해지면 그 하이퍼파라미터가 흩어지고, 정확도는 conventional과 같이 나빠지는데 calibration만 GP에서 따로 무너진다. 평균보다 하위 꼬리에서 먼저 나빠지고, 손실은 range 오차보다 noise가 하한값까지 떨어진 셀에 몰린다.", "F3 · F6 · F3c/d · P3 · P4"),
+    ("⑥", "range·nugget을 올바르게 정한 conventional 방법(oracle variogram)은 같은 희소 조건에서 calibration을 유지한다. 데이터에서 variogram을 정하는 경우는 논문 끝 OBM 검증에서 다룬다(보류 중).", "F3 · P3 · OBM(보류)"),
 ]
-STORY_END = ("결론: geoparameter는 데이터 적합 objective(CV-MSE, marginal likelihood, grid search)가 아니라 "
-             "공간통계 해석으로 정해야 하고, 정확도와 불확실성은 분리해 보고해야 한다.")
+STORY_END = ("결론: 정확도 기반 모델에 사후로 붙인 불확실성은 calibration을 맞추기 어렵다. 불확실성이 내장된 모델도 파라미터를 데이터 적합 objective로 정하면 calibration이 보장되지 않는다. "
+             "정확도와 불확실성은 분리해 보고해야 한다.")
 
 TENSION = [
     ("T1 (확인됨)", "F1 range 축에서 oracle kriging/SGS UMG가 100 → 800 m에서 0.946 → 0.794, 0.954 → 0.808로 내려가고 GP-MLE는 0.953을 유지합니다. "
            "'kriging/SGS = 정답 기준선'이라는 전제와 부딪혔습니다. P1: range가 길수록 realization 분산이 모델 sill보다 작고(레벨 평균 100 m 1.014 → 800 m 0.675), 셀별 oracle kriging UMG는 이 비와 같이 움직입니다(Spearman ρ 0.73, n = 80).", "P1"),
     ("T2", "F7에서 최적 노드와 2위 노드의 차이(MSE 0.0004~0.034, UMG 0.0006~0.010)가 ground truth 간 표준편차(MSE 1.28~1.33, UMG 0.025~0.029)보다 훨씬 작습니다. "
            "P7: truth 하나씩 봐도 MSE 최적과 UMG 최적은 kriging, SGS, GP 9/10, RBF 10/10에서 다른 노드입니다. 그러나 'MSE 최적은 긴 range, UMG 최적은 짧은 range'라는 방향은 kriging 6/10, SGS 5/10, GP 4/10에서만 성립하므로 F7에서 방향 문장을 뺐습니다.", "P7"),
-    ("T3", "P7b: kriging, SGS, GP의 Pareto 경계는 짧은 L자입니다. kriging (300 m, 0.1)은 MSE 3.882(최적 3.861, +0.021), UMG 0.948(최적 0.965, −0.017)로 두 지표를 거의 동시에 맞춥니다. SGS (300 m, 0.1) MSE 3.926, UMG 0.949, GP (212 m, 0.17) MSE 3.923, UMG 0.932도 비슷합니다. RBF+bootstrap만 경계가 깁니다(MSE 3.91에서 UMG 0.489, UMG 0.962에서 MSE 19.5). 결론 2를 '동시 최적화가 어렵다'로 둘지, '최적점이 다르므로 한 objective로 튜닝하면 다른 쪽이 보장되지 않는다'로 좁힐지 결정이 필요합니다.", "P7b"),
+    ("T3", "P7b: kriging, SGS, GP의 Pareto 경계는 짧은 L자입니다. kriging (300 m, 0.1)은 MSE 3.882(최적 3.861, +0.021), UMG 0.948(최적 0.965, −0.017)로 두 지표를 거의 동시에 맞춥니다. SGS (300 m, 0.1) MSE 3.926, UMG 0.949, GP (212 m, 0.17) MSE 3.923, UMG 0.932도 비슷합니다. RBF+bootstrap만 경계가 깁니다(MSE 3.91에서 UMG 0.489, UMG 0.962에서 MSE 19.5). 결론 1의 P7b 부분을 '동시 최적화가 어렵다'로 둘지, '최적점이 다르므로 한 objective로 튜닝하면 다른 쪽이 보장되지 않는다'로 좁힐지 결정이 필요합니다.", "P7b"),
 ]
 
 CLAIMS = {
@@ -164,11 +165,11 @@ CLAIMS = {
         "A: base case에서 RBF+bootstrap만 1:1 선 아래로 크게 내려갑니다. 명목 95 % 구간에 참값이 47 %만 들어옵니다(UMG 0.454, 나머지 0.950~0.971).",
         "B: 원인은 예측 분산의 크기입니다. RBF+bootstrap 0.4~1.5, kriging 2.2~6.9(porosity %²). bootstrap은 샘플셋이 바뀔 때의 변동만 잡고, 샘플이 없는 곳의 공간 불확실성은 잡지 못합니다.",
         "밀도가 낮아져도 이 차이는 좁혀지지 않습니다(F1 밀도 축 UMG 0.48~0.52).",
-        "튜닝으로 고칠 수 있는가: F7의 RBF 열에서 UMG를 0.962까지 올리는 노드가 있지만 그때 MSE는 19.52로, MSE 최적값 3.91의 5배입니다. 사후 bootstrap은 정확도를 포기하지 않고는 calibrate되지 않습니다 → 결론 1-a.",
-        "→ F4: 그렇다면 불확실성이 모델에 내재된 GP는? F1에서 GP-MLE는 오히려 oracle kriging 이상으로 calibrate됩니다.",
+        "튜닝으로 고칠 수 있는가: F7의 RBF 열에서 UMG를 0.962까지 올리는 노드가 있지만 그때 MSE는 19.52로, MSE 최적값 3.91의 5배입니다. 사후 bootstrap은 정확도를 포기하지 않고는 calibrate되지 않습니다 → F7에서 자세히 봅니다.",
+        "→ F7: ground truth를 알고 전 영역에서 평가하는 이상적 조건에서 grid search로 직접 골라도 그런가. 불확실성이 내장된 방법과는 무엇이 다른가.",
     ],
     "F4": [
-        "출발점: F1에서 GP-MLE는 range 축 전체에서 UMG 0.95를 유지합니다(n = 121, 밀도 약 5 %).",
+        "출발점: F1에서 GP-MLE는 range 축 전체에서 UMG 0.95를 유지합니다(n = 121, 밀도 약 5 %). oracle kriging 이상으로 calibrate됩니다.",
         "A: 그런데 GP가 맞춘 range는 실제 range를 따라가지 않습니다. 실제 100 → 800 m일 때 평균 130 → 337 m입니다.",
         "B: GP가 맞춘 noise는 실제 nugget보다 평균 1.0~1.5 크고, nugget이 0일 때도 1.47입니다.",
         "즉 GP는 '짧은 range + 큰 noise'라는 실제와 다른 모델로도 calibrate됩니다. 이 하이퍼파라미터는 marginal likelihood를 최대화한 값이지 range, nugget이 아니므로, 지질 지식으로 맞는지 검증하거나 고칠 수 없습니다.",
@@ -176,7 +177,7 @@ CLAIMS = {
         "→ F3: 이 '다른 모델'은 데이터가 충분할 때는 안정적입니다. 데이터가 줄면?",
     ],
     "F3": [
-        "기준선: kriging/SGS는 oracle variogram(range 300 m), 즉 'range·nugget을 맞게 정했을 때'의 기준입니다. 데이터에서 variogram을 정하는 과정은 이 논문에서 다루지 않고 OBM 기반 ground truth 후속 연구에서 검증합니다(2026-11-19 사용자 결정).",
+        "기준선: kriging/SGS는 oracle variogram(range 300 m), 즉 'range·nugget을 맞게 정했을 때'의 기준입니다. 데이터에서 variogram을 정하는 경우는 논문 끝 OBM 검증에서 다룹니다(2026-11-19 사용자 결정, 현재 보류).",
         "A: MSE는 밀도 20 → 1 %에서 세 방법이 함께 오릅니다(kriging 2.48 → 6.56, SGS 2.52 → 6.59, GP-MLE 2.63 → 6.74). 정확도로는 GP도 희소 데이터를 conventional과 똑같이 견딥니다.",
         "B: UMG는 다르게 움직입니다. SGS 0.932 → 0.926으로 거의 그대로, GP-MLE 0.977 → 0.890. 5 %까지는 GP-MLE가 앞서고 2 %에서 교차(kriging 0.926, GP-MLE 0.927, SGS 0.938), 1 %에서 GP-MLE가 가장 낮습니다. 데이터 손실에 정확도는 같이 나빠지는데 calibration만 GP에서 따로 무너집니다. F1의 '정확도와 UQ는 분리' 전제가 밀도 축에서 다시 나타납니다.",
         "C: 같은 구간에서 GP range가 흩어집니다. 범위 148~248 m(20 %) → 57~740 m(1 %), 300 m를 넘는 셀은 0개 → 38개(100셀 중).",
@@ -206,10 +207,10 @@ CLAIMS = {
         "→ P4: 이 두 셀이 예외인지, '파라미터가 실제에서 멀수록 UMG가 떨어진다'는 일반 경향인지 확인해야 F3 C → B를 잇는 고리가 생깁니다.",
     ],
     "F7": [
-        "질문: 1-b가 '데이터 적합으로 정한 파라미터는 희소할 때 불안정하다'라면, ground truth를 알고 전 영역에서 평가할 수 있는 이상적 조건에서 grid search로 직접 고르면 되는가?",
+        "질문: ground truth를 알고 전 영역에서 평가할 수 있는 이상적 조건에서 하이퍼파라미터를 grid search로 고르면, 사후 UQ(RBF+bootstrap)도 맞출 수 있는가? 같은 grid로 불확실성이 내장된 세 방법과 비교합니다.",
         "4개 방법 모두 MSE 최적 노드와 UMG 최적 노드가 다릅니다. 예: kriging MSE 최적 (600 m, 0.05)의 UMG 0.808, UMG 최적 (106 m, 0)의 MSE 5.562.",
                 "10개 truth 평균 면에서 MSE 최적은 kriging, SGS 600 m, UMG 최적은 kriging, SGS, GP 106 m입니다. 실제 값(300 m, 0.05)은 kriging MSE 3.887, UMG 0.928입니다.",
-        "RBF+bootstrap은 UMG 0.962를 얻으려면 MSE 19.52를 감수해야 합니다(1-a 재확인).",
+        "RBF+bootstrap은 UMG 0.962를 얻으려면 MSE 19.52를 감수해야 합니다(F2의 결론 재확인).",
         "주의(T2): 최적 노드와 2위 노드의 차이는 ground truth 간 표준편차보다 훨씬 작습니다. → P7: truth마다 따로 봐도 최적점이 갈리는가.",
     ],
     "P1": [
@@ -244,35 +245,36 @@ CLAIMS = {
         "SGS: 25노드 중 6개. 실제 노드(MSE 3.926, UMG 0.933)는 경계 위에 있고, (300 m, 0.1)은 MSE 3.926, UMG 0.949입니다.",
         "GP(고정 하이퍼파라미터): 88노드 중 6개. (300 m, noise 0.17) MSE 3.897, UMG 0.883 → (212 m, 0.17) MSE 3.923, UMG 0.932 → UMG 최적 0.958.",
         "RBF+bootstrap: 104노드 중 9개. MSE 3.91에서 UMG 0.489, UMG 0.962에서 MSE 19.5로 경계가 깁니다.",
-        "kriging, SGS, GP는 짧은 L자로 두 지표를 거의 동시에 맞추는 노드가 있고, RBF+bootstrap만 큰 trade-off가 있습니다(T3, 결론 2 문구 결정 필요).",
+        "불확실성이 내장된 kriging, SGS, GP는 짧은 L자로 두 지표를 거의 동시에 맞추는 노드가 있고, 사후 UQ인 RBF+bootstrap만 큰 trade-off가 있습니다(T3, 문구 결정 필요).",
+        "→ F4: 실제로는 ground truth로 grid search를 할 수 없습니다. 불확실성이 내장된 GP가 데이터 적합(marginal likelihood)으로 정한 파라미터는 어떤가.",
     ],
 }
 
 PH = {}
 
 SECTIONS = [
-    ("전제", "정확도와 불확실성 품질은 따로 움직인다", "논문 전체의 평가 틀입니다. 이후 모든 그림은 MSE와 UMG를 따로 봅니다.", ["F1", "P1"]),
-    ("결론 1-a", "불확실성이 모델 밖에 있으면 bootstrap으로도, 튜닝으로도 고쳐지지 않는다", "②. F7의 RBF 열을 미리 끌어와 '튜닝으로도 안 된다'까지 닫습니다.", ["F2"]),
-    ("결론 1-b", "불확실성이 내재된 GP는 데이터가 희소해지면 calibration부터 무너진다", "③ → ④. 파라미터가 지질 통계량이 아님(F4) → 희소할수록 흩어짐(F3, F6) → 흩어진 파라미터의 결과(F3c, F3d) → 꼬리와 인과 고리(P3, P4).", ["F4", "F3", "F3b", "F6", "F3c", "F3d", "P3", "P4"]),
-    ("시사점", "range·nugget은 데이터 적합 objective가 아니라 공간통계로 정해야 한다", "⑤. 이 논문에서 kriging/SGS는 oracle variogram, 즉 range·nugget을 올바르게 정했을 때의 기준입니다(F3, P3에서 희소 조건에서도 UMG 유지). 데이터에서 variogram을 정하는 과정의 검증은 OBM 기반 ground truth로 후속 연구에서 합니다. 이방성(F5)은 보류 상태이므로 F6와 함께 논의로만 다룹니다.", []),
-    ("결론 2", "grid search로 골라도 정확도와 UQ의 최적점은 다르다", "⑥. 데이터가 충분한 이상적 조건에서 grid search로 직접 고를 때. 최적점이 갈린다는 사실(F7, P7)과 그 비용의 크기(P7b)를 나눠 봅니다.", ["F7", "P7", "P7b"]),
+    ("문제 제기", "대부분의 정확도 기반 모델은 불확실성을 내장하지 않는다", "⓪. RBF 보간부터 최신 ML 회귀 모델까지 많은 공간 예측 모델은 정확도를 목표로 학습하고 예측 분산을 내놓지 않습니다. 불확실성이 필요하면 bootstrap 같은 사후 방법을 덧붙입니다. 이 논문은 그 가장 단순한 대표로 RBF+bootstrap을 쓰고, 불확실성이 내장된 kriging·SGS(oracle variogram)와 GP-MLE를 비교 대상으로 둡니다. 근거 문헌은 TODO입니다.", []),
+    ("전제", "정확도와 불확실성 품질은 따로 움직인다", "①. 논문 전체의 평가 틀입니다. 이후 모든 그림은 MSE와 UMG를 따로 봅니다.", ["F1", "P1"]),
+    ("결론 1 (핵심)", "정확도 기반 모델에 사후로 붙인 불확실성은 bootstrap으로도, 튜닝으로도 맞춰지지 않는다", "② → ③. 원인(예측 분산이 작음, F2) → ground truth를 아는 grid search로도 정확도를 버려야만 맞춰짐(F7, P7, P7b) → 같은 grid에서 불확실성이 내장된 방법은 두 지표를 거의 동시에 맞춤(P7b).", ["F2", "F7", "P7", "P7b"]),
+    ("결론 2", "불확실성이 내장돼 있어도 파라미터를 데이터 적합으로 정하면 calibration은 보장되지 않는다", "④ → ⑤. 파라미터가 지질 통계량이 아님(F4) → 희소할수록 흩어짐(F3, F6) → 흩어진 파라미터의 결과(F3c, F3d) → 꼬리와 인과 고리(P3, P4).", ["F4", "F3", "F3b", "F6", "F3c", "F3d", "P3", "P4"]),
+    ("시사점", "range·nugget은 데이터 적합 objective가 아니라 공간통계로 정해야 한다", "⑥. 이 논문에서 kriging/SGS는 oracle variogram, 즉 range·nugget을 올바르게 정했을 때의 기준입니다(F3, P3에서 희소 조건에서도 UMG 유지). 데이터에서 variogram을 정하는 경우는 논문 끝 OBM 검증으로 다룹니다(보류 중). 이방성(F5)은 보류 상태이므로 F6와 함께 논의로만 다룹니다.", []),
 ]
 
 FLOW = [
     ("전제", "F1", "MSE와 UMG, 3개 축, 4개 방법", REAL),
     ("전제", "P1", "range별 realization 분산·variogram vs 모델, oracle kriging UMG", REAL),
-    ("1-a", "F2", "Calibration 곡선, 예측 분산 (+ F7 RBF 열)", REAL),
-    ("1-b", "F4", "GP가 맞춘 range, nugget 대 실제 값", REAL),
-    ("1-b", "F3", "밀도별 oracle kriging/SGS와 GP-MLE MSE, UMG, GP range", REAL),
-    ("1-b", "F3b", "밀도별 실제 map과 샘플 위치", REAL),
-    ("1-b", "F6", "GP range 변동계수 vs 밀도 (B는 선택 placeholder)", PART),
-    ("1-b", "F3c", "극단값 2 %: GP range 최소·최대 셀", REAL),
-    ("1-b", "F3d", "극단값 1 %: 같은 구성", REAL),
-    ("1-b", "P3", "셀별 UMG 분포(꼬리)", REAL),
-    ("1-b", "P4", "GP range 오차·noise vs UMG(GP) − UMG(SGS)", REAL),
-    ("2", "F7", "정확도와 UMG 반응면, 4개 방법", REAL),
-    ("2", "P7", "truth별 MSE·UMG 최적점", REAL),
-    ("2", "P7b", "MSE–UMG Pareto 경계", REAL),
+    ("1", "F2", "Calibration 곡선, 예측 분산", REAL),
+    ("1", "F7", "정확도와 UMG 반응면, 4개 방법", REAL),
+    ("1", "P7", "truth별 MSE·UMG 최적점", REAL),
+    ("1", "P7b", "MSE–UMG Pareto 경계", REAL),
+    ("2", "F4", "GP가 맞춘 range, nugget 대 실제 값", REAL),
+    ("2", "F3", "밀도별 oracle kriging/SGS와 GP-MLE MSE, UMG, GP range", REAL),
+    ("2", "F3b", "밀도별 실제 map과 샘플 위치", REAL),
+    ("2", "F6", "GP range 변동계수 vs 밀도 (B는 선택 placeholder)", PART),
+    ("2", "F3c", "극단값 2 %: GP range 최소·최대 셀", REAL),
+    ("2", "F3d", "극단값 1 %: 같은 구성", REAL),
+    ("2", "P3", "셀별 UMG 분포(꼬리)", REAL),
+    ("2", "P4", "GP range 오차·noise vs UMG(GP) − UMG(SGS)", REAL),
 ]
 
 TODO = [
@@ -280,7 +282,8 @@ TODO = [
     ("F6 A", "E4(100셀) 데이터로 교체", "E4 데이터 있음, 미반영"),
     ("F1, F2, F3", "SGS realization, bootstrap 수를 N = 100, 150으로", "현재 N = 50 (배치 1)"),
     ("선택", "F6-B ARD 커널", "신규 실행, 논리상 필수 아님"),
-    ("후속 연구", "OBM 기반 ground truth로 데이터에서 정한 variogram 검증", "이번 논문 범위 밖"),
+    ("문제 제기", "최신 ML 공간 예측 모델의 UQ 내장 여부·사후 UQ 관행 문헌(literature-scout)", "문헌 조사만"),
+    ("OBM 검증", "OBM ground truth에서 사용자가 그린 variogram으로 2 % 검증(docs/obm_addon_plan.md)", "보류 중, 약 1~2시간 실행"),
 ]
 
 CSS = """
@@ -369,7 +372,7 @@ def main():
     h = [CSS, '<div class="wrap">']
     h.append('<header><h1>논문 스토리보드</h1>'
              '<p class="lede">그림 %d개를 하나의 논리로 엮은 초안입니다(2026-11-19 갱신). 각 그림의 마지막 → 줄이 다음 그림으로 넘어가는 연결입니다. '
-             'kriging/SGS는 oracle variogram으로만 비교합니다. F5 이방성은 보류입니다.</p></header>' % n_real)
+             '중심 주장은 ‘정확도 기반 모델에 사후로 붙인 불확실성은 맞추기 어렵다’이고, RBF+bootstrap이 그 가장 단순한 대표입니다(2026-11-19 사용자 결정). kriging/SGS는 oracle variogram으로만 비교합니다. F5 이방성은 보류입니다.</p></header>' % n_real)
     h.append('<details class="sec" open><summary><span class="tag">논리</span><span class="claim">한 줄씩 이어지는 주장</span></summary>'
              '<ol class="story">')
     for n, s, figs in STORY:
