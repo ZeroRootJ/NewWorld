@@ -31,3 +31,7 @@ reproduction 지표) 조사해 references.md에 반영 → 결과를 Sample Dens
 ## 2026-11-18
 
 **스토리라인 초안** — 연구기록·스토리보드 결과로 논리 ①–⑥ 구성 → 그림 설명을 → 연결 bullet로 재작성, 긴장 지점 T1–T4, placeholder P1/P3/P4/P5/P7 제안 → 아티팩트 게시.
+
+## 2026-11-19
+
+**oracle 전용 + 진단 그림** — variogram 기반 방법은 oracle로만 비교하기로 결정(검증은 OBM 후속) → P1/P3/P4/P7/P7b 계산·검수 → 스토리라인 문구 갱신·아티팩트 게시.

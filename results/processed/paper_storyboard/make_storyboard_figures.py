@@ -2506,6 +2506,10 @@ def main(only=None):
         ("F6", figure_f6, (dens,)),
         ("F7", figure_f7, ()),
     )
+    # P1/P3/P4/P7/P7b diagnostics (user request 2026-11-19), sibling module; imported here (not at module
+    # top) because it imports this module's helpers
+    from results.processed.paper_storyboard import make_storyboard_diagnostics as diag
+    jobs += tuple((name, fn, (mt,) if arg == "mt" else ()) for name, fn, arg in diag.JOBS)
     if only:
         unknown = set(only) - {name for name, _, _ in jobs}
         if unknown:
