@@ -57,3 +57,5 @@ reproduction 지표) 조사해 references.md에 반영 → 결과를 Sample Dens
 **부록 Fig. A2** — 사용자: truth realization 실험 variogram을 부록에 → A2(레벨별 50개, GP range 비율 색), V36.
 
 **GP noise 하한 1e-10 (1 %)** — 사용자: 하한(1e-5)이 GP-MLE 성능을 끌어올렸는지 → E4 1 % 100셀 GP만 재적합, UMG 평균 0.8895→0.8896, 하한 셀 16개 0.828→0.828; 7108 rep8만 다른 국소해; 대시보드 표시, 스토리보드 그대로.
+
+**결정: noise 하한 이슈 종료** — 사용자: 1e-10 재적합에서 거의 변동 없음 → 하한 관련 이슈는 더 다루지 않음.
