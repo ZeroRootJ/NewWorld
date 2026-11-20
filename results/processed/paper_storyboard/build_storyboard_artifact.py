@@ -16,14 +16,18 @@ def img(stem, alt):
 
 # Figure numbers in reading order (user request 2026-11-20): premise = Fig. 1,
 # conclusion 1 = Fig. 2-3, conclusion 2 = Fig. 4-13 (P1, P7 dropped 2026-11-20). Internal keys / file stems unchanged.
-ORDER = ["F1", "F2", "F7", "F4", "F3", "F3b", "F6", "P3", "P4", "F3c", "F3d", "P8", "P9"]
+ORDER = ["F1", "F2", "F7", "F4", "F3", "P3", "P4", "F3c", "F3d", "P8", "P9"]
 NUM = {k: i + 1 for i, k in enumerate(ORDER)}
+# appendix (user request 2026-11-20: F3b moved to the appendix, F6 dropped)
+APPENDIX = ["F3b"]
+LABEL = {k: "Fig. %d" % n for k, n in NUM.items()}
+LABEL.update({k: "Fig. A%d" % (i + 1) for i, k in enumerate(APPENDIX)})
 _KEY_RE = re.compile(r"(?<![A-Za-z0-9_/-])(F3[bcd]|F[1-7]|P[0-9]b?)(?![A-Za-z0-9_-])")
 
 
 def fnum(text):
     """Replace internal figure keys with the paper's figure numbers."""
-    return _KEY_RE.sub(lambda m: "Fig. %d" % NUM[m.group(1)] if m.group(1) in NUM else m.group(1), text)
+    return _KEY_RE.sub(lambda m: LABEL[m.group(1)] if m.group(1) in LABEL else m.group(1), text)
 
 
 def status_note(stem):
@@ -141,7 +145,7 @@ STORY = [
     ("②", "사후로 붙인 불확실성(RBF+bootstrap)은 구간이 체계적으로 좁고, 밀도를 바꿔도 좁혀지지 않는다.", "F2"),
     ("③", "ground truth를 아는 grid search에서도 MSE로 고른 하이퍼파라미터와 UMG로 고른 하이퍼파라미터가 다르다. 4개 방법 모두 그렇다.", "F7"),
     ("④", "불확실성이 내장된 GP-MLE는 데이터가 충분하면 잘 calibrate된다. 실제와 다른 range·noise로도 conventional 이상의 UMG를 낸다.", "F1 · F4 · F3"),
-    ("⑤", "그러나 현장에서 흔한 희소 데이터에서는 marginal likelihood로 최적화한 파라미터가 흔들린다. range가 흩어지고 noise가 하한값으로 붕괴하며, calibration은 평균보다 하위 꼬리에서 먼저 나빠진다.", "F3 · F3b · F6 · P3 · P4"),
+    ("⑤", "그러나 현장에서 흔한 희소 데이터에서는 marginal likelihood로 최적화한 파라미터가 흔들린다. range가 흩어지고 noise가 하한값으로 붕괴하며, calibration은 평균보다 하위 꼬리에서 먼저 나빠진다.", "F3 · P3 · P4"),
     ("⑥", "realization을 만들 때는 이 파라미터가 그대로 variogram·분포 모델이 된다. 흔들린 파라미터는 variogram과 분포 재현에 치명적일 수 있다.", "F3c · F3d · P8 · P9"),
     ("⑦", "range·nugget을 올바르게 정한 conventional 방법(oracle variogram)은 같은 희소 조건에서 calibration을 유지한다. 데이터에서 variogram을 정하는 경우는 논문 끝 OBM 검증에서 다룬다(보류 중).", "F3 · P3 · OBM(보류)"),
 ]
@@ -183,8 +187,8 @@ CLAIMS = {
         "A: MSE는 밀도 20 → 1 %에서 세 방법이 함께 오릅니다(kriging 2.48 → 6.56, SGS 2.52 → 6.59, GP-MLE 2.63 → 6.74). 정확도로는 GP도 희소 데이터를 conventional과 똑같이 견딥니다.",
         "B: UMG는 다르게 움직입니다. SGS 0.932 → 0.926으로 거의 그대로, GP-MLE 0.977 → 0.890. 5 %까지는 GP-MLE가 앞서고 2 %에서 교차(kriging 0.926, GP-MLE 0.927, SGS 0.938), 1 %에서 GP-MLE가 가장 낮습니다. 데이터 손실에 정확도는 같이 나빠지는데 calibration만 GP에서 따로 무너집니다. F1의 '정확도와 UQ는 분리' 전제가 밀도 축에서 다시 나타납니다.",
         "C: 같은 구간에서 GP range가 흩어집니다. 범위 148~248 m(20 %) → 57~740 m(1 %), 300 m를 넘는 셀은 0개 → 38개(100셀 중).",
-        "셀 간 UMG 표준편차도 GP-MLE 0.017 → 0.10, SGS 0.054 → 0.068입니다. 평균보다 꼬리가 먼저 벌어집니다 → P3.",
-        "→ F6: range의 흩어짐을 밀도별로 정량화.",
+        "셀 간 UMG 표준편차도 GP-MLE 0.017 → 0.10, SGS 0.054 → 0.068입니다. 평균보다 꼬리가 먼저 벌어집니다.",
+        "→ P3: 파라미터가 흔들리는 밀도에서 calibration은 어디서부터 나빠지는가.",
     ],
     "F3b": [
         "밀도 20, 10, 5, 2, 1 %에서 샘플 위치 수는 442, 244, 120, 48, 25개입니다. 2 %부터 샘플 간격이 실제 range(300 m)에 가까워집니다.",
@@ -227,7 +231,7 @@ CLAIMS = {
         "B: noise와의 순위상관은 모든 밀도에서 양수입니다(+0.774, +0.639, +0.609, +0.347, +0.313). noise를 크게 잡은 셀일수록 GP가 SGS보다 UMG가 높습니다.",
         "noise가 하한값(10⁻⁵)에 걸린 셀은 2 % 6개, 1 % 16개입니다. 이 22셀 중 17셀에서 GP-MLE UMG가 SGS보다 낮고(평균 차이 −0.083), 같은 밀도의 나머지 셀은 평균 −0.016입니다. 1 %에서 GP-MLE UMG 평균은 하한 셀 0.828, 나머지 0.901입니다.",
         "GP가 SGS보다 낮은 셀 수는 20 % 16개 → 1 % 61개입니다(100개 중).",
-        "⑤의 고리는 'range가 흩어진다'(F3 C, F6)보다 'noise가 0으로 붕괴한다'(F3c, F3d의 짧은 range 셀) 쪽이 데이터와 맞습니다. F6의 range 변동계수는 불안정성 지표로 남기고, calibration 손실과의 연결은 noise로 잡습니다.",
+        "⑤의 고리는 'range가 흩어진다'(F3 C)보다 'noise가 0으로 붕괴한다'(F3c, F3d의 짧은 range 셀) 쪽이 데이터와 맞습니다. range의 흩어짐은 불안정성 지표로 남기고, calibration 손실과의 연결은 noise로 잡습니다.",
         "→ F3c, F3d: 흔들린 파라미터는 실제로 어떤 map을 만드는가. realization 생성에서는 이 파라미터가 그대로 variogram·분포 모델이 됩니다.",
     ],
 }
@@ -235,7 +239,7 @@ CLAIMS = {
 PH = {
     "P8": dict(
         title="GP가 맞춘 파라미터가 뜻하는 variogram 모델, 밀도별",
-        why="realization을 만들 때 쓰일 variogram 모델 자체가 밀도별로 얼마나 흔들리는지 보입니다. range 숫자 하나(F6)가 아니라 range·noise·sill을 함께 담은 곡선이라 ⑥의 직접 근거가 됩니다.",
+        why="realization을 만들 때 쓰일 variogram 모델 자체가 밀도별로 얼마나 흔들리는지 보입니다. range 숫자 하나(F3 C)가 아니라 range·noise·sill을 함께 담은 곡선이라 ⑥의 직접 근거가 됩니다.",
         data="E4 100셀의 GP-MLE 하이퍼파라미터(ConstantKernel 분산, RBF length scale, WhiteKernel noise)로 implied variogram γ(h) = noise + c(1 − exp(−h²/2l²))를 그려 밀도별 패널(20, 5, 2, 1 %)에 겹치고, 정답 모델(spherical 300 m, nugget 0.45)을 점선으로 둡니다. noise 하한 셀은 색으로 구분합니다.",
         cost="기존 데이터만, 신규 실행 없음(data-curator → reviewer, 수 분).",
     ),
@@ -251,8 +255,9 @@ SECTIONS = [
     ("문제 제기", "대부분의 정확도 기반 모델은 불확실성을 내장하지 않는다", "⓪. RBF 보간부터 최신 ML 회귀 모델까지 많은 공간 예측 모델은 정확도를 목표로 학습하고 예측 분산을 내놓지 않습니다. 불확실성이 필요하면 bootstrap 같은 사후 방법을 덧붙입니다. 이 논문은 그 가장 단순한 대표로 RBF+bootstrap을 쓰고, 불확실성이 내장된 kriging·SGS(oracle variogram)와 GP-MLE를 비교 대상으로 둡니다. 근거 문헌은 TODO입니다.", []),
     ("전제", "정확도와 불확실성 품질은 따로 움직인다", "①. 논문 전체의 평가 틀입니다. 이후 모든 그림은 MSE와 UMG를 따로 봅니다.", ["F1"]),
     ("결론 1 (핵심)", "정확도 기반 모델에 사후로 붙인 불확실성은 맞지 않고, 정확도로 고른 파라미터는 UQ 최적과 다르다", "② → ③. 원인(예측 분산이 작음, F2) → ground truth를 아는 grid search에서도 MSE 최적과 UMG 최적 노드가 다름(F7).", ["F2", "F7"]),
-    ("결론 2", "GP-MLE는 잘 calibrate되지만, 현장에서 흔한 희소 데이터에서는 최적화된 파라미터가 흔들리고 이는 realization 생성에 치명적일 수 있다", "④ → ⑤ → ⑥. 데이터가 충분하면 잘 맞음(F4, F3) → 희소할수록 파라미터가 흔들림(F3, F3b, F6) → calibration 꼬리와 noise 붕괴(P3, P4) → 흔들린 파라미터로 만든 map(F3c, F3d) → realization 생성의 variogram·분포 재현(P8, P9 placeholder).", ["F4", "F3", "F3b", "F6", "P3", "P4", "F3c", "F3d", "P8", "P9"]),
-    ("시사점", "range·nugget은 데이터 적합 objective가 아니라 공간통계로 정해야 한다", "⑦. 이 논문에서 kriging/SGS는 oracle variogram, 즉 range·nugget을 올바르게 정했을 때의 기준입니다(F3, P3에서 희소 조건에서도 UMG 유지). 데이터에서 variogram을 정하는 경우는 논문 끝 OBM 검증으로 다룹니다(보류 중). 이방성(F5)은 보류 상태이므로 F6와 함께 논의로만 다룹니다.", []),
+    ("결론 2", "GP-MLE는 잘 calibrate되지만, 현장에서 흔한 희소 데이터에서는 최적화된 파라미터가 흔들리고 이는 realization 생성에 치명적일 수 있다", "④ → ⑤ → ⑥. 데이터가 충분하면 잘 맞음(F4, F3) → 희소할수록 파라미터가 흔들림(F3) → calibration 꼬리와 noise 붕괴(P3, P4) → 흔들린 파라미터로 만든 map(F3c, F3d) → realization 생성의 variogram·분포 재현(P8, P9 placeholder).", ["F4", "F3", "P3", "P4", "F3c", "F3d", "P8", "P9"]),
+    ("시사점", "range·nugget은 데이터 적합 objective가 아니라 공간통계로 정해야 한다", "⑦. 이 논문에서 kriging/SGS는 oracle variogram, 즉 range·nugget을 올바르게 정했을 때의 기준입니다(F3, P3에서 희소 조건에서도 UMG 유지). 데이터에서 variogram을 정하는 경우는 논문 끝 OBM 검증으로 다룹니다(보류 중). 이방성(F5)은 보류 상태이므로 논의로만 다룹니다.", []),
+    ("부록", "밀도별 실제 map과 샘플 위치", "본문 결론 2의 밀도 축 설정을 보여주는 참고 그림입니다(2026-11-20 사용자 결정으로 부록 이동).", ["F3b"]),
 ]
 
 FLOW = [
@@ -261,22 +266,19 @@ FLOW = [
     ("1", "F7", "정확도와 UMG 반응면, 4개 방법", REAL),
     ("2", "F4", "GP가 맞춘 range, nugget 대 실제 값", REAL),
     ("2", "F3", "밀도별 oracle kriging/SGS와 GP-MLE MSE, UMG, GP range", REAL),
-    ("2", "F3b", "밀도별 실제 map과 샘플 위치", REAL),
-    ("2", "F6", "GP range 변동계수 vs 밀도 (B는 선택 placeholder)", PART),
     ("2", "P3", "셀별 UMG 분포(꼬리)", REAL),
     ("2", "P4", "GP range 오차·noise vs UMG(GP) − UMG(SGS)", REAL),
     ("2", "F3c", "극단값 2 %: GP range 최소·최대 셀", REAL),
     ("2", "F3d", "극단값 1 %: 같은 구성", REAL),
     ("2", "P8", "GP 파라미터가 뜻하는 variogram 모델, 밀도별 (기존 데이터)", PROP),
     ("2", "P9", "GP realization의 variogram·히스토그램 재현 (소규모 신규 계산)", PROP),
+    ("부록", "F3b", "밀도별 실제 map과 샘플 위치", REAL),
 ]
 
 TODO = [
     ("P8", "GP implied variogram 곡선, 밀도별", "기존 데이터, 수 분"),
     ("P9", "GP posterior realization 재현 vs SGS", "소규모 신규 계산"),
-    ("F6 A", "E4(100셀) 데이터로 교체", "E4 데이터 있음, 미반영"),
     ("F1, F2, F3", "SGS realization, bootstrap 수를 N = 100, 150으로", "현재 N = 50 (배치 1)"),
-    ("선택", "F6-B ARD 커널", "신규 실행, 논리상 필수 아님"),
     ("문제 제기", "최신 ML 공간 예측 모델의 UQ 내장 여부·사후 UQ 관행 문헌(literature-scout)", "문헌 조사만"),
     ("OBM 검증", "OBM ground truth에서 사용자가 그린 variogram으로 2 % 검증(docs/obm_addon_plan.md)", "보류 중, 약 1~2시간 실행"),
 ]
@@ -366,7 +368,7 @@ def main():
     n_ph = sum(1 for r in FLOW if r[3] == PROP)
     h = [CSS, '<div class="wrap">']
     h.append('<header><h1>논문 스토리보드</h1>'
-             '<p class="lede">그림 %d개를 하나의 논리로 엮은 초안입니다(2026-11-19 갱신). 각 그림의 마지막 → 줄이 다음 그림으로 넘어가는 연결입니다. '
+             '<p class="lede">그림 %d개를 하나의 논리로 엮은 초안입니다(2026-11-20 갱신). 각 그림의 마지막 → 줄이 다음 그림으로 넘어가는 연결입니다. '
              '중심 주장은 ‘정확도 기반 모델에 사후로 붙인 불확실성은 맞추기 어렵다’이고, RBF+bootstrap이 그 가장 단순한 대표입니다(2026-11-19 사용자 결정). kriging/SGS는 oracle variogram으로만 비교합니다. F5 이방성은 보류입니다.</p></header>' % n_real)
     h.append('<details class="sec" open><summary><span class="tag">논리</span><span class="claim">한 줄씩 이어지는 주장</span></summary>'
              '<ol class="story">')
@@ -379,7 +381,7 @@ def main():
     h.append('</tbody></table></div></details>')
     h.append('<section><h2>흐름</h2><div class="tablebox"><table><thead><tr><th>단계</th><th>그림</th><th>내용</th><th>상태</th></tr></thead><tbody>')
     for c, f, d, st in FLOW:
-        h.append('<tr><td class="k">%s</td><td class="k"><a href="#%s">Fig. %d</a></td><td>%s</td><td>%s</td></tr>' % (c, f.lower(), NUM[f], d, chip(st)))
+        h.append('<tr><td class="k">%s</td><td class="k"><a href="#%s">%s</a></td><td>%s</td><td>%s</td></tr>' % (c, f.lower(), LABEL[f], d, chip(st)))
     h.append('</tbody></table></div></section>')
     for tag, claim, lead, keys in SECTIONS:
         h.append('<details class="sec" open><summary><span class="tag">%s</span><span class="claim">%s</span></summary>'
@@ -387,13 +389,13 @@ def main():
         for k in keys:
             if k in PH:
                 p = PH[k]
-                h.append('<article class="fig ph" id="%s"><h3><span class="n">Fig. %d</span>%s %s</h3>' % (k.lower(), NUM[k], p["title"], chip(PROP)))
+                h.append('<article class="fig ph" id="%s"><h3><span class="n">%s</span>%s %s</h3>' % (k.lower(), LABEL[k], p["title"], chip(PROP)))
                 h.append('<dl class="phd"><dt>논리상 역할</dt><dd>%s</dd><dt>제안 데이터</dt><dd>%s</dd><dt>비용</dt><dd>%s</dd></dl></article>'
                          % (p["why"], p["data"], p["cost"]))
                 continue
             f = FIGS[k]
-            h.append('<article class="fig" id="%s"><h3><span class="n">Fig. %d</span>%s %s</h3>' % (k.lower(), NUM[k], f["title"], chip(f["st"])))
-            h.append(img(f["stem"], "Fig. %d %s" % (NUM[k], f["title"])))
+            h.append('<article class="fig" id="%s"><h3><span class="n">%s</span>%s %s</h3>' % (k.lower(), LABEL[k], f["title"], chip(f["st"])))
+            h.append(img(f["stem"], "%s %s" % (LABEL[k], f["title"])))
             h.append('<ul class="claims">' + "".join('<li%s>%s</li>' % (' class="next"' if c.startswith("→") else "", c) for c in CLAIMS[k]) + '</ul>')
             h.append('<details class="how"><summary>그림 읽는 법</summary>' + "".join('<p>%s</p>' % p for p in f["body"]) + '<p>데이터: %s</p>' % status_note(f["stem"]) + '</details>')
             h.append('<div class="file">results/figures/paper_storyboard/%s.pdf</div></article>' % f["stem"])
