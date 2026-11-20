@@ -19,15 +19,19 @@ User decision 2026-11-19: variogram-based methods (simple kriging, SGS) are
 compared with the ORACLE (true) variogram only -- no picked / inferred variogram
 results are read here.
 
-Run with:
-.venv/Scripts/python.exe -m results.processed.paper_storyboard.make_storyboard_figures P1 P3 P4 P7 P7b
-(or this module directly: ... -m results.processed.paper_storyboard.make_storyboard_diagnostics)
+Each figure is a compute_p*() / draw_p*() pair registered in JOBS; the plot data
+between the two is cached in results/processed/paper_storyboard/plot_data/ (see
+make_storyboard_figures.py and plot_cache.py).
+
+Run with (same flags as make_storyboard_figures; this entry point defaults to the P* figures):
+.venv/Scripts/python.exe -m results.processed.paper_storyboard.make_storyboard_diagnostics
+.venv/Scripts/python.exe -m results.processed.paper_storyboard.make_storyboard_diagnostics --draw-only --only P7b
+(equivalently: ... -m results.processed.paper_storyboard.make_storyboard_figures --only P1 P3 P4 P7 P7b)
 """
 
 import contextlib
 import io
 import json
-import sys
 
 import numpy as np
 import pandas as pd
@@ -178,7 +182,7 @@ def _jitter(n, step, frac):
     return (np.linspace(-1.0, 1.0, n) if n > 1 else np.zeros(1)) * frac * step
 
 
-def figure_p1(mt):
+def compute_p1(mt):
     stem = "P1_range_truth_realization_stats"
     df, k = _p1_rows(mt)
     er = mt["exp"]["range"]
@@ -191,8 +195,6 @@ def figure_p1(mt):
         raise ValueError(f"P1: more than one model sill {sill_phys}")
     sill_phys, sill_ns = sill_phys[0], sill_ns[0]
     phys_dev = float(np.max(np.abs(df["ratio_phys"] - 1.0)))
-    step = float(np.min(np.diff(levels)))
-    colors = _level_colors(levels)
     bw = k["LAG_BIN_WIDTH_M"]
 
     note = (
@@ -206,41 +208,6 @@ def figure_p1(mt):
         f"{bw:g} m bins) in the bin centred at range − {bw / 2:g} m, ÷ true spherical model at that lag. Points = "
         f"individual realizations (spread horizontally), bars = level mean."
     )
-    fig, rect = _new_figure(plot_height_mm=46.0, status_text=note, top_mm=16.0, left_mm=13.0, right_mm=3.0)
-    gs = fig.add_gridspec(1, 3, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3], wspace=0.42)
-    axA, axB, axC = (fig.add_subplot(gs[0, i]) for i in range(3))
-
-    def level_scatter(ax, col):
-        for lvl in levels:
-            sub = df[df["range_m"] == lvl].sort_values("truth_seed")
-            x = lvl + _jitter(len(sub), step, P1_JITTER_FRAC)
-            ax.scatter(x, sub[col], s=P1_MARKER_S, color=colors[lvl], edgecolors="none", alpha=0.85, zorder=3)
-            ax.plot([lvl - 0.3 * step, lvl + 0.3 * step], [sub[col].mean()] * 2, color="black", linewidth=1.0,
-                    zorder=4)
-        ax.axhline(1.0, color="0.5", linestyle="--", linewidth=0.5, zorder=1)
-        ax.set_xticks(levels)
-        ax.set_xticklabels([f"{v:g}" for v in levels])
-        ax.set_xlabel("True range (m)")
-        ax.grid(True, axis="y")
-
-    level_scatter(axA, "ratio_ns")
-    axA.set_ylabel("Realization variance / model sill\n(standard-normal field, before rescaling)")
-    for lvl in levels:
-        axB.scatter(df.loc[df["range_m"] == lvl, "ratio_ns"], df.loc[df["range_m"] == lvl, "umg_kriging"],
-                    s=P1_MARKER_S + 2, marker=METHOD_MARKERS["kriging"], color=colors[lvl], edgecolors="none",
-                    alpha=0.9, zorder=3, label=f"{lvl:g} m")
-    axB.set_xlabel("Realization variance / model sill\n(standard-normal field, before rescaling)")
-    axB.set_ylabel(f"{METHOD_LABELS['kriging']} {UMG_LABEL}")
-    axB.grid(True)
-    h, l = axB.get_legend_handles_labels()
-    fig.legend(h, l, loc="upper center", bbox_to_anchor=(0.5, 1.0),
-               ncol=len(levels), borderaxespad=0.3, handletextpad=0.1, columnspacing=1.0,
-               title="True range (B; colours also in A, C)", title_fontsize=FONT_PT)
-    level_scatter(axC, "gam_ratio_lo")
-    axC.set_ylabel("Experimental / model semivariance\nat lag = range − %g m" % (bw / 2))
-    for ax, letter in zip((axA, axB, axC), "ABC"):
-        _panel_label(ax, letter, dx_pt=-30.0)
-
     def tbl(col, fmt):
         g = df.groupby("range_m")[col]
         return "; ".join(f"{lvl:g} m: mean {g.mean()[lvl]:{fmt}}, min {g.min()[lvl]:{fmt}}, max {g.max()[lvl]:{fmt}}"
@@ -309,7 +276,50 @@ def figure_p1(mt):
             *per_cell,
         ],
     )
-    return _save(fig, stem, lines)
+    return {"note": note, "status_lines": lines, "bw": bw,
+            "df": df[["range_m", "truth_seed", "ratio_ns", "umg_kriging", "gam_ratio_lo"]]}
+
+
+def draw_p1(d):
+    note, df, bw = d["note"], d["df"], d["bw"]
+    levels = sorted(df["range_m"].unique())
+    step = float(np.min(np.diff(levels)))
+    colors = _level_colors(levels)
+    fig, rect = _new_figure(plot_height_mm=46.0, status_text=note, top_mm=16.0, left_mm=13.0, right_mm=3.0)
+    gs = fig.add_gridspec(1, 3, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3], wspace=0.42)
+    axA, axB, axC = (fig.add_subplot(gs[0, i]) for i in range(3))
+
+    def level_scatter(ax, col):
+        for lvl in levels:
+            sub = df[df["range_m"] == lvl].sort_values("truth_seed")
+            x = lvl + _jitter(len(sub), step, P1_JITTER_FRAC)
+            ax.scatter(x, sub[col], s=P1_MARKER_S, color=colors[lvl], edgecolors="none", alpha=0.85, zorder=3)
+            ax.plot([lvl - 0.3 * step, lvl + 0.3 * step], [sub[col].mean()] * 2, color="black", linewidth=1.0,
+                    zorder=4)
+        ax.axhline(1.0, color="0.5", linestyle="--", linewidth=0.5, zorder=1)
+        ax.set_xticks(levels)
+        ax.set_xticklabels([f"{v:g}" for v in levels])
+        ax.set_xlabel("True range (m)")
+        ax.grid(True, axis="y")
+
+    level_scatter(axA, "ratio_ns")
+    axA.set_ylabel("Realization variance / model sill\n(standard-normal field, before rescaling)")
+    for lvl in levels:
+        axB.scatter(df.loc[df["range_m"] == lvl, "ratio_ns"], df.loc[df["range_m"] == lvl, "umg_kriging"],
+                    s=P1_MARKER_S + 2, marker=METHOD_MARKERS["kriging"], color=colors[lvl], edgecolors="none",
+                    alpha=0.9, zorder=3, label=f"{lvl:g} m")
+    axB.set_xlabel("Realization variance / model sill\n(standard-normal field, before rescaling)")
+    axB.set_ylabel(f"{METHOD_LABELS['kriging']} {UMG_LABEL}")
+    axB.grid(True)
+    h, l = axB.get_legend_handles_labels()
+    fig.legend(h, l, loc="upper center", bbox_to_anchor=(0.5, 1.0),
+               ncol=len(levels), borderaxespad=0.3, handletextpad=0.1, columnspacing=1.0,
+               title="True range (B; colours also in A, C)", title_fontsize=FONT_PT)
+    level_scatter(axC, "gam_ratio_lo")
+    axC.set_ylabel("Experimental / model semivariance\nat lag = range − %g m" % (bw / 2))
+    for ax, letter in zip((axA, axB, axC), "ABC"):
+        _panel_label(ax, letter, dx_pt=-30.0)
+    return fig
 
 
 # ---------------------------------------------------------------------------
@@ -318,7 +328,7 @@ def figure_p1(mt):
 P3_METHODS = ["gp_mle", "kriging", "sgs"]
 
 
-def figure_p3(mt):
+def compute_p3(mt):
     stem = "P3_density_umg_distribution"
     ed = mt["exp"]["density"]
     dens = mt["dens"]
@@ -343,32 +353,6 @@ def figure_p3(mt):
         "variogram. Box = 25th-75th percentile, line = median, whiskers = most extreme value within 1.5 × IQR of the "
         "box, circles = cells beyond the whiskers, white diamond = mean. x = requested sample fraction of the 50 × 50 grid."
     )
-    fig, rect = _new_figure(plot_height_mm=48.0, status_text=note, top_mm=8.0, left_mm=13.0, right_mm=58.0)
-    ax = fig.add_axes([rect[0], rect[1], rect[2] - rect[0], rect[3] - rect[1]])
-    width = 0.24
-    for i, lvl in enumerate(DENSITY_LEVELS):
-        for j, m in enumerate(P3_METHODS):
-            x = i + (j - 1) * (width + 0.04)
-            st = stats[(m, lvl)]
-            col = METHOD_COLORS[m]
-            ax.boxplot([st["v"]], positions=[x], widths=width, whis=1.5, patch_artist=True, manage_ticks=False,
-                       boxprops=dict(facecolor="none", edgecolor=col, linewidth=0.7),
-                       medianprops=dict(color=col, linewidth=1.0), whiskerprops=dict(color=col, linewidth=0.6),
-                       capprops=dict(color=col, linewidth=0.6),
-                       flierprops=dict(marker="o", markersize=1.8, markerfacecolor="none", markeredgecolor=col,
-                                       markeredgewidth=0.4))
-            ax.plot(x, st["mean"], marker="D", markersize=2.6, markerfacecolor="white", markeredgecolor=col,
-                    markeredgewidth=0.6, zorder=5)
-    ax.set_xticks(range(len(DENSITY_LEVELS)))
-    ax.set_xticklabels([f"{dens['pct'][lvl]:g}" for lvl in DENSITY_LEVELS])
-    ax.set_xlim(-0.6, len(DENSITY_LEVELS) - 0.4)
-    ax.set_xlabel(sb.DENSITY_XLABEL_SHORT)
-    ax.set_ylabel(UMG_LABEL)
-    ax.grid(True, axis="y")
-    ax.legend(handles=[Line2D([], [], color=METHOD_COLORS[m], marker="s", markerfacecolor="none", linestyle="none",
-                              markersize=5, label=METHOD_LABELS[m] + ("" if m == "gp_mle" else " (true variogram)"))
-                       for m in P3_METHODS],
-              loc="upper left", bbox_to_anchor=(1.01, 1.0), borderaxespad=0.0)
     n_fl = {}
     for (m, lvl), st in stats.items():
         iqr = st["p75"] - st["p25"]
@@ -396,7 +380,42 @@ def figure_p3(mt):
                 "cells at a level are truth x sample-set combinations (10 x 10); the box mixes between-truth and "
                 "between-sample-set variation."],
     )
-    return _save(fig, stem, lines)
+    return {"note": note, "status_lines": lines, "pct": dens["pct"],
+            "values": {m: {lvl: stats[(m, lvl)]["v"] for lvl in DENSITY_LEVELS} for m in P3_METHODS},
+            "means": {m: {lvl: float(stats[(m, lvl)]["mean"]) for lvl in DENSITY_LEVELS} for m in P3_METHODS}}
+
+
+def draw_p3(d):
+    note, dens = d["note"], {"pct": d["pct"]}
+    stats = {(m, lvl): {"v": d["values"][m][lvl], "mean": d["means"][m][lvl]}
+             for m in P3_METHODS for lvl in DENSITY_LEVELS}
+    fig, rect = _new_figure(plot_height_mm=48.0, status_text=note, top_mm=8.0, left_mm=13.0, right_mm=58.0)
+    ax = fig.add_axes([rect[0], rect[1], rect[2] - rect[0], rect[3] - rect[1]])
+    width = 0.24
+    for i, lvl in enumerate(DENSITY_LEVELS):
+        for j, m in enumerate(P3_METHODS):
+            x = i + (j - 1) * (width + 0.04)
+            st = stats[(m, lvl)]
+            col = METHOD_COLORS[m]
+            ax.boxplot([st["v"]], positions=[x], widths=width, whis=1.5, patch_artist=True, manage_ticks=False,
+                       boxprops=dict(facecolor="none", edgecolor=col, linewidth=0.7),
+                       medianprops=dict(color=col, linewidth=1.0), whiskerprops=dict(color=col, linewidth=0.6),
+                       capprops=dict(color=col, linewidth=0.6),
+                       flierprops=dict(marker="o", markersize=1.8, markerfacecolor="none", markeredgecolor=col,
+                                       markeredgewidth=0.4))
+            ax.plot(x, st["mean"], marker="D", markersize=2.6, markerfacecolor="white", markeredgecolor=col,
+                    markeredgewidth=0.6, zorder=5)
+    ax.set_xticks(range(len(DENSITY_LEVELS)))
+    ax.set_xticklabels([f"{dens['pct'][lvl]:g}" for lvl in DENSITY_LEVELS])
+    ax.set_xlim(-0.6, len(DENSITY_LEVELS) - 0.4)
+    ax.set_xlabel(sb.DENSITY_XLABEL_SHORT)
+    ax.set_ylabel(UMG_LABEL)
+    ax.grid(True, axis="y")
+    ax.legend(handles=[Line2D([], [], color=METHOD_COLORS[m], marker="s", markerfacecolor="none", linestyle="none",
+                              markersize=5, label=METHOD_LABELS[m] + ("" if m == "gp_mle" else " (true variogram)"))
+                       for m in P3_METHODS],
+              loc="upper left", bbox_to_anchor=(1.01, 1.0), borderaxespad=0.0)
+    return fig
 
 
 # ---------------------------------------------------------------------------
@@ -443,7 +462,7 @@ def _p4_table(mt):
     return out, true_r, GP_PRACTICAL_RANGE_FACTOR
 
 
-def figure_p4(mt):
+def compute_p4(mt):
     from scipy.stats import spearmanr
     stem = "P4_gp_param_error_vs_umg_loss"
     ed = mt["exp"]["density"]
@@ -453,7 +472,6 @@ def figure_p4(mt):
     if len(true_nug) != 1:
         raise ValueError("P4: E4 has more than one nugget")
     true_nug = true_nug[0]
-    colors = _level_colors(DENSITY_LEVELS)
 
     note = (
         f"E4 (density axis), all {len(DENSITY_LEVELS)} levels × {ed['n_cells']} cells ({ed['n_truth']} truths × "
@@ -463,30 +481,6 @@ def figure_p4(mt):
         f"(normalize_y = True), log scale; dashed line = true nugget fraction {true_nug:g} of the model sill. Spearman "
         "rho per density in the status file."
     )
-    fig, rect = _new_figure(plot_height_mm=48.0, status_text=note, top_mm=8.0, left_mm=14.0, right_mm=28.0)
-    gs = fig.add_gridspec(1, 2, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3], wspace=0.25)
-    axA, axB = fig.add_subplot(gs[0, 0]), fig.add_subplot(gs[0, 1])
-    for lvl in DENSITY_LEVELS:
-        sub = df[df["axis_level"] == lvl]
-        kw = dict(s=P4_MARKER_S, color=colors[lvl], edgecolors="none", alpha=P4_ALPHA, zorder=3,
-                  marker=METHOD_MARKERS["gp_mle"])
-        axA.scatter(sub["abs_log_range_err"], sub["d_sgs"], **kw)
-        axB.scatter(sub["gp_noise_variance_normalized"], sub["d_sgs"], label=f"{dens['pct'][lvl]:g}%", **kw)
-    for ax in (axA, axB):
-        ax.axhline(0.0, color="0.5", linewidth=0.5, linestyle="--", zorder=1)
-        ax.grid(True)
-        ax.set_ylabel("UMG(GP-MLE) − UMG(SGS)")
-    axA.set_xlabel("|ln(GP practical range / true range)|")
-    axB.set_xscale("log")
-    axB.axvline(true_nug, color="0.3", linewidth=0.6, linestyle="--", zorder=1)
-    axB.set_xlabel("GP noise variance (fraction of sample variance)")
-    leg = axB.legend(title="Sample density", loc="upper left", bbox_to_anchor=(1.02, 1.0), borderaxespad=0.0,
-                     markerscale=2.0, handletextpad=0.2, title_fontsize=FONT_PT)
-    for hnd in leg.legend_handles:
-        hnd.set_alpha(1.0)
-    _panel_label(axA, "A", dx_pt=-30.0)
-    _panel_label(axB, "B", dx_pt=-30.0)
-
     def rho_rows(ycol, ref):
         out = []
         for lvl in DENSITY_LEVELS + ["all"]:
@@ -534,7 +528,39 @@ def figure_p4(mt):
                 "SGS / kriging use the true (oracle) variogram only (user decision 2026-11-19).",
                 f"SGS UMG = ensemble of N = {mt['n_ens']} realizations (batch {mt['batches']})."],
     )
-    return _save(fig, stem, lines)
+    return {"note": note, "status_lines": lines, "pct": dens["pct"], "true_nug": true_nug,
+            # (columns-index name "parameter" left over from the pivot is dropped; not drawn)
+            "df": df[["axis_level", "abs_log_range_err", "gp_noise_variance_normalized", "d_sgs"]]
+            .rename_axis(columns=None)}
+
+
+def draw_p4(d):
+    note, dens, df, true_nug = d["note"], {"pct": d["pct"]}, d["df"], d["true_nug"]
+    colors = _level_colors(DENSITY_LEVELS)
+    fig, rect = _new_figure(plot_height_mm=48.0, status_text=note, top_mm=8.0, left_mm=14.0, right_mm=28.0)
+    gs = fig.add_gridspec(1, 2, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3], wspace=0.25)
+    axA, axB = fig.add_subplot(gs[0, 0]), fig.add_subplot(gs[0, 1])
+    for lvl in DENSITY_LEVELS:
+        sub = df[df["axis_level"] == lvl]
+        kw = dict(s=P4_MARKER_S, color=colors[lvl], edgecolors="none", alpha=P4_ALPHA, zorder=3,
+                  marker=METHOD_MARKERS["gp_mle"])
+        axA.scatter(sub["abs_log_range_err"], sub["d_sgs"], **kw)
+        axB.scatter(sub["gp_noise_variance_normalized"], sub["d_sgs"], label=f"{dens['pct'][lvl]:g}%", **kw)
+    for ax in (axA, axB):
+        ax.axhline(0.0, color="0.5", linewidth=0.5, linestyle="--", zorder=1)
+        ax.grid(True)
+        ax.set_ylabel("UMG(GP-MLE) − UMG(SGS)")
+    axA.set_xlabel("|ln(GP practical range / true range)|")
+    axB.set_xscale("log")
+    axB.axvline(true_nug, color="0.3", linewidth=0.6, linestyle="--", zorder=1)
+    axB.set_xlabel("GP noise variance (fraction of sample variance)")
+    leg = axB.legend(title="Sample density", loc="upper left", bbox_to_anchor=(1.02, 1.0), borderaxespad=0.0,
+                     markerscale=2.0, handletextpad=0.2, title_fontsize=FONT_PT)
+    for hnd in leg.legend_handles:
+        hnd.set_alpha(1.0)
+    _panel_label(axA, "A", dx_pt=-30.0)
+    _panel_label(axB, "B", dx_pt=-30.0)
+    return fig
 
 
 # ---------------------------------------------------------------------------
@@ -580,8 +606,13 @@ def _ring_offsets(ax, xs, ys, ylog):
     """Deterministic jitter: markers sharing a plotted position are spread HORIZONTALLY only, centred on
     the node, P7_JITTER_DX axes-fraction apart (y stays exact, so a marker never drifts toward a
     neighbouring second-hyperparameter node). Returns jittered (x, y) and the number of shared positions."""
-    x0, x1 = ax.get_xlim()
-    y0, y1 = ax.get_ylim()
+    return _ring_offsets_lims(ax.get_xlim(), ax.get_ylim(), xs, ys, ylog)
+
+
+def _ring_offsets_lims(xlim, ylim, xs, ys, ylog):
+    """_ring_offsets for given axis limits (the compute step uses it with the limits draw_p7 sets)."""
+    x0, x1 = xlim
+    y0, y1 = ylim
     u = (np.log10(xs) - np.log10(x0)) / (np.log10(x1) - np.log10(x0))
     yy = np.log10(ys) if ylog else np.asarray(ys, float)
     ly0, ly1 = (np.log10(y0), np.log10(y1)) if ylog else (y0, y1)
@@ -605,8 +636,7 @@ def _ring_offsets(ax, xs, ys, ylog):
     return xj, yj, n_shared
 
 
-def figure_p7():
-    from matplotlib.ticker import LogFormatterMathtext, NullLocator
+def compute_p7():
     stem = "P7_per_truth_optima"
     prov, src, raw, summ, run_cfg = _f7_inputs()
     truths = sorted(raw["truth_seed"].unique())
@@ -634,43 +664,20 @@ def figure_p7():
         "side by side (horizontal jitter only; y exact). Open circle = true base-case point (kriging, SGS). Axes, "
         "scales and range-equivalent definition as F7; axis limits extend half a grid step beyond the outer nodes."
     )
-    fig, rect = _new_figure(plot_height_mm=34.0, status_text=note, top_mm=12.0, left_mm=14.0)
-    gs = fig.add_gridspec(1, 4, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3], wspace=0.42)
-    panels, limits_rows, shared = [], [], {}
+    panels, limits_rows, plot = [], [], {}
     for col, m in enumerate(F7_METHODS):
-        ax = fig.add_subplot(gs[0, col])
         xs = np.array(run_cfg["grids"][m]["range_levels_m"], float)
         ys = np.array(run_cfg["grids"][m]["param2_levels"], float)
+        # the axis limits draw_p7 sets (half a grid step beyond the outer nodes) -> shared-node count
         xe, ye = _f7_edges(xs, True), _f7_edges(ys, F7_YLOG[m])
-        ax.set_xscale("log")
-        if F7_YLOG[m]:
-            ax.set_yscale("log")
-            ax.yaxis.set_major_formatter(LogFormatterMathtext())
-        ax.set_xlim(xe[0], xe[-1])
-        ax.set_ylim(ye[0], ye[-1])
-        gx, gy = np.meshgrid(xs, ys)
-        ax.scatter(gx.ravel(), gy.ravel(), s=1.2, color="0.7", edgecolors="none", zorder=1)
-        col_c = METHOD_COLORS[P7_GP_COLOR_KEY.get(m, m)]
         n_sh = {}
-        for met, mk, face in (("mse", "v", col_c), ("umg", "^", "none")):
+        plot[m] = {"xs": xs, "ys": ys}
+        for met in ("mse", "umg"):
             px = np.array([res[(m, t, met)][0]["range_equiv_m"] for t in truths], float)
             py = np.array([res[(m, t, met)][0]["param2_value"] for t in truths], float)
-            jx, jy, n_sh[met] = _ring_offsets(ax, px, py, F7_YLOG[m])
-            ax.scatter(jx, jy, s=11, marker=mk, facecolors=face, edgecolors=col_c, linewidths=0.6, zorder=4,
-                       clip_on=False)
-        shared[m] = n_sh
-        if m in ("kriging", "sgs"):
-            ax.plot(*F7_TRUE_POINT, linestyle="none", marker="o", markersize=6, markerfacecolor="none",
-                    markeredgecolor="black", markeredgewidth=0.8, zorder=5)
-        ax.set_xticks(F7_XTICKS)
-        ax.set_xticklabels([str(t) for t in F7_XTICKS])
-        ax.xaxis.set_minor_locator(NullLocator())
-        ax.set_yticks(F7_YTICKS[m])
-        ax.yaxis.set_minor_locator(NullLocator())
-        ax.set_ylabel(F7_YLABELS[m])
-        ax.set_xlabel("Range equivalent (m)")
-        ax.set_title(F7_TITLES[m], fontweight="bold")
-        _panel_label(ax, "ABCD"[col], dx_pt=-30.0, dy_pt=10.0)
+            n_sh[met] = _ring_offsets_lims((xe[0], xe[-1]), (ye[0], ye[-1]), px, py, F7_YLOG[m])[2]
+            plot[m][f"{met}_x"], plot[m][f"{met}_y"] = px, py
+        plot[m]["n_shared"] = n_sh
 
         n_same = n_gt = n_lt = n_eq = 0
         per_truth = []
@@ -696,14 +703,6 @@ def figure_p7():
                        f"{o_mse['param2_value']:.4g}), UMG ({o_umg['range_equiv_m']:g} m, {o_umg['param2_value']:.4g}). "
                        f"Nodes shared by >= 2 truths (jittered): MSE {n_sh['mse']}, UMG {n_sh['umg']}"))
         limits_rows += [f"{m} ({run_cfg['param_names'][m][1]} on y):", *per_truth]
-    fig.legend(handles=[
-        Line2D([], [], linestyle="none", marker="v", markersize=4, markerfacecolor="0.3", markeredgecolor="0.3",
-               label="MSE optimum of one truth"),
-        Line2D([], [], linestyle="none", marker="^", markersize=4, markerfacecolor="none", markeredgecolor="0.3",
-               label="UMG optimum of one truth"),
-        Line2D([], [], linestyle="none", marker="o", markersize=5, markerfacecolor="none", markeredgecolor="black",
-               label=f"True base case ({truth_cfg['hmaj1']:g} m, {truth_cfg['nug']:g})"),
-    ], loc="upper center", bbox_to_anchor=(0.5, 1.0), ncol=3, borderaxespad=0.3)
     lines = _status(
         stem,
         inputs=[f"{prov['source_run']}/metrics.csv (per truth, per grid node; per-node means over truths re-derived "
@@ -721,7 +720,57 @@ def figure_p7():
                 "the node, y unchanged (MSE and UMG markers jittered separately); markers are not clipped at the axes edge.",
                 "per truth (range-equivalent m, param2):", *limits_rows],
     )
-    return _save(fig, stem, lines)
+    return {"note": note, "status_lines": lines, "panels": plot,
+            "truth_hmaj1": truth_cfg["hmaj1"], "truth_nug": truth_cfg["nug"]}
+
+
+def draw_p7(d):
+    from matplotlib.ticker import LogFormatterMathtext, NullLocator
+    note, truth_cfg = d["note"], {"hmaj1": d["truth_hmaj1"], "nug": d["truth_nug"]}
+    fig, rect = _new_figure(plot_height_mm=34.0, status_text=note, top_mm=12.0, left_mm=14.0)
+    gs = fig.add_gridspec(1, 4, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3], wspace=0.42)
+    for col, m in enumerate(F7_METHODS):
+        ax = fig.add_subplot(gs[0, col])
+        p = d["panels"][m]
+        xs, ys = p["xs"], p["ys"]
+        xe, ye = _f7_edges(xs, True), _f7_edges(ys, F7_YLOG[m])
+        ax.set_xscale("log")
+        if F7_YLOG[m]:
+            ax.set_yscale("log")
+            ax.yaxis.set_major_formatter(LogFormatterMathtext())
+        ax.set_xlim(xe[0], xe[-1])
+        ax.set_ylim(ye[0], ye[-1])
+        gx, gy = np.meshgrid(xs, ys)
+        ax.scatter(gx.ravel(), gy.ravel(), s=1.2, color="0.7", edgecolors="none", zorder=1)
+        col_c = METHOD_COLORS[P7_GP_COLOR_KEY.get(m, m)]
+        for met, mk, face in (("mse", "v", col_c), ("umg", "^", "none")):
+            jx, jy, n_shared = _ring_offsets(ax, p[f"{met}_x"], p[f"{met}_y"], F7_YLOG[m])
+            if n_shared != p["n_shared"][met]:
+                raise ValueError(f"P7 {m} {met}: {n_shared} shared nodes as drawn, {p['n_shared'][met]} in the "
+                                 "status file (axis limits changed? recompute without --draw-only)")
+            ax.scatter(jx, jy, s=11, marker=mk, facecolors=face, edgecolors=col_c, linewidths=0.6, zorder=4,
+                       clip_on=False)
+        if m in ("kriging", "sgs"):
+            ax.plot(*F7_TRUE_POINT, linestyle="none", marker="o", markersize=6, markerfacecolor="none",
+                    markeredgecolor="black", markeredgewidth=0.8, zorder=5)
+        ax.set_xticks(F7_XTICKS)
+        ax.set_xticklabels([str(t) for t in F7_XTICKS])
+        ax.xaxis.set_minor_locator(NullLocator())
+        ax.set_yticks(F7_YTICKS[m])
+        ax.yaxis.set_minor_locator(NullLocator())
+        ax.set_ylabel(F7_YLABELS[m])
+        ax.set_xlabel("Range equivalent (m)")
+        ax.set_title(F7_TITLES[m], fontweight="bold")
+        _panel_label(ax, "ABCD"[col], dx_pt=-30.0, dy_pt=10.0)
+    fig.legend(handles=[
+        Line2D([], [], linestyle="none", marker="v", markersize=4, markerfacecolor="0.3", markeredgecolor="0.3",
+               label="MSE optimum of one truth"),
+        Line2D([], [], linestyle="none", marker="^", markersize=4, markerfacecolor="none", markeredgecolor="0.3",
+               label="UMG optimum of one truth"),
+        Line2D([], [], linestyle="none", marker="o", markersize=5, markerfacecolor="none", markeredgecolor="black",
+               label=f"True base case ({truth_cfg['hmaj1']:g} m, {truth_cfg['nug']:g})"),
+    ], loc="upper center", bbox_to_anchor=(0.5, 1.0), ncol=3, borderaxespad=0.3)
+    return fig
 
 
 def _pareto(mse, umg):
@@ -735,7 +784,7 @@ def _pareto(mse, umg):
     return np.array(idx, int)
 
 
-def figure_p7b():
+def compute_p7b():
     stem = "P7b_mse_umg_pareto"
     prov, src, raw, summ, run_cfg = _f7_inputs()
     opt = pd.read_csv(F7_OPTIMA)
@@ -747,11 +796,8 @@ def figure_p7b():
         f"node ({F7_TRUE_POINT[0]:g} m, nugget {F7_TRUE_POINT[1]:g}) for kriging and SGS. x log scale where max/min MSE ≥ "
         f"{RATIO_LOG_THRESHOLD:g}."
     )
-    fig, rect = _new_figure(plot_height_mm=36.0, status_text=note, top_mm=12.0, left_mm=13.0)
-    gs = fig.add_gridspec(1, 4, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3], wspace=0.38)
-    panels = []
+    panels, plot = [], {}
     for col, m in enumerate(F7_METHODS):
-        ax = fig.add_subplot(gs[0, col])
         a = summ[(summ.method == m) & (summ.metric == "mse")].set_index(["grid_i", "grid_j"])
         b = summ[(summ.method == m) & (summ.metric == "umg")].set_index(["grid_i", "grid_j"])
         d = a[["range_equiv_m", "param2_name", "param2_value", "mean"]].rename(columns={"mean": "mse"}).join(
@@ -761,55 +807,34 @@ def figure_p7b():
         mse, umg = d["mse"].values, d["umg"].values
         pi = _pareto(mse, umg)
         pf = d.iloc[pi].sort_values("mse")
-        c = METHOD_COLORS[P7_GP_COLOR_KEY.get(m, m)]
-        ax.scatter(mse, umg, s=5, facecolors="none", edgecolors=c, linewidths=0.4, alpha=0.6, zorder=2)
-        ax.step(pf["mse"], pf["umg"], where="post", color=c, linewidth=0.9, zorder=3)
-        ax.scatter(pf["mse"], pf["umg"], s=9, color=c, edgecolors="none", zorder=4)
         i_mse, i_umg = int(np.argmin(mse)), int(np.argmax(umg))
-        for (ii, crit, mk) in ((i_mse, "mse", "v"), (i_umg, "umg", "^")):
+        optima = {}
+        for (ii, crit) in ((i_mse, "mse"), (i_umg, "umg")):
             o = opt[(opt.method == m) & (opt.metric == crit)].iloc[0]
             r = d.iloc[ii]
             if not (np.isclose(r["range_equiv_m"], o["range_equiv_m"]) and np.isclose(r["param2_value"],
                                                                                          o["param2_value"])):
                 raise ValueError(f"P7b {m} {crit}: argmin/argmax node != optima.csv")
-            ax.plot(r["mse"], r["umg"], linestyle="none", marker=mk, markersize=5, markerfacecolor="black",
-                    markeredgecolor="white", markeredgewidth=0.3, zorder=6)
-        true_txt = ""
+            optima[crit] = [float(r["mse"]), float(r["umg"])]
+        true_txt, true_pt = "", None
         if m in ("kriging", "sgs"):
             t = d[np.isclose(d["range_equiv_m"], F7_TRUE_POINT[0]) & np.isclose(d["param2_value"], F7_TRUE_POINT[1])]
             if len(t) != 1:
                 raise ValueError(f"P7b {m}: true node not on the grid")
             t = t.iloc[0]
-            ax.plot(t["mse"], t["umg"], linestyle="none", marker="o", markersize=6, markerfacecolor="none",
-                    markeredgecolor="black", markeredgewidth=0.8, zorder=5)
+            true_pt = [float(t["mse"]), float(t["umg"])]
             on_front = bool(((pf["range_equiv_m"] == t["range_equiv_m"]) & (pf["param2_value"] == t["param2_value"])).any())
             true_txt = (f"; true node ({F7_TRUE_POINT[0]:g} m, {F7_TRUE_POINT[1]:g}): MSE {t['mse']:.4f}, UMG "
                         f"{t['umg']:.4f}, on the non-dominated set: {'yes' if on_front else 'no'}")
-        if mse.max() / mse.min() >= RATIO_LOG_THRESHOLD:
-            ax.set_xscale("log")
-        ax.set_xlabel(MSE_LABEL)
-        ax.set_ylabel("UMG" if col else UMG_LABEL)
-        ax.set_title(F7_TITLES[m], fontweight="bold")
-        ax.grid(True)
-        _panel_label(ax, "ABCD"[col], dx_pt=-28.0, dy_pt=10.0)
-        pn = d.columns  # noqa: F841
+        x_log = bool(mse.max() / mse.min() >= RATIO_LOG_THRESHOLD)
+        plot[m] = {"nodes": d[["mse", "umg"]], "front": pf[["mse", "umg"]], "optima": optima, "true_point": true_pt,
+                   "x_log": x_log}
         panels.append((f"{'ABCD'[col]} {m}",
                        f"{len(d)} nodes, {len(pf)} non-dominated ({run_cfg['param_names'][m][1]} = param2); MSE range "
                        f"{mse.min():.4f}-{mse.max():.4f} ({'log' if mse.max() / mse.min() >= RATIO_LOG_THRESHOLD else 'linear'} x), "
                        f"UMG range {umg.min():.4f}-{umg.max():.4f}" + true_txt + ". Non-dominated nodes (sorted by "
                        "MSE): " + "; ".join(f"({r.range_equiv_m:g} m, {r.param2_value:.4g}) MSE {r.mse:.4f} UMG "
                                            f"{r.umg:.4f}" for r in pf.itertuples())))
-    fig.legend(handles=[
-        Line2D([], [], linestyle="none", marker="o", markersize=3, markerfacecolor="none", markeredgecolor="0.4",
-               markeredgewidth=0.5, label="Grid node (10-truth mean)"),
-        Line2D([], [], color="0.4", marker="o", markersize=3, linewidth=0.9, label="Non-dominated nodes"),
-        Line2D([], [], linestyle="none", marker="v", markersize=4, markerfacecolor="black", markeredgecolor="black",
-               label="MSE optimum"),
-        Line2D([], [], linestyle="none", marker="^", markersize=4, markerfacecolor="black", markeredgecolor="black",
-               label="UMG optimum"),
-        Line2D([], [], linestyle="none", marker="o", markersize=5, markerfacecolor="none", markeredgecolor="black",
-               label=f"True node ({F7_TRUE_POINT[0]:g} m, {F7_TRUE_POINT[1]:g})"),
-    ], loc="upper center", bbox_to_anchor=(0.5, 1.0), ncol=5, borderaxespad=0.3)
     lines = _status(
         stem,
         inputs=[_rel(F7_SUMMARY) + f" (per-node mean over truths; re-derived from {prov['source_run']}/metrics.csv "
@@ -823,17 +848,59 @@ def figure_p7b():
                 "GP panel = the F7 grid's fixed-hyperparameter GP (method 'gp'), drawn in the GP-MLE colour.",
                 "the RBF / GP grids have no exact 'true node'; none is marked for them."],
     )
-    return _save(fig, stem, lines)
+    return {"note": note, "status_lines": lines, "panels": plot}
 
 
+def draw_p7b(d):
+    fig, rect = _new_figure(plot_height_mm=36.0, status_text=d["note"], top_mm=12.0, left_mm=13.0)
+    gs = fig.add_gridspec(1, 4, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3], wspace=0.38)
+    for col, m in enumerate(F7_METHODS):
+        ax = fig.add_subplot(gs[0, col])
+        p = d["panels"][m]
+        mse, umg = p["nodes"]["mse"].values, p["nodes"]["umg"].values
+        pf = p["front"]
+        c = METHOD_COLORS[P7_GP_COLOR_KEY.get(m, m)]
+        ax.scatter(mse, umg, s=5, facecolors="none", edgecolors=c, linewidths=0.4, alpha=0.6, zorder=2)
+        ax.step(pf["mse"], pf["umg"], where="post", color=c, linewidth=0.9, zorder=3)
+        ax.scatter(pf["mse"], pf["umg"], s=9, color=c, edgecolors="none", zorder=4)
+        for crit, mk in (("mse", "v"), ("umg", "^")):
+            x, y = p["optima"][crit]
+            ax.plot(x, y, linestyle="none", marker=mk, markersize=5, markerfacecolor="black",
+                    markeredgecolor="white", markeredgewidth=0.3, zorder=6)
+        if p["true_point"] is not None:
+            ax.plot(p["true_point"][0], p["true_point"][1], linestyle="none", marker="o", markersize=6,
+                    markerfacecolor="none", markeredgecolor="black", markeredgewidth=0.8, zorder=5)
+        if p["x_log"]:
+            ax.set_xscale("log")
+        ax.set_xlabel(MSE_LABEL)
+        ax.set_ylabel("UMG" if col else UMG_LABEL)
+        ax.set_title(F7_TITLES[m], fontweight="bold")
+        ax.grid(True)
+        _panel_label(ax, "ABCD"[col], dx_pt=-28.0, dy_pt=10.0)
+    fig.legend(handles=[
+        Line2D([], [], linestyle="none", marker="o", markersize=3, markerfacecolor="none", markeredgecolor="0.4",
+               markeredgewidth=0.5, label="Grid node (10-truth mean)"),
+        Line2D([], [], color="0.4", marker="o", markersize=3, linewidth=0.9, label="Non-dominated nodes"),
+        Line2D([], [], linestyle="none", marker="v", markersize=4, markerfacecolor="black", markeredgecolor="black",
+               label="MSE optimum"),
+        Line2D([], [], linestyle="none", marker="^", markersize=4, markerfacecolor="black", markeredgecolor="black",
+               label="UMG optimum"),
+        Line2D([], [], linestyle="none", marker="o", markersize=5, markerfacecolor="none", markeredgecolor="black",
+               label=f"True node ({F7_TRUE_POINT[0]:g} m, {F7_TRUE_POINT[1]:g})"),
+    ], loc="upper center", bbox_to_anchor=(0.5, 1.0), ncol=5, borderaxespad=0.3)
+    return fig
+
+
+# (key, stem, compute, shared input, draw) - same layout as make_storyboard_figures.FIGURES
 JOBS = (
-    ("P1", figure_p1, "mt"),
-    ("P3", figure_p3, "mt"),
-    ("P4", figure_p4, "mt"),
-    ("P7", figure_p7, None),
-    ("P7b", figure_p7b, None),
+    ("P1", "P1_range_truth_realization_stats", compute_p1, "mt", draw_p1),
+    ("P3", "P3_density_umg_distribution", compute_p3, "mt", draw_p3),
+    ("P4", "P4_gp_param_error_vs_umg_loss", compute_p4, "mt", draw_p4),
+    ("P7", "P7_per_truth_optima", compute_p7, None, draw_p7),
+    ("P7b", "P7b_mse_umg_pareto", compute_p7b, None, draw_p7b),
 )
 
 
 if __name__ == "__main__":
-    sb.main(sys.argv[1:] or [name for name, _, _ in JOBS])
+    # same flags as make_storyboard_figures (--draw-only, --only KEY ...); default = the P* figures only
+    sb.main(default_keys=[key for key, *_ in JOBS])

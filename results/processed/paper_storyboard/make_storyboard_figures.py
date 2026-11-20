@@ -44,8 +44,33 @@ Conventions
   labels, and dashed/hollow artists. Their curve shapes are arbitrary seeded
   smooth curves that carry NO expected-result meaning (see _schematic_curves).
 
+Compute / draw split (user request 2026-11-20)
+---------------------------------------------
+Every figure (and every diagnostic P* figure of make_storyboard_diagnostics.py)
+is a pair registered in FIGURES / make_storyboard_diagnostics.JOBS:
+  * compute_<fig>(...) reads the inputs, runs every consistency check and
+    calculation and returns a plain dict with exactly what the plot needs, plus
+    the DATA STATUS note and the .status.txt lines;
+  * draw_<fig>(d) only draws from that dict (matplotlib, layout, styling).
+The dict is cached by plot_cache.py in results/processed/paper_storyboard/plot_data/
+(<stem>.json + <stem>.<table>.csv + <stem>.npz; the json "meta" block records the
+git commit and every input file read, with size / mtime / sha256). A full run
+draws from the reloaded cache too, so a --draw-only run produces the same bytes.
+Layout-only edits go into draw_*; anything that changes numbers or status text
+goes into compute_* and needs a run without --draw-only.
+
 Run with:
 .venv/Scripts/python.exe -m results.processed.paper_storyboard.make_storyboard_figures
+    compute + draw all figures F1-F7 and P1-P7b (slow: regenerates truth maps etc.)
+... make_storyboard_figures --only F7 F3c
+    compute + draw the named figures only (keys: F1 F2 F3 F3-2 F3-2b F3c F3d F4 F5 F6 F7
+    P1 P3 P4 P7 P7b; bare positional keys, as in older commands, also work)
+... make_storyboard_figures --draw-only [--only F7 ...]
+    redraw from plot_data/ only (seconds; nothing is read from the inputs). Fails with
+    a clear message if a selected figure has no cache; warns if an input file recorded
+    in the cache has changed since it was computed.
+... make_storyboard_diagnostics [--draw-only] [--only P7b ...]
+    same flags, defaults to the P* figures.
 """
 
 import json
@@ -64,13 +89,16 @@ from matplotlib.lines import Line2D  # noqa: E402
 _REPO_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(_REPO_ROOT))
 
-from src.evaluation import calc_umg  # noqa: E402
-from src.experiments.base_case import NX, NY  # noqa: E402
-from src.experiments.evaluate_multi_truth_axes import read_metrics_csv  # noqa: E402
-from src.experiments.evaluate_sample_replicate_axis import (  # noqa: E402
-    VARIANCE_SOURCE_FILES,
-    VARIANCE_SOURCE_IS_MC_BACKTRANSFORM,
-)
+from results.processed.paper_storyboard import plot_cache  # noqa: E402
+
+# src.* modules (geostatspy / numba / scipy.stats / sklearn chains) are imported
+# lazily inside the COMPUTE functions only, so a --draw-only run never pays for them.
+
+
+def read_metrics_csv(path):
+    """src.experiments.evaluate_multi_truth_axes.read_metrics_csv, imported on first use."""
+    from src.experiments.evaluate_multi_truth_axes import read_metrics_csv as _read
+    return _read(path)
 
 PROCESSED = _REPO_ROOT / "results" / "processed"
 FIGURES_DIR = _REPO_ROOT / "results" / "figures" / "paper_storyboard"
@@ -524,6 +552,7 @@ def _load_multi_truth() -> dict:
     Error bars everywhere in F1-F3 are the evaluator's POOLED mean / std
     (ddof=1) over all cells of a level (metrics_summary.csv); this is
     re-derived from metrics.csv and asserted equal."""
+    from src.experiments.base_case import NX, NY
     prov = json.loads(MTA_PROV.read_text(encoding="utf-8"))
     if len(prov["batch_sets"]) != 1 or len(prov["sources"]) != 1:
         raise ValueError(f"{_rel(MTA_PROV)}: expected one source and one batch set.")
@@ -709,7 +738,13 @@ def _mt_common_limits(mt):
 # ---------------------------------------------------------------------------
 # F1
 # ---------------------------------------------------------------------------
-def figure_f1(mt):
+def _plot_summary(summ) -> pd.DataFrame:
+    """The columns of a metrics summary the density / level plots draw."""
+    return summ[["axis_level", "method", "metric", "mean", "std"]]
+
+
+def compute_f1(mt):
+    from src.experiments.base_case import NX, NY
     stem = "F1_accuracy_vs_calibration_three_axes"
     ex = mt["exp"]
     dens = mt["dens"]
@@ -724,47 +759,9 @@ def figure_f1(mt):
         f"{rn_txt}. Density axis: {_mt_axis_text(ex['density'])}. "
         f"Points = mean over all cells of a level (no error bars). {_mt_ensemble_text(mt)}."
     )
-    fig, rect = _new_figure(plot_height_mm=84.0, status_text=note, top_mm=13.0)
-    gs = fig.add_gridspec(2, 3, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3],
-                          wspace=0.24, hspace=0.16)
-    axes = np.empty((2, 3), dtype=object)
-    for c in range(3):
-        axes[0, c] = fig.add_subplot(gs[0, c])
-        axes[1, c] = fig.add_subplot(gs[1, c], sharex=axes[0, c],
-                                     sharey=axes[1, 0] if c > 0 else None)
-
-    level_cols = [
-        (ex["range"]["summary"], "Ground-truth variogram range (m)"),
-        (ex["nugget"]["summary"], "Ground-truth nugget (fraction of sill)"),
-    ]
-    level_values = []
-    for c, (summ, xlabel) in enumerate(level_cols):
-        for r, metric in enumerate(["mse", "umg"]):
-            lv = _plot_level_metric(axes[r, c], summ, metric, errorbars=False)
-        level_values.append(lv)
-        axes[1, c].set_xlabel(xlabel)
-    for r, metric in enumerate(["mse", "umg"]):
-        _plot_density_metric(axes[r, 2], ex["density"]["summary"], dens, metric, errorbars=False)
-    _style_density_axis(axes[1, 2], dens, xlabel=False)
-    axes[1, 2].set_xlabel(DENSITY_XLABEL_SHORT)
-
-    for c in range(3):
-        axes[1, c].axhline(1.0, color="gray", linestyle="--", linewidth=0.6, zorder=1)
-        plt.setp(axes[0, c].get_xticklabels(), visible=False)
-        if c > 0:
-            plt.setp(axes[1, c].get_yticklabels(), visible=False)
-        for r in range(2):
-            axes[r, c].grid(True)
-    axes[0, 0].set_ylabel(MSE_LABEL)
-    axes[1, 0].set_ylabel(UMG_LABEL)
-    for ax, letter in zip(axes.ravel(), "ABCDEF"):
-        _panel_label(ax, letter, dx_pt=-20.0 if letter in "AD" else -8.0)
-
-    handles = _method_handles() + [
-        Line2D([0], [0], color="gray", linestyle="--", linewidth=0.6, label="Ideal (UMG = 1)")
-    ]
-    fig.legend(handles=handles, loc="upper center", ncol=5, bbox_to_anchor=(0.5, 1.0),
-               columnspacing=1.8)
+    # level values exactly as _plot_level_metric derives its x ticks
+    level_values = [np.array(sorted(ex[a]["summary"]["axis_level"].astype(float).unique()))
+                    for a in ("range", "nugget")]
 
     er, en, ed = ex["range"], ex["nugget"], ex["density"]
     lines = _status_file(
@@ -807,13 +804,62 @@ def figure_f1(mt):
             "UMG density axis: " + _density_table(ed["summary"], "umg"),
         ],
     )
-    return _save(fig, stem, lines)
+    return {"note": note, "status_lines": lines, "pct": dens["pct"],
+            "summ_range": _plot_summary(er["summary"]), "summ_nugget": _plot_summary(en["summary"]),
+            "summ_density": _plot_summary(ed["summary"])}
+
+
+def draw_f1(d):
+    dens = {"pct": d["pct"]}
+    fig, rect = _new_figure(plot_height_mm=84.0, status_text=d["note"], top_mm=13.0)
+    gs = fig.add_gridspec(2, 3, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3],
+                          wspace=0.24, hspace=0.16)
+    axes = np.empty((2, 3), dtype=object)
+    for c in range(3):
+        axes[0, c] = fig.add_subplot(gs[0, c])
+        axes[1, c] = fig.add_subplot(gs[1, c], sharex=axes[0, c],
+                                     sharey=axes[1, 0] if c > 0 else None)
+
+    level_cols = [
+        (d["summ_range"], "Ground-truth variogram range (m)"),
+        (d["summ_nugget"], "Ground-truth nugget (fraction of sill)"),
+    ]
+    for c, (summ, xlabel) in enumerate(level_cols):
+        for r, metric in enumerate(["mse", "umg"]):
+            _plot_level_metric(axes[r, c], summ, metric, errorbars=False)
+        axes[1, c].set_xlabel(xlabel)
+    for r, metric in enumerate(["mse", "umg"]):
+        _plot_density_metric(axes[r, 2], d["summ_density"], dens, metric, errorbars=False)
+    _style_density_axis(axes[1, 2], dens, xlabel=False)
+    axes[1, 2].set_xlabel(DENSITY_XLABEL_SHORT)
+
+    for c in range(3):
+        axes[1, c].axhline(1.0, color="gray", linestyle="--", linewidth=0.6, zorder=1)
+        plt.setp(axes[0, c].get_xticklabels(), visible=False)
+        if c > 0:
+            plt.setp(axes[1, c].get_yticklabels(), visible=False)
+        for r in range(2):
+            axes[r, c].grid(True)
+    axes[0, 0].set_ylabel(MSE_LABEL)
+    axes[1, 0].set_ylabel(UMG_LABEL)
+    for ax, letter in zip(axes.ravel(), "ABCDEF"):
+        _panel_label(ax, letter, dx_pt=-20.0 if letter in "AD" else -8.0)
+
+    handles = _method_handles() + [
+        Line2D([0], [0], color="gray", linestyle="--", linewidth=0.6, label="Ideal (UMG = 1)")
+    ]
+    fig.legend(handles=handles, loc="upper center", ncol=5, bbox_to_anchor=(0.5, 1.0),
+               columnspacing=1.8)
+    return fig
 
 
 # ---------------------------------------------------------------------------
 # F2
 # ---------------------------------------------------------------------------
-def figure_f2(mt):
+def compute_f2(mt):
+    from src.evaluation import calc_umg
+    from src.experiments.evaluate_sample_replicate_axis import (
+        VARIANCE_SOURCE_FILES, VARIANCE_SOURCE_IS_MC_BACKTRANSFORM)
     stem = "F2_base_case_calibration_and_variance"
     ex = mt["exp"]
     dens = mt["dens"]
@@ -870,37 +916,6 @@ def figure_f2(mt):
         f"B: {_mt_axis_text(ed)}; points = mean over all cells of a level (no error bars). All variances in porosity %² – {mc_txt}. "
         f"{_mt_ensemble_text(mt)}."
     )
-    fig, rect = _new_figure(plot_height_mm=62.0, status_text=note, top_mm=12.0)
-    gs = fig.add_gridspec(1, 2, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3],
-                          wspace=0.24, width_ratios=[1.0, 1.35])
-    ax_a = fig.add_subplot(gs[0, 0])
-    ax_b = fig.add_subplot(gs[0, 1])
-
-    ax_a.plot([0, 1], [0, 1], color="gray", linestyle="--", linewidth=0.6, zorder=1)
-    for method in METHODS:
-        sub = curves[curves["method"] == method].sort_values("p_interval")
-        ax_a.plot(sub["p_interval"], sub["fraction_in"], color=METHOD_COLORS[method],
-                  marker=METHOD_MARKERS[method], markersize=2.6)
-    ax_a.set_xlim(0, 1)
-    ax_a.set_ylim(0, 1)
-    ax_a.set_aspect("equal", adjustable="box")
-    ax_a.set_xlabel("Nominal probability interval")
-    ax_a.set_ylabel("Fraction of truth in interval")
-    ax_a.grid(True)
-
-    _plot_density_metric(ax_b, ed["summary"], dens, "variance_mean", errorbars=False)
-    _style_density_axis(ax_b, dens)
-    ax_b.set_ylabel("Mean predictive variance (porosity %²)")
-    ax_b.grid(True)
-
-    _panel_label(ax_a, "A")
-    _panel_label(ax_b, "B")
-    handles = _method_handles() + [
-        Line2D([0], [0], color="gray", linestyle="--", linewidth=0.6, label="Ideal (1:1), panel A")
-    ]
-    fig.legend(handles=handles, loc="upper center", ncol=5, bbox_to_anchor=(0.5, 1.0),
-               columnspacing=1.8)
-
     lines = _status_file(
         stem,
         inputs=[
@@ -936,7 +951,47 @@ def figure_f2(mt):
             "panel B plotted values (level mean+-std): " + _density_table(ed["summary"], "variance_mean"),
         ],
     )
-    return _save(fig, stem, lines)
+    return {"note": note, "status_lines": lines, "pct": dens["pct"],
+            "curves": curves[["method", "p_interval", "fraction_in"]],
+            "summ_density": _plot_summary(ed["summary"])}
+
+
+def draw_f2(d):
+    dens = {"pct": d["pct"]}
+    curves = d["curves"]
+    note = d["note"]
+    fig, rect = _new_figure(plot_height_mm=62.0, status_text=note, top_mm=12.0)
+    gs = fig.add_gridspec(1, 2, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3],
+                          wspace=0.24, width_ratios=[1.0, 1.35])
+    ax_a = fig.add_subplot(gs[0, 0])
+    ax_b = fig.add_subplot(gs[0, 1])
+
+    ax_a.plot([0, 1], [0, 1], color="gray", linestyle="--", linewidth=0.6, zorder=1)
+    for method in METHODS:
+        sub = curves[curves["method"] == method].sort_values("p_interval")
+        ax_a.plot(sub["p_interval"], sub["fraction_in"], color=METHOD_COLORS[method],
+                  marker=METHOD_MARKERS[method], markersize=2.6)
+    ax_a.set_xlim(0, 1)
+    ax_a.set_ylim(0, 1)
+    ax_a.set_aspect("equal", adjustable="box")
+    ax_a.set_xlabel("Nominal probability interval")
+    ax_a.set_ylabel("Fraction of truth in interval")
+    ax_a.grid(True)
+
+    _plot_density_metric(ax_b, d["summ_density"], dens, "variance_mean", errorbars=False)
+    _style_density_axis(ax_b, dens)
+    ax_b.set_ylabel("Mean predictive variance (porosity %²)")
+    ax_b.grid(True)
+
+    _panel_label(ax_a, "A")
+    _panel_label(ax_b, "B")
+    handles = _method_handles() + [
+        Line2D([0], [0], color="gray", linestyle="--", linewidth=0.6, label="Ideal (1:1), panel A")
+    ]
+    fig.legend(handles=handles, loc="upper center", ncol=5, bbox_to_anchor=(0.5, 1.0),
+               columnspacing=1.8)
+
+    return fig
 
 
 # ---------------------------------------------------------------------------
@@ -955,7 +1010,7 @@ def _load_gp_lengths() -> pd.DataFrame:
 # ---------------------------------------------------------------------------
 # F3
 # ---------------------------------------------------------------------------
-def figure_f3(mt):
+def compute_f3(mt):
     stem = "F3_gp_vs_sample_density"
     ed = mt["exp"]["density"]
     dens = mt["dens"]
@@ -967,12 +1022,10 @@ def figure_f3(mt):
     spread = float(max(gp["value"].max(), fits["fit_range_m"].max())
                    / min(gp["value"].min(), fits["fit_range_m"].min()))
     use_log = spread >= RATIO_LOG_THRESHOLD
-    faded = ("sgs", "rbf_bootstrap", "sgs_inferred")
     if "coverage90" not in set(summ["metric"]):
         raise ValueError(f"{_rel(MTA_SUMMARY)} has no coverage90 for {ed['experiment']}.")
     # row 2 data: inferred kriging / SGS + the SAME GP-MLE rows as row 1
     summ2 = pd.concat([summ[summ["method"] == "gp_mle"], inf["summary"]], ignore_index=True)
-    row2_methods = INF_METHODS + ["gp_mle"]
 
     note = (
         f"{_mt_axis_text(ed)} (ground-truth range {dens['truth_range_m']:g} m); A–C, B-2, C-2: {_mt_bar_text()}; "
@@ -987,99 +1040,6 @@ def figure_f3(mt):
         f"the two range definitions differ; max/min over all points = {spread:.1f}×, "
         f"{'log' if use_log else 'linear'} y axis. {_mt_ensemble_text(mt)}."
     )
-    fig, rect = _new_figure(plot_height_mm=2 * F3_PLOT_HEIGHT_MM + 16.0, status_text=note, top_mm=14.0,
-                            right_mm=F3_RIGHT_MM)
-    gs = fig.add_gridspec(2, 4, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3], wspace=0.42,
-                          hspace=16.0 / F3_PLOT_HEIGHT_MM)
-    ax_a, ax_b, ax_c, ax_d = (fig.add_subplot(gs[0, i]) for i in range(4))
-    ax_b2, ax_c2 = fig.add_subplot(gs[1, 1]), fig.add_subplot(gs[1, 2])
-    ax_leg2 = fig.add_subplot(gs[1, 3])
-    ax_leg2.axis("off")
-
-    _plot_density_metric(ax_a, summ, dens, "mse", faded=faded)
-    # B and C omit RBF+bootstrap (its UMG ~0.5 / coverage ~0.45 compresses the
-    # y range of the other methods); its values are in the status file.
-    bc_methods = [m for m in METHODS if m not in F3_BC_OMIT]
-    _plot_density_metric(ax_b, summ, dens, "umg", methods=bc_methods, faded=faded)
-    _plot_density_metric(ax_c, summ, dens, "coverage90", methods=bc_methods, faded=faded)
-    _plot_density_metric(ax_b2, summ2, dens, "umg", methods=row2_methods, faded=faded)
-    _plot_density_metric(ax_c2, summ2, dens, "coverage90", methods=row2_methods, faded=faded)
-    for ax in (ax_b, ax_b2):
-        ax.axhline(1.0, color="gray", linestyle="--", linewidth=0.6, zorder=1)
-        ax.set_ylabel(UMG_LABEL)
-    for ax in (ax_c, ax_c2):
-        ax.axhline(COV90_NOMINAL, color="gray", linestyle="--", linewidth=0.6, zorder=1)
-        ax.set_ylabel(COV90_LABEL)
-    ax_a.set_ylabel(MSE_LABEL)
-    # B-2 / C-2 share B / C's y range (union of the autoscaled ranges)
-    for pair in ((ax_b, ax_b2), (ax_c, ax_c2)):
-        lo = min(a.get_ylim()[0] for a in pair)
-        hi = max(a.get_ylim()[1] for a in pair)
-        for a in pair:
-            a.set_ylim(lo, hi)
-
-    # Deterministic (non-random) horizontal spread of the per-cell points,
-    # ordered by (truth_seed, sample_rep); GP-MLE shifted left, inferred
-    # spherical range shifted right.
-    spread_frac = np.linspace(-F3_D_SPLIT_SPREAD, F3_D_SPLIT_SPREAD, n_per)
-    for lvl in DENSITY_LEVELS:
-        sub = gp[gp["axis_level"] == lvl].sort_values(["truth_seed", "sample_rep"])
-        ax_d.scatter(
-            dens["pct"][lvl] * (1.0 - F3_D_SPLIT_SHIFT + spread_frac), sub["value"],
-            s=F3_D_MARKER_S, marker=METHOD_MARKERS["gp_mle"], facecolors=METHOD_COLORS["gp_mle"],
-            edgecolors="none", alpha=F3_D_ALPHA, zorder=3,
-        )
-        fsub = fits[fits["axis_level"] == lvl].sort_values(["truth_seed", "sample_rep"])
-        ax_d.scatter(
-            dens["pct"][lvl] * (1.0 + F3_D_SPLIT_SHIFT + spread_frac), fsub["fit_range_m"],
-            s=F3_D_MARKER_S, marker="o", facecolors=F3_D_INF_COLOR,
-            edgecolors="none", alpha=F3_D_ALPHA, zorder=3,
-        )
-    ax_d.axhline(dens["truth_range_m"], color="black", linestyle="--", linewidth=0.7, zorder=2)
-    if use_log:
-        ax_d.set_yscale("log")
-        # plain-number major ticks inside the data range (default log ticks
-        # label only 10^2 here)
-        lo, hi = ax_d.get_ylim()
-        ticks = [t for t in F3_D_LOG_TICKS if lo <= t <= hi]
-        ax_d.set_yticks(ticks)
-        ax_d.set_yticklabels([f"{t:g}" for t in ticks])
-        ax_d.yaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
-    else:
-        ax_d.set_ylim(bottom=0)
-    ax_d.set_ylabel("Fitted range (m)")
-
-    for ax, letter in zip((ax_a, ax_b, ax_c, ax_d, ax_b2, ax_c2), ("A", "B", "C", "D", "B-2", "C-2")):
-        _style_density_axis(ax, dens, xlabel=False)
-        ax.set_xlabel(DENSITY_XLABEL_SHORT)
-        ax.grid(True)
-        _panel_label(ax, letter)
-
-    # Panel y axes are autoscaled (errorbar includes the +-1 std bars) then
-    # unioned per pair; verify nothing is clipped.
-    for ax, s_, ms, metric, name in (
-            (ax_b, summ, bc_methods, "umg", "B"), (ax_c, summ, bc_methods, "coverage90", "C"),
-            (ax_b2, summ2, row2_methods, "umg", "B-2"), (ax_c2, summ2, row2_methods, "coverage90", "C-2")):
-        r = s_[(s_["metric"] == metric) & (s_["method"].isin(ms))]
-        lo_, hi_ = float((r["mean"] - r["std"]).min()), float((r["mean"] + r["std"]).max())
-        yl = ax.get_ylim()
-        if yl[0] > lo_ or yl[1] < hi_:
-            raise ValueError(f"panel {name} y range {yl} clips the mean +-1 std range [{lo_}, {hi_}].")
-
-    handles = _method_handles(faded=faded) + [
-        Line2D([0], [0], color="gray", linestyle="--", linewidth=0.6, label="Ideal (UMG = 1)"),
-        Line2D([0], [0], color="gray", linestyle="--", linewidth=0.6,
-               label=f"Nominal ({COV90_NOMINAL:.2f})"),
-        Line2D([0], [0], color="black", linestyle="--", linewidth=0.7,
-               label=f"Ground-truth range ({dens['truth_range_m']:g} m)"),
-        Line2D([0], [0], color=F3_D_INF_COLOR, marker="o", linestyle="none", markersize=3.0,
-               label="D: kriging/SGS inferred range (spherical)"),
-    ]
-    fig.legend(handles=handles, loc="upper center", ncol=4, bbox_to_anchor=(0.5, 1.0),
-               columnspacing=1.4)
-    ax_leg2.legend(handles=_method_handles(methods=row2_methods, faded=faded),
-                   loc="center", title="B-2, C-2", frameon=False)
-
     per_level = gp.groupby("axis_level")["value"].describe(percentiles=[0.5]).loc[DENSITY_LEVELS]
     n_above = {lvl: int((gp[gp["axis_level"] == lvl]["value"] > dens["truth_range_m"]).sum())
                for lvl in DENSITY_LEVELS}
@@ -1170,7 +1130,111 @@ def figure_f3(mt):
             "inferred coverage90: " + _density_table(inf["summary"], "coverage90", INF_METHODS),
         ],
     )
-    return _save(fig, stem, lines)
+    return {"note": note, "status_lines": lines, "pct": dens["pct"], "truth_range_m": dens["truth_range_m"],
+            "summ": _plot_summary(summ), "summ2": _plot_summary(summ2), "n_per": n_per, "use_log": use_log,
+            "gp": gp[["axis_level", "truth_seed", "sample_rep", "value"]],
+            "fits": fits[["axis_level", "truth_seed", "sample_rep", "fit_range_m"]]}
+
+
+def draw_f3(d):
+    note, dens, summ, summ2 = d["note"], {"pct": d["pct"]}, d["summ"], d["summ2"]
+    gp, fits, n_per, use_log = d["gp"], d["fits"], d["n_per"], d["use_log"]
+    truth_range_m = d["truth_range_m"]
+    faded = ("sgs", "rbf_bootstrap", "sgs_inferred")
+    row2_methods = INF_METHODS + ["gp_mle"]
+    fig, rect = _new_figure(plot_height_mm=2 * F3_PLOT_HEIGHT_MM + 16.0, status_text=note, top_mm=14.0,
+                            right_mm=F3_RIGHT_MM)
+    gs = fig.add_gridspec(2, 4, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3], wspace=0.42,
+                          hspace=16.0 / F3_PLOT_HEIGHT_MM)
+    ax_a, ax_b, ax_c, ax_d = (fig.add_subplot(gs[0, i]) for i in range(4))
+    ax_b2, ax_c2 = fig.add_subplot(gs[1, 1]), fig.add_subplot(gs[1, 2])
+    ax_leg2 = fig.add_subplot(gs[1, 3])
+    ax_leg2.axis("off")
+
+    _plot_density_metric(ax_a, summ, dens, "mse", faded=faded)
+    # B and C omit RBF+bootstrap (its UMG ~0.5 / coverage ~0.45 compresses the
+    # y range of the other methods); its values are in the status file.
+    bc_methods = [m for m in METHODS if m not in F3_BC_OMIT]
+    _plot_density_metric(ax_b, summ, dens, "umg", methods=bc_methods, faded=faded)
+    _plot_density_metric(ax_c, summ, dens, "coverage90", methods=bc_methods, faded=faded)
+    _plot_density_metric(ax_b2, summ2, dens, "umg", methods=row2_methods, faded=faded)
+    _plot_density_metric(ax_c2, summ2, dens, "coverage90", methods=row2_methods, faded=faded)
+    for ax in (ax_b, ax_b2):
+        ax.axhline(1.0, color="gray", linestyle="--", linewidth=0.6, zorder=1)
+        ax.set_ylabel(UMG_LABEL)
+    for ax in (ax_c, ax_c2):
+        ax.axhline(COV90_NOMINAL, color="gray", linestyle="--", linewidth=0.6, zorder=1)
+        ax.set_ylabel(COV90_LABEL)
+    ax_a.set_ylabel(MSE_LABEL)
+    # B-2 / C-2 share B / C's y range (union of the autoscaled ranges)
+    for pair in ((ax_b, ax_b2), (ax_c, ax_c2)):
+        lo = min(a.get_ylim()[0] for a in pair)
+        hi = max(a.get_ylim()[1] for a in pair)
+        for a in pair:
+            a.set_ylim(lo, hi)
+
+    # Deterministic (non-random) horizontal spread of the per-cell points,
+    # ordered by (truth_seed, sample_rep); GP-MLE shifted left, inferred
+    # spherical range shifted right.
+    spread_frac = np.linspace(-F3_D_SPLIT_SPREAD, F3_D_SPLIT_SPREAD, n_per)
+    for lvl in DENSITY_LEVELS:
+        sub = gp[gp["axis_level"] == lvl].sort_values(["truth_seed", "sample_rep"])
+        ax_d.scatter(
+            dens["pct"][lvl] * (1.0 - F3_D_SPLIT_SHIFT + spread_frac), sub["value"],
+            s=F3_D_MARKER_S, marker=METHOD_MARKERS["gp_mle"], facecolors=METHOD_COLORS["gp_mle"],
+            edgecolors="none", alpha=F3_D_ALPHA, zorder=3,
+        )
+        fsub = fits[fits["axis_level"] == lvl].sort_values(["truth_seed", "sample_rep"])
+        ax_d.scatter(
+            dens["pct"][lvl] * (1.0 + F3_D_SPLIT_SHIFT + spread_frac), fsub["fit_range_m"],
+            s=F3_D_MARKER_S, marker="o", facecolors=F3_D_INF_COLOR,
+            edgecolors="none", alpha=F3_D_ALPHA, zorder=3,
+        )
+    ax_d.axhline(truth_range_m, color="black", linestyle="--", linewidth=0.7, zorder=2)
+    if use_log:
+        ax_d.set_yscale("log")
+        # plain-number major ticks inside the data range (default log ticks
+        # label only 10^2 here)
+        lo, hi = ax_d.get_ylim()
+        ticks = [t for t in F3_D_LOG_TICKS if lo <= t <= hi]
+        ax_d.set_yticks(ticks)
+        ax_d.set_yticklabels([f"{t:g}" for t in ticks])
+        ax_d.yaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
+    else:
+        ax_d.set_ylim(bottom=0)
+    ax_d.set_ylabel("Fitted range (m)")
+
+    for ax, letter in zip((ax_a, ax_b, ax_c, ax_d, ax_b2, ax_c2), ("A", "B", "C", "D", "B-2", "C-2")):
+        _style_density_axis(ax, dens, xlabel=False)
+        ax.set_xlabel(DENSITY_XLABEL_SHORT)
+        ax.grid(True)
+        _panel_label(ax, letter)
+
+    # Panel y axes are autoscaled (errorbar includes the +-1 std bars) then
+    # unioned per pair; verify nothing is clipped.
+    for ax, s_, ms, metric, name in (
+            (ax_b, summ, bc_methods, "umg", "B"), (ax_c, summ, bc_methods, "coverage90", "C"),
+            (ax_b2, summ2, row2_methods, "umg", "B-2"), (ax_c2, summ2, row2_methods, "coverage90", "C-2")):
+        r = s_[(s_["metric"] == metric) & (s_["method"].isin(ms))]
+        lo_, hi_ = float((r["mean"] - r["std"]).min()), float((r["mean"] + r["std"]).max())
+        yl = ax.get_ylim()
+        if yl[0] > lo_ or yl[1] < hi_:
+            raise ValueError(f"panel {name} y range {yl} clips the mean +-1 std range [{lo_}, {hi_}].")
+
+    handles = _method_handles(faded=faded) + [
+        Line2D([0], [0], color="gray", linestyle="--", linewidth=0.6, label="Ideal (UMG = 1)"),
+        Line2D([0], [0], color="gray", linestyle="--", linewidth=0.6,
+               label=f"Nominal ({COV90_NOMINAL:.2f})"),
+        Line2D([0], [0], color="black", linestyle="--", linewidth=0.7,
+               label=f"Ground-truth range ({truth_range_m:g} m)"),
+        Line2D([0], [0], color=F3_D_INF_COLOR, marker="o", linestyle="none", markersize=3.0,
+               label="D: kriging/SGS inferred range (spherical)"),
+    ]
+    fig.legend(handles=handles, loc="upper center", ncol=4, bbox_to_anchor=(0.5, 1.0),
+               columnspacing=1.4)
+    ax_leg2.legend(handles=_method_handles(methods=row2_methods, faded=faded),
+                   loc="center", title="B-2, C-2", frameon=False)
+    return fig
 
 
 # ---------------------------------------------------------------------------
@@ -1266,7 +1330,7 @@ def _load_rep0_density(mt) -> dict:
             "warn_oracle": warn_o, "warn_picked": warn_p, "prov": prov}
 
 
-def figure_f3_2(mt):
+def compute_f3_2(mt):
     """Density axis, one row (user request 2026-11-18): kriging and SGS with the
     user-picked variogram on the rep0 cells (10 per level); GP-MLE over ALL cells
     of a level (10 truths x 10 samplings = 100). Means only, no error bars.
@@ -1302,7 +1366,6 @@ def figure_f3_2(mt):
     inf_summ = _summarize(im)
     if set(inf_summ["n"]) != {n_pick}:
         raise ValueError(f"{_rel(INF_METRICS)}: expected {n_pick} rep0 cells per level.")
-    summ_bc, methods_bc = summ, methods
     n_src = pc["vario_source"].value_counts().to_dict()
     auto_cells = pc[pc["vario_source"] == "auto"]
     unconf = pc[pc["pick_confirmed"].astype(str) == "False"]
@@ -1326,75 +1389,6 @@ def figure_f3_2(mt):
         f"range = RBF-kernel length scale at the 0.05 correlation cutoff; max/min over all points = {spread:.1f}×, "
         f"{ax_scale} y axis. SGS ensemble N = {mt['n_ens']}; kriging and GP-MLE have no ensemble."
     )
-    fig, rect = _new_figure(plot_height_mm=F3_PLOT_HEIGHT_MM, status_text=note, top_mm=14.0,
-                            right_mm=F3_RIGHT_MM)
-    # coverage90 panel removed (user request 2026-11-18); range panel is now C (code name ax_d kept)
-    gs = fig.add_gridspec(1, 3, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3], wspace=0.36)
-    ax_a, ax_b, ax_d = (fig.add_subplot(gs[0, i]) for i in range(3))
-
-    _plot_density_metric(ax_a, summ, dens, "mse", methods=methods, errorbars=False)
-    _plot_density_metric(ax_b, summ_bc, dens, "umg", methods=methods_bc, errorbars=False)
-    # B, C: oracle (true 300 m variogram) kriging / SGS on the SAME rep0 cells (user request 2026-11-18)
-    ax_b.axhline(1.0, color="gray", linestyle="--", linewidth=0.6, zorder=1)
-    ax_a.set_ylabel(MSE_LABEL)
-    ax_b.set_ylabel(UMG_LABEL)
-
-    # C (range): GP-MLE practical range of all cells + the fixed oracle range only
-    # (user request 2026-11-18); deterministic horizontal spread ordered by (truth_seed, sample_rep)
-    sp_gp = np.linspace(-F3_D_SPLIT_SPREAD, F3_D_SPLIT_SPREAD, F3_2_GP_N_CELLS)
-    for lvl in DENSITY_LEVELS:
-        sub = gp_all[gp_all["axis_level"] == lvl].sort_values(["truth_seed", "sample_rep"])
-        ax_d.scatter(
-            dens["pct"][lvl] * (1.0 + sp_gp), sub["value"],
-            s=F3_D_MARKER_S, marker=METHOD_MARKERS["gp_mle"], facecolors=METHOD_COLORS["gp_mle"],
-            edgecolors="none", alpha=F3_D_ALPHA, zorder=3,
-        )
-    ax_d.axhline(dens["truth_range_m"], color="black", linestyle="--", linewidth=0.7, zorder=2)
-    ax_d.text(0.97, 0.97, f"dashed: oracle {dens['truth_range_m']:g} m (fixed)", transform=ax_d.transAxes,
-              ha="right", va="top", fontsize=6, zorder=5,
-              bbox=dict(boxstyle="square,pad=0.2", facecolor="white", edgecolor="none", alpha=0.85))
-    if use_log:
-        ax_d.set_yscale("log")
-        lo, hi = ax_d.get_ylim()
-        ticks = [t for t in F3_D_LOG_TICKS if lo <= t <= hi]
-        ax_d.set_yticks(ticks)
-        ax_d.set_yticklabels([f"{t:g}" for t in ticks])
-        ax_d.yaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
-    else:
-        ax_d.set_ylim(bottom=0)
-    ax_d.set_ylabel("GP-MLE practical range (m)")
-
-    for ax, letter in zip((ax_a, ax_b, ax_d), ("A", "B", "C")):
-        _style_density_axis(ax, dens, xlabel=False)
-        ax.set_xlabel(DENSITY_XLABEL_SHORT)
-        ax.grid(True)
-        _panel_label(ax, letter)
-
-    for ax, metric, name in ((ax_a, "mse", "A"), (ax_b, "umg", "B")):
-        r = (summ if name == "A" else pd.concat([summ_bc, oracle], ignore_index=True))
-        r = r[r["metric"] == metric]
-        lo_, hi_ = float(r["mean"].min()), float(r["mean"].max())
-        yl = ax.get_ylim()
-        if yl[0] > lo_ or yl[1] < hi_:
-            raise ValueError(f"panel {name} y range {yl} clips the means [{lo_}, {hi_}].")
-
-    labels = {
-        "kriging": f"Simple kriging, oracle variogram ({F3_2_GP_N_CELLS}/level)",
-        "sgs": f"SGS, oracle variogram ({F3_2_GP_N_CELLS}/level)",
-        "gp_mle": f"GP-MLE ({F3_2_GP_N_CELLS}/level)",
-    }
-    leg_methods = methods
-    handles = _method_handles(methods=leg_methods)
-    for h, m in zip(handles, leg_methods):
-        h.set_label(labels[m])
-    handles += [
-        Line2D([0], [0], color="gray", linestyle="--", linewidth=0.6,
-               label="Ideal UMG (1)"),
-        Line2D([0], [0], color="black", linestyle="--", linewidth=0.7,
-               label=f"C: oracle range (fixed {dens['truth_range_m']:g} m)"),
-    ]
-    fig.legend(handles=handles, loc="upper center", ncol=3, bbox_to_anchor=(0.5, 1.0), columnspacing=1.0)
-
     gp_level = gp_all.groupby("axis_level")["value"].describe(percentiles=[0.5]).loc[DENSITY_LEVELS]
     gp_above = {lvl: int((gp_all[gp_all["axis_level"] == lvl]["value"] > dens["truth_range_m"]).sum())
                 for lvl in DENSITY_LEVELS}
@@ -1488,10 +1482,89 @@ def figure_f3_2(mt):
             f"GP-MLE ({F3_2_GP_N_CELLS} cells) coverage90 (not drawn): " + _density_table(gp_summ, "coverage90", ["gp_mle"]),
         ],
     )
-    return _save(fig, stem, lines)
+    return {"note": note, "status_lines": lines, "pct": dens["pct"], "truth_range_m": dens["truth_range_m"],
+            "summ": _plot_summary(summ), "use_log": use_log,
+            "gp_all": gp_all[["axis_level", "truth_seed", "sample_rep", "value"]]}
 
 
-def figure_f3_2_maps(mt):
+def draw_f3_2(d):
+    note, dens, summ, gp_all, use_log = d["note"], {"pct": d["pct"]}, d["summ"], d["gp_all"], d["use_log"]
+    truth_range_m = d["truth_range_m"]
+    methods = ["kriging", "sgs", "gp_mle"]
+    summ_bc, methods_bc = summ, methods
+    oracle = summ[summ["method"].isin(["kriging", "sgs"])]
+    fig, rect = _new_figure(plot_height_mm=F3_PLOT_HEIGHT_MM, status_text=note, top_mm=14.0,
+                            right_mm=F3_RIGHT_MM)
+    # coverage90 panel removed (user request 2026-11-18); range panel is now C (code name ax_d kept)
+    gs = fig.add_gridspec(1, 3, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3], wspace=0.36)
+    ax_a, ax_b, ax_d = (fig.add_subplot(gs[0, i]) for i in range(3))
+
+    _plot_density_metric(ax_a, summ, dens, "mse", methods=methods, errorbars=False)
+    _plot_density_metric(ax_b, summ_bc, dens, "umg", methods=methods_bc, errorbars=False)
+    # B, C: oracle (true 300 m variogram) kriging / SGS on the SAME rep0 cells (user request 2026-11-18)
+    ax_b.axhline(1.0, color="gray", linestyle="--", linewidth=0.6, zorder=1)
+    ax_a.set_ylabel(MSE_LABEL)
+    ax_b.set_ylabel(UMG_LABEL)
+
+    # C (range): GP-MLE practical range of all cells + the fixed oracle range only
+    # (user request 2026-11-18); deterministic horizontal spread ordered by (truth_seed, sample_rep)
+    sp_gp = np.linspace(-F3_D_SPLIT_SPREAD, F3_D_SPLIT_SPREAD, F3_2_GP_N_CELLS)
+    for lvl in DENSITY_LEVELS:
+        sub = gp_all[gp_all["axis_level"] == lvl].sort_values(["truth_seed", "sample_rep"])
+        ax_d.scatter(
+            dens["pct"][lvl] * (1.0 + sp_gp), sub["value"],
+            s=F3_D_MARKER_S, marker=METHOD_MARKERS["gp_mle"], facecolors=METHOD_COLORS["gp_mle"],
+            edgecolors="none", alpha=F3_D_ALPHA, zorder=3,
+        )
+    ax_d.axhline(truth_range_m, color="black", linestyle="--", linewidth=0.7, zorder=2)
+    ax_d.text(0.97, 0.97, f"dashed: oracle {truth_range_m:g} m (fixed)", transform=ax_d.transAxes,
+              ha="right", va="top", fontsize=6, zorder=5,
+              bbox=dict(boxstyle="square,pad=0.2", facecolor="white", edgecolor="none", alpha=0.85))
+    if use_log:
+        ax_d.set_yscale("log")
+        lo, hi = ax_d.get_ylim()
+        ticks = [t for t in F3_D_LOG_TICKS if lo <= t <= hi]
+        ax_d.set_yticks(ticks)
+        ax_d.set_yticklabels([f"{t:g}" for t in ticks])
+        ax_d.yaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
+    else:
+        ax_d.set_ylim(bottom=0)
+    ax_d.set_ylabel("GP-MLE practical range (m)")
+
+    for ax, letter in zip((ax_a, ax_b, ax_d), ("A", "B", "C")):
+        _style_density_axis(ax, dens, xlabel=False)
+        ax.set_xlabel(DENSITY_XLABEL_SHORT)
+        ax.grid(True)
+        _panel_label(ax, letter)
+
+    for ax, metric, name in ((ax_a, "mse", "A"), (ax_b, "umg", "B")):
+        r = (summ if name == "A" else pd.concat([summ_bc, oracle], ignore_index=True))
+        r = r[r["metric"] == metric]
+        lo_, hi_ = float(r["mean"].min()), float(r["mean"].max())
+        yl = ax.get_ylim()
+        if yl[0] > lo_ or yl[1] < hi_:
+            raise ValueError(f"panel {name} y range {yl} clips the means [{lo_}, {hi_}].")
+
+    labels = {
+        "kriging": f"Simple kriging, oracle variogram ({F3_2_GP_N_CELLS}/level)",
+        "sgs": f"SGS, oracle variogram ({F3_2_GP_N_CELLS}/level)",
+        "gp_mle": f"GP-MLE ({F3_2_GP_N_CELLS}/level)",
+    }
+    leg_methods = methods
+    handles = _method_handles(methods=leg_methods)
+    for h, m in zip(handles, leg_methods):
+        h.set_label(labels[m])
+    handles += [
+        Line2D([0], [0], color="gray", linestyle="--", linewidth=0.6,
+               label="Ideal UMG (1)"),
+        Line2D([0], [0], color="black", linestyle="--", linewidth=0.7,
+               label=f"C: oracle range (fixed {truth_range_m:g} m)"),
+    ]
+    fig.legend(handles=handles, loc="upper center", ncol=3, bbox_to_anchor=(0.5, 1.0), columnspacing=1.0)
+    return fig
+
+
+def compute_f3_2_maps(mt):
     """Ground-truth (oracle) porosity map of ONE realization (truth seed
     F3_2_MAP_TRUTH_SEED) with the rep0 conditioning samples at each density level
     (user request 2026-11-18). The truth and samples are regenerated with the
@@ -1499,6 +1572,7 @@ def figure_f3_2_maps(mt):
     the user-picked kriging run of each cell."""
     from src.experiments.base_case_conditioning import (  # local: only this figure needs the generators
         get_base_case_truth, get_conditioning_samples)
+    from src.experiments.base_case import NX, NY
 
     stem = "F3-2b_density_truth_and_samples"
     dens = mt["dens"]
@@ -1534,6 +1608,29 @@ def figure_f3_2_maps(mt):
         f"{int(cells['sample_seed'].iloc[0])}) used by kriging and SGS in F3-2; the same truth field in every "
         f"panel; n = actual number of distinct sample locations. Colour scale = min/max of the truth field."
     )
+    lines = _status_file(
+        stem,
+        inputs=[
+            f"{_rel(PICK_CELLS)} (rows truth_seed == {t}: sample_seed, n_samples_requested, run_dir_kriging_picked)",
+            "truth regenerated with src.experiments.base_case_conditioning.get_base_case_truth(truth_seed, "
+            "hmaj1 = hmin1 = ground-truth range, nug); samples with get_conditioning_samples(truth, sample_seed, "
+            "n_samples) - asserted equal (X, Y) to each run's samples.csv",
+        ],
+        panels=[(f"{dens['pct'][lvl]:g}%", f"REAL DATA - truth seed {t} porosity map + rep0 samples "
+                 f"(n = {len(samples[lvl])}, requested {int(cells.loc[lvl, 'n_samples_requested'])})")
+                for lvl in DENSITY_LEVELS],
+        in_figure_note="DATA STATUS: " + note,
+        limits=[f"single realization (truth seed {t}) chosen as the first truth seed; the other 9 realizations "
+                "are not shown.",
+                f"colour scale vmin/vmax = truth min/max ({vmin:.2f} / {vmax:.2f} %), colormap {F3_2_MAP_CMAP}."],
+    )
+    return {"note": note, "status_lines": lines, "pct": dens["pct"], "truth": truth, "ext": ext,
+            "vmin": vmin, "vmax": vmax, "samples": {lvl: samples[lvl][["X", "Y"]] for lvl in DENSITY_LEVELS}}
+
+
+def draw_f3_2_maps(d):
+    note, dens, truth, ext = d["note"], {"pct": d["pct"]}, d["truth"], d["ext"]
+    vmin, vmax, samples = d["vmin"], d["vmax"], d["samples"]
     fig, rect = _new_figure(plot_height_mm=F3_2_MAP_HEIGHT_MM, status_text=note, top_mm=6.0, right_mm=22.0)
     gs = fig.add_gridspec(1, len(DENSITY_LEVELS), left=rect[0], bottom=rect[1], right=rect[2], top=rect[3],
                           wspace=0.30)
@@ -1556,27 +1653,10 @@ def figure_f3_2_maps(mt):
     cax = fig.add_axes([rect[2] + 0.03, rect[1], 0.012, rect[3] - rect[1]])
     cb = fig.colorbar(im, cax=cax)
     cb.set_label("Porosity (%)")
-
-    lines = _status_file(
-        stem,
-        inputs=[
-            f"{_rel(PICK_CELLS)} (rows truth_seed == {t}: sample_seed, n_samples_requested, run_dir_kriging_picked)",
-            "truth regenerated with src.experiments.base_case_conditioning.get_base_case_truth(truth_seed, "
-            "hmaj1 = hmin1 = ground-truth range, nug); samples with get_conditioning_samples(truth, sample_seed, "
-            "n_samples) - asserted equal (X, Y) to each run's samples.csv",
-        ],
-        panels=[(f"{dens['pct'][lvl]:g}%", f"REAL DATA - truth seed {t} porosity map + rep0 samples "
-                 f"(n = {len(samples[lvl])}, requested {int(cells.loc[lvl, 'n_samples_requested'])})")
-                for lvl in DENSITY_LEVELS],
-        in_figure_note="DATA STATUS: " + note,
-        limits=[f"single realization (truth seed {t}) chosen as the first truth seed; the other 9 realizations "
-                "are not shown.",
-                f"colour scale vmin/vmax = truth min/max ({vmin:.2f} / {vmax:.2f} %), colormap {F3_2_MAP_CMAP}."],
-    )
-    return _save(fig, stem, lines)
+    return fig
 
 
-def figure_f3_extremes(mt, lvl=F3_EXT_LEVEL, stem="F3c_density_gp_range_extremes"):
+def compute_f3_extremes(mt, lvl=F3_EXT_LEVEL, stem="F3c_density_gp_range_extremes"):
     """Extreme-value check (user requests 2026-11-18): at density F3_EXT_LEVEL, the
     GP-MLE cells with the SHORTEST and the LONGEST fitted practical range. Per row
     (one cell): ground truth + conditioning samples, GP-MLE posterior-mean map, ONE
@@ -1588,7 +1668,7 @@ def figure_f3_extremes(mt, lvl=F3_EXT_LEVEL, stem="F3c_density_gp_range_extremes
     from src.experiments.evaluate_multi_truth_axes import MAP_MATCH_TOL, _conditioning, _gaussian_metrics
     # variogram estimator / model / constants REUSED from the variogram-reproduction figures
     # (imported here: that module chain pulls in sklearn, only this figure needs it)
-    from src.experiments.base_case import CC1, HMAJ1, NUG, POR_STDEV
+    from src.experiments.base_case import CC1, HMAJ1, NUG, NX, NY, POR_STDEV
     from results.processed.sample_replicate_axis.make_length_case_study_figures import (
         CURVE_COLORS, DIST_STD_DDOF)
     from results.processed.sample_replicate_axis.make_variogram_reproduction_figure import (
@@ -1702,7 +1782,6 @@ def figure_f3_extremes(mt, lvl=F3_EXT_LEVEL, stem="F3c_density_gp_range_extremes
     # one set of bin edges over the three maps of BOTH rows -> identical bins and x axis in every histogram panel
     shared_edges = np.histogram_bin_edges(
         np.concatenate([r["maps"][key].ravel() for r in rows for key in series]), bins=F3_EXT_HIST_BINS)
-    hist_edges = {r["tag"]: shared_edges for r in rows}
 
     note = (
         f"density {dens['pct'][lvl]:g}%: the GP-MLE cells with the shortest and the longest fitted practical range "
@@ -1714,77 +1793,6 @@ def figure_f3_extremes(mt, lvl=F3_EXT_LEVEL, stem="F3c_density_gp_range_extremes
         f"histograms of all grid cells (same bins and x axis in both rows). One colour scale for all maps (min/max of the two "
         f"truth fields)."
     )
-    fig, _rect = _new_figure(plot_height_mm=F3_EXT_HEIGHT_MM, status_text=note, top_mm=F3_EXT_TOP_MM,
-                             bottom_axis_mm=0.0)
-    fw_mm, fh_mm = FULL_WIDTH_MM, fig.get_figheight() / MM
-
-    def _ax(x_mm, y_top_mm, w_mm, h_mm):
-        """axes placed in mm from the left edge / from the top edge of the canvas"""
-        return fig.add_axes([x_mm / fw_mm, 1.0 - (y_top_mm + h_mm) / fh_mm, w_mm / fw_mm, h_mm / fh_mm])
-
-    L = F3_EXT_LAYOUT_MM
-    map_x = [L["left"] + j * (L["map"] + L["map_gap"]) for j in range(3)]
-    cbar_x = map_x[2] + L["map"] + L["cbar_gap"]
-    vario_x = cbar_x + L["cbar_w"] + L["cbar_to_plot"]
-    hist_x = vario_x + L["plot_w"] + L["plot_gap"]
-    if hist_x + L["plot_w"] > fw_mm - 1.0:
-        raise ValueError(f"F3c: layout exceeds the {fw_mm:g} mm canvas ({hist_x + L['plot_w']:.1f} mm).")
-    im = None
-    for i, r in enumerate(rows):
-        y_top = F3_EXT_TOP_MM + L["row_title"] + i * (L["map"] + L["row_title"] + L["row_gap"])
-        for j, key in enumerate(series):
-            ax = _ax(map_x[j], y_top, L["map"], L["map"])
-            im = ax.imshow(r["maps"][key], extent=ext, origin="upper", cmap=F3_2_MAP_CMAP, vmin=vmin, vmax=vmax)
-            if key == "truth":
-                s = r["samples"]
-                ax.scatter(s["X"], s["Y"], s=F3_EXT_MARKER_S, facecolors="white", edgecolors="black",
-                           linewidths=0.4, zorder=3)
-                ax.set_title(f"{r['tag'].capitalize()} GP range\ntruth {r['truth_seed']}, {r['sample_rep']} "
-                             f"(n = {r['n']})", fontsize=FONT_PT)
-                ax.set_ylabel("Y (m)")
-            elif key == "gp":
-                ax.set_title(f"GP-MLE mean ({r['range']:.0f} m)\nMSE {r['mse']:.2f}, UMG {r['umg']:.3f}",
-                             fontsize=FONT_PT)
-                ax.set_yticklabels([])
-            else:
-                ax.set_title(f"SGS realization {k_real}\n(oracle {rng_true:g} m)", fontsize=FONT_PT)
-                ax.set_yticklabels([])
-            ax.set_xticks([0, 500, 1000])
-            ax.set_yticks([0, 500, 1000])
-            ax.set_xlabel("X (m)")
-        cax = _ax(cbar_x, y_top, L["cbar_w"], L["map"])
-        cb = fig.colorbar(im, cax=cax)
-        cb.set_label("Porosity (%)")
-
-        axv = _ax(vario_x, y_top, L["plot_w"], L["map"])
-        axv.plot(h_smooth, model_smooth, color=CURVE_COLORS["model"], linestyle="--", linewidth=0.8, zorder=2)
-        for key in series:
-            v = r["vario"][key]
-            axv.plot(v["lag_bin_center_m"], v["semivariance_empirical"], color=colors[key], linewidth=1.0, zorder=3)
-        axv.set_xlim(0.0, LAG_MAX_M)
-        axv.set_ylim(0.0, Y_MAX)
-        axv.set_xticks([0, 250, 500, 750])
-        axv.set_xlabel("Lag (m)")
-        axv.set_ylabel("Semivariance γ (porosity %²)")
-        axv.grid(True)
-        if i == 0:
-            axv.set_title("Experimental variogram", fontsize=FONT_PT)
-
-        axh = _ax(hist_x, y_top, L["plot_w"], L["map"])
-        for key in series:
-            axh.hist(r["maps"][key].ravel(), bins=hist_edges[r["tag"]], density=True, histtype="step",
-                     color=colors[key], linewidth=1.0)
-        axh.set_xlim(shared_edges[0], shared_edges[-1])
-        axh.set_xlabel("Porosity (%)")
-        axh.set_ylabel("Density (1/%)")
-        if i == 0:
-            axh.set_title("Histogram (all cells)", fontsize=FONT_PT)
-    handles = [Line2D([], [], color=colors[key], linewidth=1.0, label=labels[key]) for key in series]
-    handles.append(Line2D([], [], color=CURVE_COLORS["model"], linestyle="--", linewidth=0.8, label=model_label))
-    fig.legend(handles=handles, loc="upper center", ncol=2, columnspacing=1.2, handlelength=2.0,
-               bbox_to_anchor=((vario_x + (hist_x + L["plot_w"])) / 2.0 / fw_mm, 1.0 - 0.6 / fh_mm),
-               borderaxespad=0.0)
-
     def _per_series(r, d, fmt):
         return ", ".join(f"{key} {fmt.format(d[key])}" for key in series)
 
@@ -1855,7 +1863,95 @@ def figure_f3_extremes(mt, lvl=F3_EXT_LEVEL, stem="F3c_density_gp_range_extremes
                 "the two cells differ in truth realization AND sample set; this is a two-case illustration, "
                 "not a controlled comparison."],
     )
-    return _save(fig, stem, lines)
+    plot_rows = [{"tag": r["tag"], "truth_seed": r["truth_seed"], "sample_rep": r["sample_rep"], "n": r["n"],
+                  "range": r["range"], "mse": r["mse"], "umg": r["umg"], "samples": r["samples"][["X", "Y"]],
+                  "maps": r["maps"],
+                  "vario": {key: r["vario"][key][["lag_bin_center_m", "semivariance_empirical"]] for key in series}}
+                 for r in rows]
+    return {"note": note, "status_lines": lines, "rows": plot_rows, "vmin": vmin, "vmax": vmax, "ext": ext,
+            "k_real": k_real, "rng_true": rng_true, "colors": colors, "labels": labels, "model_label": model_label,
+            "model_color": CURVE_COLORS["model"], "h_smooth": h_smooth, "model_smooth": model_smooth,
+            "shared_edges": shared_edges, "lag_max_m": LAG_MAX_M, "y_max": Y_MAX}
+
+
+def draw_f3_extremes(d):
+    note, rows, vmin, vmax, ext = d["note"], d["rows"], d["vmin"], d["vmax"], d["ext"]
+    k_real, rng_true, colors, labels = d["k_real"], d["rng_true"], d["colors"], d["labels"]
+    model_label, h_smooth, model_smooth = d["model_label"], d["h_smooth"], d["model_smooth"]
+    shared_edges = d["shared_edges"]
+    hist_edges = {r["tag"]: shared_edges for r in rows}
+    series = ("truth", "gp", "sgs")   # columns 1-3 and the curves of columns 4-5, in this order
+    fig, _rect = _new_figure(plot_height_mm=F3_EXT_HEIGHT_MM, status_text=note, top_mm=F3_EXT_TOP_MM,
+                             bottom_axis_mm=0.0)
+    fw_mm, fh_mm = FULL_WIDTH_MM, fig.get_figheight() / MM
+
+    def _ax(x_mm, y_top_mm, w_mm, h_mm):
+        """axes placed in mm from the left edge / from the top edge of the canvas"""
+        return fig.add_axes([x_mm / fw_mm, 1.0 - (y_top_mm + h_mm) / fh_mm, w_mm / fw_mm, h_mm / fh_mm])
+
+    L = F3_EXT_LAYOUT_MM
+    map_x = [L["left"] + j * (L["map"] + L["map_gap"]) for j in range(3)]
+    cbar_x = map_x[2] + L["map"] + L["cbar_gap"]
+    vario_x = cbar_x + L["cbar_w"] + L["cbar_to_plot"]
+    hist_x = vario_x + L["plot_w"] + L["plot_gap"]
+    if hist_x + L["plot_w"] > fw_mm - 1.0:
+        raise ValueError(f"F3c: layout exceeds the {fw_mm:g} mm canvas ({hist_x + L['plot_w']:.1f} mm).")
+    im = None
+    for i, r in enumerate(rows):
+        y_top = F3_EXT_TOP_MM + L["row_title"] + i * (L["map"] + L["row_title"] + L["row_gap"])
+        for j, key in enumerate(series):
+            ax = _ax(map_x[j], y_top, L["map"], L["map"])
+            im = ax.imshow(r["maps"][key], extent=ext, origin="upper", cmap=F3_2_MAP_CMAP, vmin=vmin, vmax=vmax)
+            if key == "truth":
+                s = r["samples"]
+                ax.scatter(s["X"], s["Y"], s=F3_EXT_MARKER_S, facecolors="white", edgecolors="black",
+                           linewidths=0.4, zorder=3)
+                ax.set_title(f"{r['tag'].capitalize()} GP range\ntruth {r['truth_seed']}, {r['sample_rep']} "
+                             f"(n = {r['n']})", fontsize=FONT_PT)
+                ax.set_ylabel("Y (m)")
+            elif key == "gp":
+                ax.set_title(f"GP-MLE mean ({r['range']:.0f} m)\nMSE {r['mse']:.2f}, UMG {r['umg']:.3f}",
+                             fontsize=FONT_PT)
+                ax.set_yticklabels([])
+            else:
+                ax.set_title(f"SGS realization {k_real}\n(oracle {rng_true:g} m)", fontsize=FONT_PT)
+                ax.set_yticklabels([])
+            ax.set_xticks([0, 500, 1000])
+            ax.set_yticks([0, 500, 1000])
+            ax.set_xlabel("X (m)")
+        cax = _ax(cbar_x, y_top, L["cbar_w"], L["map"])
+        cb = fig.colorbar(im, cax=cax)
+        cb.set_label("Porosity (%)")
+
+        axv = _ax(vario_x, y_top, L["plot_w"], L["map"])
+        axv.plot(h_smooth, model_smooth, color=d["model_color"], linestyle="--", linewidth=0.8, zorder=2)
+        for key in series:
+            v = r["vario"][key]
+            axv.plot(v["lag_bin_center_m"], v["semivariance_empirical"], color=colors[key], linewidth=1.0, zorder=3)
+        axv.set_xlim(0.0, d["lag_max_m"])
+        axv.set_ylim(0.0, d["y_max"])
+        axv.set_xticks([0, 250, 500, 750])
+        axv.set_xlabel("Lag (m)")
+        axv.set_ylabel("Semivariance γ (porosity %²)")
+        axv.grid(True)
+        if i == 0:
+            axv.set_title("Experimental variogram", fontsize=FONT_PT)
+
+        axh = _ax(hist_x, y_top, L["plot_w"], L["map"])
+        for key in series:
+            axh.hist(r["maps"][key].ravel(), bins=hist_edges[r["tag"]], density=True, histtype="step",
+                     color=colors[key], linewidth=1.0)
+        axh.set_xlim(shared_edges[0], shared_edges[-1])
+        axh.set_xlabel("Porosity (%)")
+        axh.set_ylabel("Density (1/%)")
+        if i == 0:
+            axh.set_title("Histogram (all cells)", fontsize=FONT_PT)
+    handles = [Line2D([], [], color=colors[key], linewidth=1.0, label=labels[key]) for key in series]
+    handles.append(Line2D([], [], color=d["model_color"], linestyle="--", linewidth=0.8, label=model_label))
+    fig.legend(handles=handles, loc="upper center", ncol=2, columnspacing=1.2, handlelength=2.0,
+               bbox_to_anchor=((vario_x + (hist_x + L["plot_w"])) / 2.0 / fw_mm, 1.0 - 0.6 / fh_mm),
+               borderaxespad=0.0)
+    return fig
 
 
 # ---------------------------------------------------------------------------
@@ -1877,7 +1973,7 @@ def _scatter_fitted_vs_truth(ax, df, xcol, ycol, level_col):
     ax.grid(True)
 
 
-def figure_f4():
+def compute_f4():
     stem = "F4_gp_fitted_vs_truth_hyperparameters"
     rng = pd.read_csv(RANGE_GP_REAL)
     nug = pd.read_csv(NUGGET_GP_REAL)
@@ -1913,35 +2009,6 @@ def figure_f4():
         "realizations, large markers = per-level mean. Fits stopped at an optimizer bound: "
         f"{n_bound_r} of {len(rng)} (A), {n_bound_n} of {len(nug)} (B). Single sample density only."
     )
-    fig, rect = _new_figure(plot_height_mm=70.0, status_text=note, top_mm=11.0)
-    gs = fig.add_gridspec(1, 2, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3], wspace=0.22)
-    ax_a = fig.add_subplot(gs[0, 0])
-    ax_b = fig.add_subplot(gs[0, 1])
-
-    _scatter_fitted_vs_truth(ax_a, rng, "range_m", "gp_practical_range_m", "range_m")
-    ax_a.set_xlabel("Ground-truth variogram range (m)")
-    ax_a.set_ylabel("GP-MLE fitted practical range (m)")
-    _scatter_fitted_vs_truth(ax_b, nug, nx, ny, "nug_normalized")
-    ax_b.set_xlabel(nxl)
-    ax_b.set_ylabel(nyl)
-    if F4_NUGGET_MODE == "real":
-        ax_b.set_xticklabels([f"{v:.1f}" for v in sorted(nug[nx].unique())])
-    fig.align_xlabels([ax_a, ax_b])
-    _panel_label(ax_a, "A")
-    _panel_label(ax_b, "B")
-
-    c = METHOD_COLORS["gp_mle"]
-    mk = METHOD_MARKERS["gp_mle"]
-    handles = [
-        Line2D([0], [0], linestyle="none", marker=mk, markersize=3, markerfacecolor=c,
-               markeredgecolor="none", alpha=0.45, label="GP-MLE, one ground-truth realization"),
-        Line2D([0], [0], color=c, marker=mk, markersize=4.2, markeredgecolor="black",
-               markeredgewidth=0.5, label="GP-MLE, mean per level"),
-        Line2D([0], [0], color="gray", linestyle="--", linewidth=0.6, label="y = x"),
-    ]
-    fig.legend(handles=handles, loc="upper center", ncol=3, bbox_to_anchor=(0.5, 1.0),
-               columnspacing=1.8)
-
     lines = _status_file(
         stem,
         inputs=[
@@ -1973,13 +2040,48 @@ def figure_f4():
             "nugget-axis runs use the base-case range.",
         ],
     )
-    return _save(fig, stem, lines)
+    return {"note": note, "status_lines": lines, "nugget_mode": F4_NUGGET_MODE, "nx": nx, "ny": ny, "nxl": nxl,
+            "nyl": nyl, "rng": rng[["range_m", "gp_practical_range_m"]],
+            "nug": nug[list(dict.fromkeys([nx, ny, "nug_normalized"]))]}
+
+
+def draw_f4(d):
+    note, rng, nug, nx, ny, nxl, nyl = d["note"], d["rng"], d["nug"], d["nx"], d["ny"], d["nxl"], d["nyl"]
+    fig, rect = _new_figure(plot_height_mm=70.0, status_text=note, top_mm=11.0)
+    gs = fig.add_gridspec(1, 2, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3], wspace=0.22)
+    ax_a = fig.add_subplot(gs[0, 0])
+    ax_b = fig.add_subplot(gs[0, 1])
+
+    _scatter_fitted_vs_truth(ax_a, rng, "range_m", "gp_practical_range_m", "range_m")
+    ax_a.set_xlabel("Ground-truth variogram range (m)")
+    ax_a.set_ylabel("GP-MLE fitted practical range (m)")
+    _scatter_fitted_vs_truth(ax_b, nug, nx, ny, "nug_normalized")
+    ax_b.set_xlabel(nxl)
+    ax_b.set_ylabel(nyl)
+    if d["nugget_mode"] == "real":
+        ax_b.set_xticklabels([f"{v:.1f}" for v in sorted(nug[nx].unique())])
+    fig.align_xlabels([ax_a, ax_b])
+    _panel_label(ax_a, "A")
+    _panel_label(ax_b, "B")
+
+    c = METHOD_COLORS["gp_mle"]
+    mk = METHOD_MARKERS["gp_mle"]
+    handles = [
+        Line2D([0], [0], linestyle="none", marker=mk, markersize=3, markerfacecolor=c,
+               markeredgecolor="none", alpha=0.45, label="GP-MLE, one ground-truth realization"),
+        Line2D([0], [0], color=c, marker=mk, markersize=4.2, markeredgecolor="black",
+               markeredgewidth=0.5, label="GP-MLE, mean per level"),
+        Line2D([0], [0], color="gray", linestyle="--", linewidth=0.6, label="y = x"),
+    ]
+    fig.legend(handles=handles, loc="upper center", ncol=3, bbox_to_anchor=(0.5, 1.0),
+               columnspacing=1.8)
+    return fig
 
 
 # ---------------------------------------------------------------------------
 # F5
 # ---------------------------------------------------------------------------
-def figure_f5():
+def compute_f5():
     stem = "F5_anisotropy"
     azi = pd.read_csv(ANISO_AZIMUTH)
     vario = pd.read_csv(ANISO_VARIO)
@@ -2005,6 +2107,67 @@ def figure_f5():
         f"above it (max {exp_max:.1f}), means are computed from all points. C: PLACEHOLDER – the anisotropy-axis experiment (4 methods, MSE and UMG vs "
         "anisotropy ratio) has not been run; curve shapes are arbitrary."
     )
+    # max of the per-lag-index experimental means (exactly as draw_f5 forms them; status text only)
+    max_mean = 0.0
+    for direction in ("major", "minor"):
+        d_exp = exp[exp["direction"] == direction].copy()
+        d_exp["lag_idx"] = d_exp.groupby(["truth_seed", "sample_draw_seed"]).cumcount()
+        mean = d_exp.groupby("lag_idx")[["lag", "gamma"]].mean()
+        max_mean = max(max_mean, float(mean["gamma"].max()))
+
+    lines = _status_file(
+        stem,
+        inputs=[
+            f"{_rel(ANISO_AZIMUTH)} (columns ratio_label, hmaj1, hmin1, azimuth_deg, true_practical_range)",
+            f"{_rel(ANISO_VARIO)} (rows ratio_label == '{F5_VARIOGRAM_RATIO}'; columns direction "
+            "[major, minor], source [model, experimental], lag, gamma, truth_seed, sample_draw_seed)",
+        ],
+        panels=[
+            ("A", "REAL DATA (analytic) - true practical range vs azimuth for the 3 stored ratio levels"),
+            ("B", f"REAL DATA - experimental vs model variogram, major and minor direction, ratio level "
+                  f"'{F5_VARIOGRAM_RATIO}' (thin lines = individual truth x draw combinations, markers = "
+                  "mean over them by lag index)"),
+            ("C", "PLACEHOLDER - synthetic illustration, NO DATA. Two stacked axes (MSE, UMG) vs anisotropy "
+                  "ratio for the 4 methods. Curves are arbitrary seeded smooth curves "
+                  f"(seed {PLACEHOLDER_SEED}, {PLACEHOLDER_SEED + 1}) with no expected-result meaning; no "
+                  "numeric ticks."),
+        ],
+        in_figure_note="DATA STATUS: " + note,
+        limits=[
+            f"panel A levels exactly as stored in true_range_by_azimuth.csv: {azi_txt}. Note the level "
+            "labelled '3:1' has hmin1 (600 m) LARGER than hmaj1 (300 m) and '2:1' has hmin1 150 m.",
+            "panel B comes from anisotropy_variogram_check, whose ratio levels are parameterized "
+            "differently: " + ", ".join(
+                f"'{k}' = hmaj1 {r.hmaj1:g} m / hmin1 {r.hmin1:g} m"
+                for k, r in vario.groupby('ratio_label', sort=False)[['hmaj1', 'hmin1']].first().iterrows())
+            + ". Panels A and B therefore do NOT show the same ground-truth models.",
+            f"panel B: {n_truth} truth seeds {sorted(int(s) for s in exp['truth_seed'].unique())} x "
+            f"{n_draw} sample draws {sorted(int(s) for s in exp['sample_draw_seed'].unique())}; the "
+            "top-level variogram_comparison.csv is used (the density_10/ subfolder holds a separate, "
+            "different file that is not used here).",
+            "panel B experimental mean: lags differ slightly between runs, so runs are averaged by lag "
+            "INDEX (mean lag, mean gamma); npair weighting is not applied.",
+            f"panel B y axis is cut at {F5_VARIOGRAM_YMAX:g}; {n_off} of {len(exp)} individual experimental "
+            f"(lag, gamma) points exceed it (max gamma {exp_max:.2f}); no mean marker is cut "
+            f"(max mean-by-lag-index gamma {max_mean:.2f}).",
+            "no prediction method (kriging/SGS/RBF/GP) has been run on any anisotropic ground truth.",
+        ],
+        needed=[
+            "Anisotropy axis proper: all 4 methods on anisotropic ground truths at several ratios "
+            "(non-axis-aligned direction per docs/experiment_context.md axis 4), MSE and UMG per level, "
+            "same sample locations across methods, multiple realizations.",
+        ],
+    )
+    return {"note": note, "status_lines": lines, "n_truth": n_truth, "n_draw": n_draw,
+            "azi": azi[["ratio_label", "hmaj1", "hmin1", "azimuth_deg", "true_practical_range"]],
+            "exp": exp[["direction", "truth_seed", "sample_draw_seed", "lag", "gamma"]],
+            "model": v[v["source"] == "model"][["direction", "lag", "gamma"]]}
+
+
+def draw_f5(d):
+    note, azi, exp, model = d["note"], d["azi"], d["exp"], d["model"]
+    n_truth, n_draw = d["n_truth"], d["n_draw"]
+    azi_levels = azi.groupby("ratio_label", sort=False)[["hmaj1", "hmin1"]].first()
     fig, rect = _new_figure(plot_height_mm=58.0, status_text=note, top_mm=22.0)
     gs = fig.add_gridspec(2, 3, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3],
                           wspace=0.34, hspace=0.12)
@@ -2033,7 +2196,6 @@ def figure_f5():
     # (experimental tab:blue, model black); major solid, minor dashed.
     dir_ls = {"major": "-", "minor": "--"}
     dir_mk = {"major": "o", "minor": "s"}
-    max_mean = 0.0
     for direction in ("major", "minor"):
         d_exp = exp[exp["direction"] == direction].copy()
         d_exp["lag_idx"] = d_exp.groupby(["truth_seed", "sample_draw_seed"]).cumcount()
@@ -2041,10 +2203,9 @@ def figure_f5():
             ax_b.plot(grp["lag"], grp["gamma"], color="tab:blue", linewidth=0.3, alpha=0.22,
                       linestyle=dir_ls[direction], zorder=1)
         mean = d_exp.groupby("lag_idx")[["lag", "gamma"]].mean()
-        max_mean = max(max_mean, float(mean["gamma"].max()))
         ax_b.plot(mean["lag"], mean["gamma"], color="tab:blue", linestyle=dir_ls[direction],
                   marker=dir_mk[direction], markersize=2.6, zorder=3)
-        mod = v[(v["source"] == "model") & (v["direction"] == direction)].sort_values("lag")
+        mod = model[model["direction"] == direction].sort_values("lag")
         ax_b.plot(mod["lag"], mod["gamma"], color="black", linestyle=dir_ls[direction], zorder=4)
     ax_b.axhline(1.0, color="gray", linestyle=":", linewidth=0.4, zorder=0)
     ax_b.set_xlabel("Lag distance (m)")
@@ -2090,57 +2251,13 @@ def figure_f5():
     _panel_label(ax_a, "A")
     _panel_label(ax_b, "B")
     _panel_label(ax_c1, "C")
-
-    lines = _status_file(
-        stem,
-        inputs=[
-            f"{_rel(ANISO_AZIMUTH)} (columns ratio_label, hmaj1, hmin1, azimuth_deg, true_practical_range)",
-            f"{_rel(ANISO_VARIO)} (rows ratio_label == '{F5_VARIOGRAM_RATIO}'; columns direction "
-            "[major, minor], source [model, experimental], lag, gamma, truth_seed, sample_draw_seed)",
-        ],
-        panels=[
-            ("A", "REAL DATA (analytic) - true practical range vs azimuth for the 3 stored ratio levels"),
-            ("B", f"REAL DATA - experimental vs model variogram, major and minor direction, ratio level "
-                  f"'{F5_VARIOGRAM_RATIO}' (thin lines = individual truth x draw combinations, markers = "
-                  "mean over them by lag index)"),
-            ("C", "PLACEHOLDER - synthetic illustration, NO DATA. Two stacked axes (MSE, UMG) vs anisotropy "
-                  "ratio for the 4 methods. Curves are arbitrary seeded smooth curves "
-                  f"(seed {PLACEHOLDER_SEED}, {PLACEHOLDER_SEED + 1}) with no expected-result meaning; no "
-                  "numeric ticks."),
-        ],
-        in_figure_note="DATA STATUS: " + note,
-        limits=[
-            f"panel A levels exactly as stored in true_range_by_azimuth.csv: {azi_txt}. Note the level "
-            "labelled '3:1' has hmin1 (600 m) LARGER than hmaj1 (300 m) and '2:1' has hmin1 150 m.",
-            "panel B comes from anisotropy_variogram_check, whose ratio levels are parameterized "
-            "differently: " + ", ".join(
-                f"'{k}' = hmaj1 {r.hmaj1:g} m / hmin1 {r.hmin1:g} m"
-                for k, r in vario.groupby('ratio_label', sort=False)[['hmaj1', 'hmin1']].first().iterrows())
-            + ". Panels A and B therefore do NOT show the same ground-truth models.",
-            f"panel B: {n_truth} truth seeds {sorted(int(s) for s in exp['truth_seed'].unique())} x "
-            f"{n_draw} sample draws {sorted(int(s) for s in exp['sample_draw_seed'].unique())}; the "
-            "top-level variogram_comparison.csv is used (the density_10/ subfolder holds a separate, "
-            "different file that is not used here).",
-            "panel B experimental mean: lags differ slightly between runs, so runs are averaged by lag "
-            "INDEX (mean lag, mean gamma); npair weighting is not applied.",
-            f"panel B y axis is cut at {F5_VARIOGRAM_YMAX:g}; {n_off} of {len(exp)} individual experimental "
-            f"(lag, gamma) points exceed it (max gamma {exp_max:.2f}); no mean marker is cut "
-            f"(max mean-by-lag-index gamma {max_mean:.2f}).",
-            "no prediction method (kriging/SGS/RBF/GP) has been run on any anisotropic ground truth.",
-        ],
-        needed=[
-            "Anisotropy axis proper: all 4 methods on anisotropic ground truths at several ratios "
-            "(non-axis-aligned direction per docs/experiment_context.md axis 4), MSE and UMG per level, "
-            "same sample locations across methods, multiple realizations.",
-        ],
-    )
-    return _save(fig, stem, lines)
+    return fig
 
 
 # ---------------------------------------------------------------------------
 # F6
 # ---------------------------------------------------------------------------
-def figure_f6(dens):
+def compute_f6(dens):
     stem = "F6_hyperparameter_stability_vs_density"
     gp = _load_gp_lengths()
     n_rep = int(gp.groupby("axis_level").size().iloc[0])
@@ -2161,46 +2278,6 @@ def figure_f6(dens):
         "B: PLACEHOLDER – no anisotropic-kernel GP (axis-aligned, or with rotation angle) has been "
         "fitted; curve shapes and ordering are arbitrary."
     )
-    fig, rect = _new_figure(plot_height_mm=56.0, status_text=note, top_mm=19.0)
-    gs = fig.add_gridspec(1, 2, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3], wspace=0.24)
-    ax_a = fig.add_subplot(gs[0, 0])
-    ax_b = fig.add_subplot(gs[0, 1])
-
-    xs = [dens["pct"][lvl] for lvl in DENSITY_LEVELS]
-    ax_a.plot(xs, stats["cv"].values, color=METHOD_COLORS["gp_mle"],
-              marker=METHOD_MARKERS["gp_mle"], markersize=3.6)
-    _style_density_axis(ax_a, dens)
-    ax_a.set_ylim(bottom=0)
-    ax_a.set_ylabel("CV of fitted practical range (std / mean)")
-    ax_a.grid(True)
-    ax_a.legend(
-        handles=[Line2D([0], [0], color=METHOD_COLORS["gp_mle"], marker=METHOD_MARKERS["gp_mle"],
-                        markersize=3.6, label="GP-MLE, isotropic kernel (1 length scale)")],
-        loc="lower center", bbox_to_anchor=(0.5, 1.02), borderaxespad=0.0)
-
-    t = np.linspace(0.0, 1.0, 5)
-    curves = _schematic_curves(2, len(t), PLACEHOLDER_SEED + 2)
-    specs = [
-        ((0, (4, 2)), "Axis-aligned anisotropic kernel (2 length scales)"),
-        ((0, (1, 1.5)), "Rotated anisotropic kernel (2 length scales + angle)"),
-        # legend title carries the "(schematic, no data)" tag for both entries
-    ]
-    h_b = []
-    for (ls, label), y in zip(specs, curves):
-        ax_b.plot(t, y, color="0.35", linestyle=ls, linewidth=0.9)
-        h_b.append(Line2D([0], [0], color="0.35", linestyle=ls, linewidth=0.9,
-                          label=label))
-    ax_b.set_xlim(-0.08, 1.08)
-    ax_b.set_ylim(0.0, 1.0)
-    _mark_placeholder(ax_b)
-    ax_b.set_xlabel("Sample density (dense → sparse)")
-    ax_b.set_ylabel("CV of each fitted hyperparameter (schematic)")
-    ax_b.legend(handles=h_b, loc="lower center", bbox_to_anchor=(0.5, 1.10), ncol=1,
-                borderaxespad=0.0, title="Schematic, no data:", title_fontsize=FONT_PT)
-
-    _panel_label(ax_a, "A")
-    _panel_label(ax_b, "B")
-
     lines = _status_file(
         stem,
         inputs=[
@@ -2235,7 +2312,51 @@ def figure_f6(dens):
             "truths), recording every fitted hyperparameter per replicate so its CV can be computed.",
         ],
     )
-    return _save(fig, stem, lines)
+    return {"note": note, "status_lines": lines, "pct": dens["pct"], "cv": stats["cv"].values}
+
+
+def draw_f6(d):
+    note, dens, cv = d["note"], {"pct": d["pct"]}, d["cv"]
+    fig, rect = _new_figure(plot_height_mm=56.0, status_text=note, top_mm=19.0)
+    gs = fig.add_gridspec(1, 2, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3], wspace=0.24)
+    ax_a = fig.add_subplot(gs[0, 0])
+    ax_b = fig.add_subplot(gs[0, 1])
+
+    xs = [dens["pct"][lvl] for lvl in DENSITY_LEVELS]
+    ax_a.plot(xs, cv, color=METHOD_COLORS["gp_mle"],
+              marker=METHOD_MARKERS["gp_mle"], markersize=3.6)
+    _style_density_axis(ax_a, dens)
+    ax_a.set_ylim(bottom=0)
+    ax_a.set_ylabel("CV of fitted practical range (std / mean)")
+    ax_a.grid(True)
+    ax_a.legend(
+        handles=[Line2D([0], [0], color=METHOD_COLORS["gp_mle"], marker=METHOD_MARKERS["gp_mle"],
+                        markersize=3.6, label="GP-MLE, isotropic kernel (1 length scale)")],
+        loc="lower center", bbox_to_anchor=(0.5, 1.02), borderaxespad=0.0)
+
+    t = np.linspace(0.0, 1.0, 5)
+    curves = _schematic_curves(2, len(t), PLACEHOLDER_SEED + 2)
+    specs = [
+        ((0, (4, 2)), "Axis-aligned anisotropic kernel (2 length scales)"),
+        ((0, (1, 1.5)), "Rotated anisotropic kernel (2 length scales + angle)"),
+        # legend title carries the "(schematic, no data)" tag for both entries
+    ]
+    h_b = []
+    for (ls, label), y in zip(specs, curves):
+        ax_b.plot(t, y, color="0.35", linestyle=ls, linewidth=0.9)
+        h_b.append(Line2D([0], [0], color="0.35", linestyle=ls, linewidth=0.9,
+                          label=label))
+    ax_b.set_xlim(-0.08, 1.08)
+    ax_b.set_ylim(0.0, 1.0)
+    _mark_placeholder(ax_b)
+    ax_b.set_xlabel("Sample density (dense → sparse)")
+    ax_b.set_ylabel("CV of each fitted hyperparameter (schematic)")
+    ax_b.legend(handles=h_b, loc="lower center", bbox_to_anchor=(0.5, 1.10), ncol=1,
+                borderaxespad=0.0, title="Schematic, no data:", title_fontsize=FONT_PT)
+
+    _panel_label(ax_a, "A")
+    _panel_label(ax_b, "B")
+    return fig
 
 
 # ---------------------------------------------------------------------------
@@ -2320,11 +2441,7 @@ def _f7_grid(summ, method, metric):
     return xs, ys, z
 
 
-def figure_f7():
-    from matplotlib import patheffects
-    from matplotlib.colors import LogNorm, Normalize
-    from matplotlib.ticker import LogFormatterMathtext, NullLocator
-
+def compute_f7():
     stem = "F7_response_surfaces_accuracy_vs_uncertainty"
     summ = pd.read_csv(F7_SUMMARY)
     opt = pd.read_csv(F7_OPTIMA)
@@ -2358,91 +2475,21 @@ def figure_f7():
         f"RBF λ = nugget/(1 − nugget) (noise-to-signal ratio). Source: {prov['source_run']} (cross-check vs multi-truth run: "
         f"{prov['checks']['crosscheck_verdict']})."
     )
-    plot_h = 2 * (F7_CBAR_MM + F7_CBAR_GAP_MM + F7_PANEL_MM) + F7_ROW_GAP_MM
-    fig, rect = _new_figure(plot_height_mm=plot_h, status_text=note, top_mm=23.0, left_mm=14.0)
-    ratios = [F7_CBAR_MM, F7_CBAR_GAP_MM, F7_PANEL_MM, F7_ROW_GAP_MM, F7_CBAR_MM, F7_CBAR_GAP_MM, F7_PANEL_MM]
-    panel_w = ((rect[2] - rect[0]) * FULL_WIDTH_MM - 3 * F7_COL_GAP_MM) / 4.0
-    gs = fig.add_gridspec(7, 4, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3],
-                          height_ratios=ratios, hspace=0.0, wspace=F7_COL_GAP_MM / panel_w)
-    halo = [patheffects.withStroke(linewidth=1.6, foreground="white")]
     letters = iter("ABCDEFGH")
-    panel_info = []
+    panel_info, grids = [], {}
     for row, met in enumerate(("mse", "umg")):
         for col, m in enumerate(F7_METHODS):
-            cax = fig.add_subplot(gs[4 * row, col])
-            ax = fig.add_subplot(gs[4 * row + 2, col])
             xs, ys, z = _f7_grid(summ, m, met)
             zmin, zmax = float(np.min(z)), float(np.max(z))
             use_log = met == "mse" and zmax / zmin >= RATIO_LOG_THRESHOLD
-            norm = LogNorm(zmin, zmax) if use_log else Normalize(zmin, zmax)
-            levels = (np.geomspace(zmin, zmax, F7_N_LEVELS + 1) if use_log
-                      else np.linspace(zmin, zmax, F7_N_LEVELS + 1))
             fx, fy, fz = _f7_fine(xs, ys, z, F7_YLOG[m])
-            pc = ax.contourf(fx, fy, fz, levels=levels, cmap=F7_CMAP[met], norm=norm, extend="neither")
-            ax.contour(fx, fy, fz, levels=levels[1:-1], colors="black", linewidths=0.25, alpha=0.45)
-            ax.set_xlim(xs[0], xs[-1])
-            ax.set_ylim(ys[0], ys[-1])
-            ax.set_xscale("log")
-            if F7_YLOG[m]:
-                ax.set_yscale("log")
-                ax.yaxis.set_major_formatter(LogFormatterMathtext())
-            ax.set_xticks(F7_XTICKS)
-            ax.set_xticklabels([str(t) for t in F7_XTICKS])
-            ax.xaxis.set_minor_locator(NullLocator())
-            ax.set_yticks(F7_YTICKS[m])
-            ax.yaxis.set_minor_locator(NullLocator())
-            ax.set_ylabel(F7_YLABELS[m])
-            if row == 1:
-                ax.set_xlabel("Range equivalent (m)")
-            # optima (grid nodes)
-            # user request 2026-11-20: same marker meaning in every panel -
-            # filled star = MSE-surface optimum, hollow star = UMG-surface optimum
             own = opt_row(m, met)
-            mse_opt, oth = opt_row(m, "mse"), opt_row(m, "umg")
-            ax.plot(oth["range_equiv_m"], oth["param2_value"], linestyle="none", marker="*", markersize=8,
-                    markerfacecolor="none", markeredgecolor="black", markeredgewidth=0.8, path_effects=halo,
-                    zorder=6, clip_on=False)
-            ax.plot(mse_opt["range_equiv_m"], mse_opt["param2_value"], linestyle="none", marker="*", markersize=8,
-                    markerfacecolor="black", markeredgecolor="white", markeredgewidth=0.4, zorder=7, clip_on=False)
-            ax.plot(*_f7_true_point(m), linestyle="none", marker=F7_TRUE_MARKER[m], markersize=4,
-                    markerfacecolor="none", markeredgecolor="black", markeredgewidth=0.8, path_effects=halo,
-                    zorder=5, clip_on=False)
-            cb = fig.colorbar(pc, cax=cax, orientation="horizontal")
-            cax.xaxis.set_ticks_position("top")
-            cax.xaxis.set_label_position("top")
-            cb.set_label(F7_CBAR_LABEL[met], labelpad=1.5)
-            cb.outline.set_linewidth(0.5)
-            cax.tick_params(length=1.5, pad=1.0)
-            # contourf colourbars default to one tick per band edge -> pick a few readable ticks
-            if use_log:
-                tk = matplotlib.ticker.LogLocator(base=10, subs=(1.0, 2.0, 5.0)).tick_values(zmin, zmax)
-            else:
-                tk = matplotlib.ticker.MaxNLocator(nbins=4).tick_values(zmin, zmax)
-            tk = [t for t in tk if zmin <= t <= zmax]
-            cb.set_ticks(tk)
-            cb.set_ticklabels([f"{t:g}" for t in tk])
-            cax.xaxis.set_minor_locator(NullLocator())
-            if row == 0:
-                cax.annotate(F7_TITLES[m], xy=(0.5, 1.0), xycoords="axes fraction", xytext=(0, 21),
-                             textcoords="offset points", ha="center", va="bottom", fontweight="bold")
-            letter = next(letters)
-            _panel_label(ax, letter, dx_pt=-30.0, dy_pt=12.0)
-            panel_info.append((letter, m, met, use_log, zmin, zmax, own))
-    fig.legend(
-        handles=[
-            Line2D([0], [0], linestyle="none", marker="*", markersize=7, markerfacecolor="black",
-                   markeredgecolor="black", label="MSE-surface optimum (min MSE)"),
-            Line2D([0], [0], linestyle="none", marker="*", markersize=7, markerfacecolor="none",
-                   markeredgecolor="black", markeredgewidth=0.8, label="UMG-surface optimum (max UMG)"),
-            Line2D([0], [0], linestyle="none", marker="o", markersize=4, markerfacecolor="none",
-                   markeredgecolor="black", markeredgewidth=0.8,
-                   label=f"True base case ({truth['hmaj1']:g} m, {truth['nug']:g})"),
-            Line2D([0], [0], linestyle="none", marker="D", markersize=4, markerfacecolor="none",
-                   markeredgecolor="black", markeredgewidth=0.8,
-                   label="Approx. true-case equivalent (RBF, GP)"),
-        ],
-        loc="upper center", bbox_to_anchor=(0.5, 1.0), ncol=2, borderaxespad=0.3, columnspacing=3.0,
-    )
+            grids[f"{met}_{m}"] = {"xs": xs, "ys": ys, "fx": fx, "fy": fy, "fz": fz, "zmin": zmin, "zmax": zmax,
+                                   "use_log": use_log}
+            panel_info.append((next(letters), m, met, use_log, zmin, zmax, own))
+    # optimum nodes drawn in every panel (filled star = MSE optimum, hollow star = UMG optimum)
+    optima = {m: {met: [float(opt_row(m, met)["range_equiv_m"]), float(opt_row(m, met)["param2_value"])]
+                  for met in ("mse", "umg")} for m in F7_METHODS}
 
     panels = []
     for letter, m, met, use_log, zmin, zmax, own in panel_info:
@@ -2478,45 +2525,216 @@ def figure_f7():
     lines = _status_file(stem, inputs=[_rel(F7_SUMMARY), _rel(F7_OPTIMA), _rel(F7_PROV),
                                        prov["source_run"] + "/run_config.json"],
                          panels=panels, in_figure_note="DATA STATUS: " + note, limits=limits)
-    return _save(fig, stem, lines)
+    return {"note": note, "status_lines": lines, "grids": grids, "optima": optima,
+            "truth_hmaj1": truth["hmaj1"], "truth_nug": truth["nug"]}
 
 
-def main(only=None):
-    """Draw all figures, or only those named in ``only`` (e.g. ["F3c"]; command line:
-    ``... make_storyboard_figures F3c``)."""
-    _setup_style()
-    dens = _density_info()   # F6 (single-truth replicate axis)
-    mt = _load_multi_truth()  # F1-F3 (multi_truth_axes E2-E5)
-    written = []
-    jobs = (
-        ("F1", figure_f1, (mt,)),
-        ("F2", figure_f2, (mt,)),
-        ("F3", figure_f3, (mt,)),
-        ("F3-2", figure_f3_2, (mt,)),
-        ("F3-2b", figure_f3_2_maps, (mt,)),
-        ("F3c", figure_f3_extremes, (mt,)),
-        ("F3d", figure_f3_extremes, (mt, "1", "F3d_density_gp_range_extremes_1pct")),
-        ("F4", figure_f4, ()),
-        ("F5", figure_f5, ()),
-        ("F6", figure_f6, (dens,)),
-        ("F7", figure_f7, ()),
+def draw_f7(d):
+    from matplotlib import patheffects
+    from matplotlib.colors import LogNorm, Normalize
+    from matplotlib.ticker import LogFormatterMathtext, NullLocator
+
+    note, truth = d["note"], {"hmaj1": d["truth_hmaj1"], "nug": d["truth_nug"]}
+    plot_h = 2 * (F7_CBAR_MM + F7_CBAR_GAP_MM + F7_PANEL_MM) + F7_ROW_GAP_MM
+    fig, rect = _new_figure(plot_height_mm=plot_h, status_text=note, top_mm=23.0, left_mm=14.0)
+    ratios = [F7_CBAR_MM, F7_CBAR_GAP_MM, F7_PANEL_MM, F7_ROW_GAP_MM, F7_CBAR_MM, F7_CBAR_GAP_MM, F7_PANEL_MM]
+    panel_w = ((rect[2] - rect[0]) * FULL_WIDTH_MM - 3 * F7_COL_GAP_MM) / 4.0
+    gs = fig.add_gridspec(7, 4, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3],
+                          height_ratios=ratios, hspace=0.0, wspace=F7_COL_GAP_MM / panel_w)
+    halo = [patheffects.withStroke(linewidth=1.6, foreground="white")]
+    letters = iter("ABCDEFGH")
+    for row, met in enumerate(("mse", "umg")):
+        for col, m in enumerate(F7_METHODS):
+            cax = fig.add_subplot(gs[4 * row, col])
+            ax = fig.add_subplot(gs[4 * row + 2, col])
+            g = d["grids"][f"{met}_{m}"]
+            xs, ys, zmin, zmax, use_log = g["xs"], g["ys"], g["zmin"], g["zmax"], g["use_log"]
+            norm = LogNorm(zmin, zmax) if use_log else Normalize(zmin, zmax)
+            levels = (np.geomspace(zmin, zmax, F7_N_LEVELS + 1) if use_log
+                      else np.linspace(zmin, zmax, F7_N_LEVELS + 1))
+            fx, fy, fz = g["fx"], g["fy"], g["fz"]
+            pc = ax.contourf(fx, fy, fz, levels=levels, cmap=F7_CMAP[met], norm=norm, extend="neither")
+            ax.contour(fx, fy, fz, levels=levels[1:-1], colors="black", linewidths=0.25, alpha=0.45)
+            ax.set_xlim(xs[0], xs[-1])
+            ax.set_ylim(ys[0], ys[-1])
+            ax.set_xscale("log")
+            if F7_YLOG[m]:
+                ax.set_yscale("log")
+                ax.yaxis.set_major_formatter(LogFormatterMathtext())
+            ax.set_xticks(F7_XTICKS)
+            ax.set_xticklabels([str(t) for t in F7_XTICKS])
+            ax.xaxis.set_minor_locator(NullLocator())
+            ax.set_yticks(F7_YTICKS[m])
+            ax.yaxis.set_minor_locator(NullLocator())
+            ax.set_ylabel(F7_YLABELS[m])
+            if row == 1:
+                ax.set_xlabel("Range equivalent (m)")
+            # optima (grid nodes)
+            # user request 2026-11-20: same marker meaning in every panel -
+            # filled star = MSE-surface optimum, hollow star = UMG-surface optimum
+            mse_opt, oth = d["optima"][m]["mse"], d["optima"][m]["umg"]
+            ax.plot(oth[0], oth[1], linestyle="none", marker="*", markersize=8,
+                    markerfacecolor="none", markeredgecolor="black", markeredgewidth=0.8, path_effects=halo,
+                    zorder=6, clip_on=False)
+            ax.plot(mse_opt[0], mse_opt[1], linestyle="none", marker="*", markersize=8,
+                    markerfacecolor="black", markeredgecolor="white", markeredgewidth=0.4, zorder=7, clip_on=False)
+            ax.plot(*_f7_true_point(m), linestyle="none", marker=F7_TRUE_MARKER[m], markersize=4,
+                    markerfacecolor="none", markeredgecolor="black", markeredgewidth=0.8, path_effects=halo,
+                    zorder=5, clip_on=False)
+            cb = fig.colorbar(pc, cax=cax, orientation="horizontal")
+            cax.xaxis.set_ticks_position("top")
+            cax.xaxis.set_label_position("top")
+            cb.set_label(F7_CBAR_LABEL[met], labelpad=1.5)
+            cb.outline.set_linewidth(0.5)
+            cax.tick_params(length=1.5, pad=1.0)
+            # contourf colourbars default to one tick per band edge -> pick a few readable ticks
+            if use_log:
+                tk = matplotlib.ticker.LogLocator(base=10, subs=(1.0, 2.0, 5.0)).tick_values(zmin, zmax)
+            else:
+                tk = matplotlib.ticker.MaxNLocator(nbins=4).tick_values(zmin, zmax)
+            tk = [t for t in tk if zmin <= t <= zmax]
+            cb.set_ticks(tk)
+            cb.set_ticklabels([f"{t:g}" for t in tk])
+            cax.xaxis.set_minor_locator(NullLocator())
+            if row == 0:
+                cax.annotate(F7_TITLES[m], xy=(0.5, 1.0), xycoords="axes fraction", xytext=(0, 21),
+                             textcoords="offset points", ha="center", va="bottom", fontweight="bold")
+            letter = next(letters)
+            _panel_label(ax, letter, dx_pt=-30.0, dy_pt=12.0)
+    fig.legend(
+        handles=[
+            Line2D([0], [0], linestyle="none", marker="*", markersize=7, markerfacecolor="black",
+                   markeredgecolor="black", label="MSE-surface optimum (min MSE)"),
+            Line2D([0], [0], linestyle="none", marker="*", markersize=7, markerfacecolor="none",
+                   markeredgecolor="black", markeredgewidth=0.8, label="UMG-surface optimum (max UMG)"),
+            Line2D([0], [0], linestyle="none", marker="o", markersize=4, markerfacecolor="none",
+                   markeredgecolor="black", markeredgewidth=0.8,
+                   label=f"True base case ({truth['hmaj1']:g} m, {truth['nug']:g})"),
+            Line2D([0], [0], linestyle="none", marker="D", markersize=4, markerfacecolor="none",
+                   markeredgecolor="black", markeredgewidth=0.8,
+                   label="Approx. true-case equivalent (RBF, GP)"),
+        ],
+        loc="upper center", bbox_to_anchor=(0.5, 1.0), ncol=2, borderaxespad=0.3, columnspacing=3.0,
     )
-    # P1/P3/P4/P7/P7b diagnostics (user request 2026-11-19), sibling module; imported here (not at module
-    # top) because it imports this module's helpers
+    return fig
+
+
+# ---------------------------------------------------------------------------
+# Figure registry and command line
+# ---------------------------------------------------------------------------
+THIS_SCRIPT = "results/processed/paper_storyboard/make_storyboard_figures.py"
+
+# (key, stem, compute(shared input or nothing) -> plot-data dict, shared input, draw(plot data) -> fig)
+FIGURES = (
+    ("F1", "F1_accuracy_vs_calibration_three_axes", compute_f1, "mt", draw_f1),
+    ("F2", "F2_base_case_calibration_and_variance", compute_f2, "mt", draw_f2),
+    ("F3", "F3_gp_vs_sample_density", compute_f3, "mt", draw_f3),
+    ("F3-2", "F3-2_density_rep0_picked_variogram", compute_f3_2, "mt", draw_f3_2),
+    ("F3-2b", "F3-2b_density_truth_and_samples", compute_f3_2_maps, "mt", draw_f3_2_maps),
+    ("F3c", "F3c_density_gp_range_extremes",
+     lambda mt: compute_f3_extremes(mt, F3_EXT_LEVEL, "F3c_density_gp_range_extremes"), "mt", draw_f3_extremes),
+    ("F3d", "F3d_density_gp_range_extremes_1pct",
+     lambda mt: compute_f3_extremes(mt, "1", "F3d_density_gp_range_extremes_1pct"), "mt", draw_f3_extremes),
+    ("F4", "F4_gp_fitted_vs_truth_hyperparameters", compute_f4, None, draw_f4),
+    ("F5", "F5_anisotropy", compute_f5, None, draw_f5),
+    ("F6", "F6_hyperparameter_stability_vs_density", compute_f6, "dens", draw_f6),
+    ("F7", "F7_response_surfaces_accuracy_vs_uncertainty", compute_f7, None, draw_f7),
+)
+# shared inputs, loaded once per run and only if a selected figure is computed
+SHARED_LOADERS = {
+    "mt": _load_multi_truth,   # F1-F3 + P1/P3/P4 (multi_truth_axes E2-E5)
+    "dens": _density_info,     # F6 (single-truth replicate axis)
+}
+
+
+def all_jobs():
+    """F* jobs of this module followed by the P* jobs of make_storyboard_diagnostics
+    (imported here, not at module top, because it imports this module's helpers)."""
     from results.processed.paper_storyboard import make_storyboard_diagnostics as diag
-    jobs += tuple((name, fn, (mt,) if arg == "mt" else ()) for name, fn, arg in diag.JOBS)
+    return FIGURES + diag.JOBS
+
+
+def _parse_args(argv, default_keys=None):
+    import argparse
+    keys = [j[0] for j in all_jobs()]
+    ap = argparse.ArgumentParser(
+        prog="python -m results.processed.paper_storyboard.make_storyboard_figures",
+        description="Storyboard figures F1-F7 and diagnostics P1-P7b: compute plot data (cached in "
+                    f"{plot_cache.PLOT_DATA_DIR.relative_to(_REPO_ROOT).as_posix()}/) and draw.")
+    ap.add_argument("names", nargs="*", metavar="KEY", help="figure keys (same as --only; kept for old commands)")
+    ap.add_argument("--only", nargs="+", default=[], metavar="KEY", help="figure keys: " + " ".join(keys))
+    ap.add_argument("--draw-only", action="store_true",
+                    help="draw from the cached plot data only (no input files read, no checks / calculations); "
+                         "fails if a selected figure has no cache")
+    a = ap.parse_args(argv)
+    only = list(dict.fromkeys(a.names + a.only)) or default_keys
     if only:
-        unknown = set(only) - {name for name, _, _ in jobs}
+        unknown = sorted(set(only) - set(keys))
         if unknown:
-            raise ValueError(f"unknown figure name(s): {sorted(unknown)}")
-    for name, fn, args in jobs:
-        if only and name not in only:
-            continue
-        print(name)
-        written += fn(*args)
-    print(f"{len(written)} files written to {_rel(FIGURES_DIR)}")
+            ap.error(f"unknown figure key(s) {unknown}; valid: {' '.join(keys)}")
+    return only, a.draw_only
+
+
+def main(argv=None, default_keys=None):
+    """Compute + draw all figures (default), or only ``--only`` keys; ``--draw-only``
+    redraws from results/processed/paper_storyboard/plot_data/ without recomputing.
+    ``argv`` defaults to sys.argv[1:]; ``default_keys`` is the selection when no key is given."""
+    import time
+    only, draw_only = _parse_args(sys.argv[1:] if argv is None else argv, default_keys)
+    _setup_style()
+    jobs = [j for j in all_jobs() if not only or j[0] in only]
+    if draw_only:   # fail before drawing anything if a selected figure was never computed
+        missing = [key for key, stem, *_ in jobs if not (plot_cache.PLOT_DATA_DIR / f"{stem}.json").exists()]
+        if missing:
+            raise SystemExit(f"ERROR: no plot cache for {' '.join(missing)} in "
+                             f"{plot_cache.PLOT_DATA_DIR.relative_to(_REPO_ROOT).as_posix()}/. Run the same "
+                             "command without --draw-only (e.g. --only " + " ".join(missing) + ") first.")
+    shared = {}
+
+    def get_shared(name):
+        if name not in shared:
+            reads = set()
+            with plot_cache.track_reads(reads):
+                shared[name] = (SHARED_LOADERS[name](), reads)
+        return shared[name]
+
+    written, n_stale = [], 0
+    for key, stem, compute, needs, draw in jobs:
+        print(key)
+        t0 = time.perf_counter()
+        if not draw_only:
+            args, reads = (), set()
+            if needs:
+                value, shared_reads = get_shared(needs)
+                args, reads = (value,), set(shared_reads)
+            with plot_cache.track_reads(reads):
+                data = compute(*args)
+            if data["status_lines"][0] != stem:
+                raise ValueError(f"{key}: compute step wrote stem {data['status_lines'][0]!r}, registry {stem!r}")
+            generated_by = ("results/processed/paper_storyboard/make_storyboard_diagnostics.py"
+                            if "diagnostics" in (getattr(compute, "__module__", "") or "") else THIS_SCRIPT)
+            plot_cache.save(key, stem, data, reads, generated_by=generated_by)
+            t1 = time.perf_counter()
+            print(f"  plot data {plot_cache.PLOT_DATA_DIR.relative_to(_REPO_ROOT).as_posix()}/{stem}.* "
+                  f"({plot_cache.cache_size(stem)} bytes, {len(reads)} input files, compute {t1 - t0:.1f} s)")
+        try:
+            d, meta = plot_cache.load(stem)
+        except plot_cache.CacheMissingError as e:
+            raise SystemExit(f"ERROR ({key}): {e}") from None
+        if draw_only:
+            stale = plot_cache.stale_inputs(meta)
+            if stale:
+                n_stale += 1
+                print(f"  WARNING: plot data computed {meta['computed_at']} (git {meta['git_commit'][:7]}) may be "
+                      f"STALE - {len(stale)} input file(s) changed since: "
+                      + ", ".join(f"{p} ({why})" for p, why in stale[:5]) + (" ..." if len(stale) > 5 else ""))
+        t1 = time.perf_counter()
+        written += _save(draw(d), stem, d["status_lines"])
+        print(f"  draw {time.perf_counter() - t1:.1f} s")
+    print(f"{len(written)} files written to {_rel(FIGURES_DIR)}"
+          + (f"; {n_stale} figure(s) drawn from possibly stale plot data" if n_stale else ""))
     return written
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:] or None)
+    main()

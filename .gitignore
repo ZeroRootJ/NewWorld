@@ -9,3 +9,6 @@ results/raw/
 
 # artifact 게시용 임시 HTML 소스 (published artifact 자체가 원본, 이 파일은 로컬 재게시용)
 .artifact_tmp/
+
+# 스토리보드 그림 데이터 캐시 (make_storyboard_figures 전체 실행으로 재생성, --draw-only용 로컬 캐시)
+results/processed/paper_storyboard/plot_data/
