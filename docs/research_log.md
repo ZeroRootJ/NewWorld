@@ -39,3 +39,5 @@ reproduction 지표) 조사해 references.md에 반영 → 결과를 Sample Dens
 **스토리 재구성** — 사용자: 셀링포인트는 "정확도 기반 모델(최신 ML 포함)은 UQ 미내장 → 사후 UQ는 맞추기 어렵다", RBF가 최단순 대표 → 결론 1(핵심) = F2·F7·P7·P7b, 결론 2 = GP 희소 조건; 아티팩트 V29.
 
 **P7b 제거·결론 2 논조** — 사용자: grid search는 "MSE/UMG 최적이 다르다"까지만(P7b·trade-off 크기 문장 삭제), 결론 2 = 희소 데이터에서 GP 파라미터 흔들림 → realization 생성(variogram·분포 재현)에 치명적 → placeholder P8(implied variogram)·P9(GP realization 재현) 추가; 아티팩트 V30.
+
+**F1 오차막대 제거** — 사용자 요청 → 6개 패널 모두 평균만 표시, status·아티팩트 문구 갱신; V31.

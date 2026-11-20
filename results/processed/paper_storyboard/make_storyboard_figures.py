@@ -646,9 +646,10 @@ def _mt_axis_text(a) -> str:
     return f"{a['n_truth']} ground-truth realizations × {sets} = {a['n_cells']} cells per level"
 
 
-def _plot_level_metric(ax, summ, metric):
+def _plot_level_metric(ax, summ, metric, errorbars=True):
     """mean +- 1 std on a LINEAR numeric level axis; methods offset additively
-    by a fraction of the level spacing so error bars do not overlap."""
+    by a fraction of the level spacing so error bars do not overlap.
+    errorbars=False draws the means only (F1, user request 2026-11-20)."""
     levels = np.array(sorted(summ["axis_level"].astype(float).unique()))
     step = float(np.min(np.diff(levels)))
     for m_idx, method in enumerate(METHODS):
@@ -656,7 +657,7 @@ def _plot_level_metric(ax, summ, metric):
         sub = summ[(summ["method"] == method) & (summ["metric"] == metric)].copy()
         sub["x"] = sub["axis_level"].astype(float)
         sub = sub.sort_values("x")
-        ax.errorbar(sub["x"] + off, sub["mean"], yerr=sub["std"], color=METHOD_COLORS[method],
+        ax.errorbar(sub["x"] + off, sub["mean"], yerr=sub["std"] if errorbars else None, color=METHOD_COLORS[method],
                     marker=METHOD_MARKERS[method], markersize=3.6, linewidth=1.0,
                     elinewidth=0.5, capsize=1.5, capthick=0.5, zorder=3)
     ax.set_xticks(levels)
@@ -728,7 +729,7 @@ def figure_f1(mt):
                   f"({ex['nugget']['n_levels']} levels): {nugget_txt}")
     note = (
         f"{rn_txt}. Density axis: {_mt_axis_text(ex['density'])}. "
-        f"{_mt_bar_text().capitalize()}. {_mt_ensemble_text(mt)}."
+        f"Points = mean over all cells of a level (no error bars). {_mt_ensemble_text(mt)}."
     )
     fig, rect = _new_figure(plot_height_mm=84.0, status_text=note, top_mm=13.0)
     gs = fig.add_gridspec(2, 3, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3],
@@ -746,11 +747,11 @@ def figure_f1(mt):
     level_values = []
     for c, (summ, xlabel) in enumerate(level_cols):
         for r, metric in enumerate(["mse", "umg"]):
-            lv = _plot_level_metric(axes[r, c], summ, metric)
+            lv = _plot_level_metric(axes[r, c], summ, metric, errorbars=False)
         level_values.append(lv)
         axes[1, c].set_xlabel(xlabel)
     for r, metric in enumerate(["mse", "umg"]):
-        _plot_density_metric(axes[r, 2], ex["density"]["summary"], dens, metric)
+        _plot_density_metric(axes[r, 2], ex["density"]["summary"], dens, metric, errorbars=False)
     _style_density_axis(axes[1, 2], dens, xlabel=False)
     axes[1, 2].set_xlabel(DENSITY_XLABEL_SHORT)
 
@@ -777,12 +778,12 @@ def figure_f1(mt):
         stem,
         inputs=_mt_inputs(mt),
         panels=[
-            ("A", f"REAL DATA - MSE vs ground-truth range ({er['experiment']}), 4 methods, mean +-1 std over "
-                  f"{er['n_cells']} cells per level"),
-            ("B", f"REAL DATA - MSE vs ground-truth nugget ({en['experiment']}), mean +-1 std over "
-                  f"{en['n_cells']} cells per level"),
-            ("C", f"REAL DATA - MSE vs sample density ({ed['experiment']}), mean +-1 std over "
-                  f"{ed['n_cells']} cells per level"),
+            ("A", f"REAL DATA - MSE vs ground-truth range ({er['experiment']}), 4 methods, mean over "
+                  f"{er['n_cells']} cells per level (no error bars)"),
+            ("B", f"REAL DATA - MSE vs ground-truth nugget ({en['experiment']}), mean over "
+                  f"{en['n_cells']} cells per level (no error bars)"),
+            ("C", f"REAL DATA - MSE vs sample density ({ed['experiment']}), mean over "
+                  f"{ed['n_cells']} cells per level (no error bars)"),
             ("D", "REAL DATA - UMG vs ground-truth range, same statistics as A"),
             ("E", "REAL DATA - UMG vs ground-truth nugget, same statistics as B"),
             ("F", "REAL DATA - UMG vs sample density, same statistics as C"),

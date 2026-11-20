@@ -9,15 +9,15 @@ INPUT FILES (read-only):
   - results/raw/multi_truth_axes/20261116T222609599808Z/run_config.json (read-only; hmaj1 / hmin1 / nug of every cell, joined on experiment + config_key)
 
 PANELS:
-  A: REAL DATA - MSE vs ground-truth range (E2), 4 methods, mean +-1 std over 10 cells per level
-  B: REAL DATA - MSE vs ground-truth nugget (E3), mean +-1 std over 10 cells per level
-  C: REAL DATA - MSE vs sample density (E4), mean +-1 std over 100 cells per level
+  A: REAL DATA - MSE vs ground-truth range (E2), 4 methods, mean over 10 cells per level (no error bars)
+  B: REAL DATA - MSE vs ground-truth nugget (E3), mean over 10 cells per level (no error bars)
+  C: REAL DATA - MSE vs sample density (E4), mean over 100 cells per level (no error bars)
   D: REAL DATA - UMG vs ground-truth range, same statistics as A
   E: REAL DATA - UMG vs ground-truth nugget, same statistics as B
   F: REAL DATA - UMG vs sample density, same statistics as C
 
 DATA STATUS note printed in the figure margin:
-  DATA STATUS: Range axis (8 levels) and nugget axis (6 levels): 10 ground-truth realizations × 1 sample set (n = 121 of 125 requested) = 10 cells per level. Density axis: 10 ground-truth realizations × 10 sample sets = 100 cells per level. Points = mean, bars = ±1 std (ddof = 1) pooled over all cells of a level. SGS and RBF+bootstrap ensemble N = 50 (batch 1); kriging and GP-MLE have no ensemble.
+  DATA STATUS: Range axis (8 levels) and nugget axis (6 levels): 10 ground-truth realizations × 1 sample set (n = 121 of 125 requested) = 10 cells per level. Density axis: 10 ground-truth realizations × 10 sample sets = 100 cells per level. Points = mean over all cells of a level (no error bars). SGS and RBF+bootstrap ensemble N = 50 (batch 1); kriging and GP-MLE have no ensemble.
 
 DATA LIMITATIONS / FACTS ABOUT THE INPUTS:
   - evaluation: src/experiments/evaluate_multi_truth_axes.py at git 8e8c4a6 (git_dirty=True, dirty files ['results/processed/multi_truth_axes/']); 641 cells evaluated, 0 skipped; source results/raw/multi_truth_axes/20261116T222609599808Z (is_production_configuration=True).

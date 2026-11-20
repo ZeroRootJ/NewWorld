@@ -22,7 +22,7 @@ FIGS = {
         title="정확도와 calibration, 3개 축",
         body=[
             "위 행은 MSE, 아래 행은 UMG입니다. 열은 왼쪽부터 ground-truth range, nugget, sample density 축입니다.",
-            "range와 nugget 축은 레벨당 ground-truth realization 10개(샘플셋은 같음, n = 121), density 축은 ground truth 10개 × 샘플셋 10개 = 100셀입니다. 점은 평균, 막대는 레벨 내 모든 셀의 ±1 표준편차입니다. SGS와 RBF+bootstrap의 ensemble 크기는 N = 50입니다.",
+            "range와 nugget 축은 레벨당 ground-truth realization 10개(샘플셋은 같음, n = 121), density 축은 ground truth 10개 × 샘플셋 10개 = 100셀입니다. 점은 레벨 내 모든 셀의 평균이고, 오차막대는 그리지 않았습니다(2026-11-20 사용자 요청). SGS와 RBF+bootstrap의 ensemble 크기는 N = 50입니다.",
         ]),
     "F2": dict(
         stem="F2_base_case_calibration_and_variance", st=REAL,
