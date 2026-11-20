@@ -89,15 +89,20 @@ EXPERIMENT_NAME = "gp_mle"
 CODE_ENTRYPOINT = "src/experiments/gp_mle.py"
 
 
-def build_kernel():
+def build_kernel(noise_level_bounds=NOISE_LEVEL_BOUNDS):
+    """``noise_level_bounds`` (added 2026-11-20, gp_noise_floor_1pct
+    diagnostic): WhiteKernel noise-level bounds in the normalized-y space.
+    The default is the production constant NOISE_LEVEL_BOUNDS, so calling
+    with no argument builds exactly the production kernel. Only diagnostics
+    pass a different value (e.g. a lower floor of 1e-10)."""
     return (
         ConstantKernel(CONSTANT_VALUE_INIT, CONSTANT_VALUE_BOUNDS)
         * RBF(length_scale=LENGTH_SCALE_INIT, length_scale_bounds=LENGTH_SCALE_BOUNDS)
-        + WhiteKernel(noise_level=NOISE_LEVEL_INIT, noise_level_bounds=NOISE_LEVEL_BOUNDS)
+        + WhiteKernel(noise_level=NOISE_LEVEL_INIT, noise_level_bounds=noise_level_bounds)
     )
 
 
-def build_gpr() -> GaussianProcessRegressor:
+def build_gpr(noise_level_bounds=NOISE_LEVEL_BOUNDS) -> GaussianProcessRegressor:
     """THE production GaussianProcessRegressor configuration (unfitted).
 
     Exists so that diagnostics which only need the hyperparameter fit (e.g.
@@ -114,9 +119,13 @@ def build_gpr() -> GaussianProcessRegressor:
     zero-mean, so y is internally centered/scaled for the optimizer, and
     sklearn's predict() automatically reverses this so the returned mean
     and std are already in the original porosity units.
+
+    ``noise_level_bounds``: passed to build_kernel; default = production
+    NOISE_LEVEL_BOUNDS (no-argument call is unchanged). Everything else
+    (restarts, normalize_y, random_state) is not parameterized.
     """
     return GaussianProcessRegressor(
-        kernel=build_kernel(),
+        kernel=build_kernel(noise_level_bounds),
         n_restarts_optimizer=N_RESTARTS_OPTIMIZER,
         normalize_y=True,
         random_state=GP_RANDOM_STATE,

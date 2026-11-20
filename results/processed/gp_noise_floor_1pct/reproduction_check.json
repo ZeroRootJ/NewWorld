@@ -1,0 +1,68 @@
+{
+  "generated_by": "src/experiments/gp_noise_floor_1pct.py",
+  "git_commit": "089460158a16b2a118a21c52e927fd6c13c12415",
+  "git_dirty": true,
+  "git_dirty_files": [
+    "src/experiments/gp_mle.py",
+    "results/processed/gp_noise_floor_1pct/",
+    "src/experiments/gp_noise_floor_1pct.py"
+  ],
+  "raw_run": "results/raw/gp_noise_floor_1pct/20261120T174658618918Z",
+  "production_source": "results/processed/multi_truth_axes",
+  "old_values": "production values from results/processed/multi_truth_axes (metrics.csv, hyperparameters.csv); umg_sgs = sgs batches '1' (N=50)",
+  "noise_columns": "noise_old/new = WhiteKernel noise_level in normalized-y space (the bound applies here)",
+  "at_floor_rule": "np.isclose(noise, lower_bound, rtol=1e-06, atol=0)",
+  "reproduction_check": {
+    "length_scale_m": {
+      "max_rel_diff": 0.0,
+      "n_exact": 100,
+      "n_within_rtol": 100
+    },
+    "noise_variance_normalized": {
+      "max_rel_diff": 0.0,
+      "n_exact": 100,
+      "n_within_rtol": 100
+    },
+    "noise_variance_real_units": {
+      "max_rel_diff": 0.0,
+      "n_exact": 100,
+      "n_within_rtol": 100
+    },
+    "signal_variance_normalized": {
+      "max_rel_diff": 0.0,
+      "n_exact": 100,
+      "n_within_rtol": 100
+    },
+    "log_marginal_likelihood": {
+      "max_rel_diff": 0.0,
+      "n_exact": 100,
+      "n_within_rtol": 100
+    },
+    "umg": {
+      "max_rel_diff": 0.0,
+      "n_exact": 100,
+      "n_within_rtol": 100
+    },
+    "mse": {
+      "max_rel_diff": 0.0,
+      "n_exact": 100,
+      "n_within_rtol": 100
+    },
+    "variance_mean": {
+      "max_rel_diff": 0.0,
+      "n_exact": 100,
+      "n_within_rtol": 100
+    },
+    "coverage90": {
+      "max_rel_diff": 0.0,
+      "n_exact": 100,
+      "n_within_rtol": 100
+    },
+    "posterior_mean_map_max_abs_diff": 3.552713678800501e-15,
+    "posterior_var_map_max_abs_diff": 0.0,
+    "n_cells_maps_bit_identical": 74,
+    "rtol": 1e-06,
+    "passed": true,
+    "failed_quantities": []
+  }
+}

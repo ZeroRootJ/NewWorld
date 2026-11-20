@@ -55,3 +55,5 @@ reproduction 지표) 조사해 references.md에 반영 → 결과를 Sample Dens
 **Fig. 4 갱신 + truth variogram** — 사용자: F4를 n50(레벨당 50개)·nugget sill 비율(0–1)로 → V35; realization 변동 확인용 truth 700개 실험 variogram(전체 map·샘플) 계산, 실험 대시보드에 GP range 색으로 표시.
 
 **부록 Fig. A2** — 사용자: truth realization 실험 variogram을 부록에 → A2(레벨별 50개, GP range 비율 색), V36.
+
+**GP noise 하한 1e-10 (1 %)** — 사용자: 하한(1e-5)이 GP-MLE 성능을 끌어올렸는지 → E4 1 % 100셀 GP만 재적합, UMG 평균 0.8895→0.8896, 하한 셀 16개 0.828→0.828; 7108 rep8만 다른 국소해; 대시보드 표시, 스토리보드 그대로.
