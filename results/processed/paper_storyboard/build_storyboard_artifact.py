@@ -93,8 +93,8 @@ FIGS = {
         stem="F4_gp_fitted_vs_truth_hyperparameters", st=REAL,
         title="GP가 맞춘 range, nugget과 실제 값",
         body=[
-            "A는 ground-truth range 대 GP-MLE가 맞춘 practical range, B는 ground-truth nugget 대 GP-MLE가 맞춘 noise variance입니다. 점선은 y = x입니다.",
-            "레벨당 ground-truth realization 10개이고, 샘플 위치는 모두 같습니다(n = 121). optimizer 경계에 걸린 적합은 A 80개 중 0개, B 60개 중 0개입니다.",
+            "A는 ground-truth range 대 GP-MLE가 맞춘 practical range, B는 ground-truth nugget 대 GP-MLE가 맞춘 noise로, 둘 다 sill 대비 비율(0~1)입니다(GP는 noise / (signal + noise)). 점선은 y = x입니다.",
+            "레벨당 ground-truth realization 50개이고(2026-11-20, 10개에서 확장), 샘플 위치는 모두 같습니다(n = 121). optimizer 경계에 걸린 적합은 A 400개 중 2개(range 100 m, noise 하한), B 300개 중 0개입니다.",
         ]),
     "F5": dict(
         stem="F5_anisotropy", st=PART,
@@ -176,10 +176,10 @@ CLAIMS = {
     ],
     "F4": [
         "출발점: F1에서 GP-MLE는 range 축 전체에서 UMG 0.95를 유지합니다(n = 121, 밀도 약 5 %). oracle kriging 이상으로 calibrate됩니다.",
-        "A: 그런데 GP가 맞춘 range는 실제 range를 따라가지 않습니다. 실제 100 → 800 m일 때 평균 130 → 337 m입니다.",
-        "B: GP가 맞춘 noise는 실제 nugget보다 평균 1.0~1.5 크고, nugget이 0일 때도 1.47입니다.",
+        "A: 그런데 GP가 맞춘 range는 실제 range를 따라가지 않습니다. 실제 100 → 800 m일 때 평균 107 → 388 m입니다.",
+        "B: GP가 맞춘 noise 비율은 실제 nugget보다 레벨 평균 0.12~0.17 크고, nugget이 0일 때도 0.167입니다.",
         "즉 GP는 '짧은 range + 큰 noise'라는 실제와 다른 모델로도 calibrate됩니다. 이 하이퍼파라미터는 marginal likelihood를 최대화한 값이지 range, nugget이 아니므로, 지질 지식으로 맞는지 검증하거나 고칠 수 없습니다.",
-        "ground truth 10개에서 같은 방향이므로 realization 하나의 우연이 아닙니다.",
+        "ground truth 50개에서 같은 방향이므로 realization 하나의 우연이 아닙니다.",
         "→ F3: 이 '다른 모델'은 데이터가 충분할 때는 안정적입니다. 현장에서 흔한 희소 데이터에서는?",
     ],
     "F3": [

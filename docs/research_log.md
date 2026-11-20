@@ -51,3 +51,5 @@ reproduction 지표) 조사해 references.md에 반영 → 결과를 Sample Dens
 **F6 삭제·F3b 부록** — 사용자 → 파라미터 수 vs 데이터량(F6) 제외, 밀도별 map·샘플 위치(F3b)는 부록 Fig. A1; 본문 Fig. 1–11; V34.
 
 **GP-MLE truth 50개/레벨** — 사용자: Fig. 4 점 개수 레벨당 50개 → GP-MLE만 seed 7110–7149 추가(range 8, nugget 6레벨, 700 적합, 157 s), 기존 10개 재현 ≤1.2e-15, `*_n50.csv`; 실험 대시보드 신설.
+
+**Fig. 4 갱신 + truth variogram** — 사용자: F4를 n50(레벨당 50개)·nugget sill 비율(0–1)로 → V35; realization 변동 확인용 truth 700개 실험 variogram(전체 map·샘플) 계산, 실험 대시보드에 GP range 색으로 표시.

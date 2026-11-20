@@ -119,8 +119,9 @@ REPL_SEEDS = PROCESSED / "sample_replicate_axis" / "replicate_seeds.json"
 REPL_EXTRA = PROCESSED / "sample_replicate_axis" / "extra_density_levels_record.json"
 REPL_LENGTH = PROCESSED / "sample_replicate_axis" / "length_scale_by_replicate.csv"
 REPL_VAR_SOURCES = PROCESSED / "sample_replicate_axis" / "variance_metric_sources.csv"
-RANGE_GP_REAL = PROCESSED / "range_axis" / "gp_hyperparameters_by_realization.csv"
-NUGGET_GP_REAL = PROCESSED / "nugget_axis" / "gp_hyperparameters_by_realization.csv"
+# 50 ground truths per level (gp_realization_n50, user request 2026-11-20; was the 10-truth files)
+RANGE_GP_REAL = PROCESSED / "range_axis" / "gp_hyperparameters_by_realization_n50.csv"
+NUGGET_GP_REAL = PROCESSED / "nugget_axis" / "gp_hyperparameters_by_realization_n50.csv"
 ANISO_AZIMUTH = PROCESSED / "anisotropy_azimuth_sweep" / "true_range_by_azimuth.csv"
 ANISO_VARIO = PROCESSED / "anisotropy_variogram_check" / "variogram_comparison.csv"
 
@@ -159,7 +160,7 @@ DENSITY_LEVELS = ["20", "10", "5", "2", "1"]  # dense -> sparse
 # x = truth_nugget_real_units, both Porosity %^2). "fraction" switches to the
 # dimensionless pair those scripts only RECORD (y = gp_noise_fraction_of_fitted_sill,
 # x = nug_normalized).
-F4_NUGGET_MODE = "real"
+F4_NUGGET_MODE = "fraction"  # user request 2026-11-20: nugget as fraction of sill, axis max 1
 # F5 panel B: representative ratio level of anisotropy_variogram_check.
 F5_VARIOGRAM_RATIO = "3:1"
 # F5 panel B y-axis upper limit (display only; means use all points and the
@@ -2029,8 +2030,8 @@ def compute_f4():
             "make_gp_realization_figures.py PLOT y = gp_noise_variance_real_units against "
             "x = truth_nugget_real_units (= nug * 9, porosity %^2), not a normalized ratio; the "
             "dimensionless pair (gp_noise_fraction_of_fitted_sill vs nug_normalized) is only a recorded "
-            "column there. This figure follows the PLOTTED definition; set F4_NUGGET_MODE = 'fraction' "
-            "in the script for the dimensionless pair.",
+            "column there. Since 2026-11-20 (user request) this figure uses F4_NUGGET_MODE = 'fraction', "
+            "the dimensionless pair, with both panel-B axes 0-1.",
             "panel B x tick positions "
             f"{[round(float(v), 2) for v in sorted(nug[nx].unique())]} correspond to nug_normalized "
             f"{sorted(nug['nug_normalized'].unique())}.",
@@ -2060,6 +2061,10 @@ def draw_f4(d):
     ax_b.set_ylabel(nyl)
     if d["nugget_mode"] == "real":
         ax_b.set_xticklabels([f"{v:.1f}" for v in sorted(nug[nx].unique())])
+    else:
+        ax_b.set_xlim(-0.03, 1.0)
+        ax_b.set_ylim(-0.03, 1.0)
+        ax_b.plot([0, 1], [0, 1], color="gray", linestyle="--", linewidth=0.6, zorder=1)
     fig.align_xlabels([ax_a, ax_b])
     _panel_label(ax_a, "A")
     _panel_label(ax_b, "B")
