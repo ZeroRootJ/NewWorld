@@ -15,8 +15,8 @@ def img(stem, alt):
 
 
 # Figure numbers in reading order (user request 2026-11-20): premise = Fig. 1,
-# conclusion 1 = Fig. 2-4, conclusion 2 = Fig. 5-14. Internal keys / file stems unchanged.
-ORDER = ["F1", "F2", "F7", "P7", "F4", "F3", "F3b", "F6", "P3", "P4", "F3c", "F3d", "P8", "P9"]
+# conclusion 1 = Fig. 2-3, conclusion 2 = Fig. 4-13 (P1, P7 dropped 2026-11-20). Internal keys / file stems unchanged.
+ORDER = ["F1", "F2", "F7", "F4", "F3", "F3b", "F6", "P3", "P4", "F3c", "F3d", "P8", "P9"]
 NUM = {k: i + 1 for i, k in enumerate(ORDER)}
 _KEY_RE = re.compile(r"(?<![A-Za-z0-9_/-])(F3[bcd]|F[1-7]|P[0-9]b?)(?![A-Za-z0-9_-])")
 
@@ -129,12 +129,6 @@ FIGS = {
         body=[
             "density 축(E4) 500셀. 점 하나가 같은 ground truth·같은 샘플셋의 GP-MLE와 SGS(oracle)이고, y = UMG(GP-MLE) − UMG(SGS)입니다. A의 x는 |ln(GP practical range / 300 m)|, B의 x는 GP가 맞춘 noise variance(샘플 분산 대비 비율, 로그)입니다. B의 점선은 실제 nugget 비율 0.05(모델 sill 대비)로 참고용입니다. 10⁻⁵는 optimizer의 noise 하한값입니다.",
         ]),
-    "P7": dict(
-        stem="P7_per_truth_optima", st=REAL,
-        title="ground truth별 MSE 최적점과 UMG 최적점",
-        body=[
-            "F7과 같은 grid, 같은 축입니다. ground truth 하나씩 따로 MSE가 가장 낮은 노드(채운 ▼)와 UMG가 가장 높은 노드(빈 ▲)를 찍었습니다. 회색 점은 grid 노드, 원은 실제 base case(300 m, 0.05)입니다. 여러 truth가 같은 노드를 고른 경우 노드 주위 작은 원 위에 나눠 찍었습니다. 축 범위는 바깥 노드에서 반 칸 더 넓습니다.",
-        ]),
 }
 
 PROP = "prop"
@@ -145,7 +139,7 @@ STORY = [
     ("⓪", "대부분의 정확도 기반 모델(RBF 보간부터 최신 ML 회귀 모델까지)은 불확실성을 내장하지 않는다. 필요하면 bootstrap 같은 사후 방법을 덧붙인다. RBF+bootstrap은 그 가장 단순한 대표다.", "문제 제기"),
     ("①", "정확도로는 방법이 구분되지 않는다. 불확실성은 따로 평가해야 한다.", "F1"),
     ("②", "사후로 붙인 불확실성(RBF+bootstrap)은 구간이 체계적으로 좁고, 밀도를 바꿔도 좁혀지지 않는다.", "F2"),
-    ("③", "ground truth를 아는 grid search에서도 MSE로 고른 하이퍼파라미터와 UMG로 고른 하이퍼파라미터가 다르다. 4개 방법 모두, truth 하나씩 봐도 그렇다.", "F7 · P7"),
+    ("③", "ground truth를 아는 grid search에서도 MSE로 고른 하이퍼파라미터와 UMG로 고른 하이퍼파라미터가 다르다. 4개 방법 모두 그렇다.", "F7"),
     ("④", "불확실성이 내장된 GP-MLE는 데이터가 충분하면 잘 calibrate된다. 실제와 다른 range·noise로도 conventional 이상의 UMG를 낸다.", "F1 · F4 · F3"),
     ("⑤", "그러나 현장에서 흔한 희소 데이터에서는 marginal likelihood로 최적화한 파라미터가 흔들린다. range가 흩어지고 noise가 하한값으로 붕괴하며, calibration은 평균보다 하위 꼬리에서 먼저 나빠진다.", "F3 · F3b · F6 · P3 · P4"),
     ("⑥", "realization을 만들 때는 이 파라미터가 그대로 variogram·분포 모델이 된다. 흔들린 파라미터는 variogram과 분포 재현에 치명적일 수 있다.", "F3c · F3d · P8 · P9"),
@@ -159,7 +153,7 @@ TENSION = [
     ("T1", "F1 range 축에서 oracle kriging/SGS UMG가 100 → 800 m에서 0.946 → 0.794, 0.954 → 0.808로 내려가고 GP-MLE는 0.953을 유지합니다. "
            "'kriging/SGS = 정답 기준선'이라는 전제와 부딪힙니다(진단 그림 P1은 2026-11-20 사용자 결정으로 삭제).", "—"),
     ("T2", "F7에서 최적 노드와 2위 노드의 차이(MSE 0.0004~0.034, UMG 0.0006~0.010)가 ground truth 간 표준편차(MSE 1.28~1.33, UMG 0.025~0.029)보다 훨씬 작습니다. "
-           "P7: truth 하나씩 봐도 MSE 최적과 UMG 최적은 kriging, SGS, GP 9/10, RBF 10/10에서 다른 노드입니다. 그러나 'MSE 최적은 긴 range, UMG 최적은 짧은 range'라는 방향은 kriging 6/10, SGS 5/10, GP 4/10에서만 성립하므로 F7에서 방향 문장을 뺐습니다.", "P7"),
+           "'MSE 최적은 긴 range, UMG 최적은 짧은 range'라는 방향 문장은 F7에서 뺐습니다(truth별 최적점 그림 P7은 2026-11-20 사용자 결정으로 삭제).", "—"),
 ]
 
 CLAIMS = {
@@ -219,7 +213,8 @@ CLAIMS = {
         "질문: ground truth를 알고 전 영역에서 평가할 수 있는 이상적 조건에서 하이퍼파라미터를 grid search로 고르면, MSE로 고른 노드와 UMG로 고른 노드가 같은가?",
         "4개 방법 모두 MSE 최적 노드와 UMG 최적 노드가 다릅니다. 예: kriging MSE 최적 (600 m, 0.05)의 UMG 0.808, UMG 최적 (106 m, 0)의 MSE 5.562.",
                 "10개 truth 평균 면에서 MSE 최적은 kriging, SGS 600 m, UMG 최적은 kriging, SGS, GP 106 m입니다. 실제 값(300 m, 0.05)은 kriging MSE 3.887, UMG 0.928입니다.",
-        "주의(T2): 최적 노드와 2위 노드의 차이는 ground truth 간 표준편차보다 훨씬 작습니다. → P7: truth마다 따로 봐도 최적점이 갈리는가.",
+        "주의(T2): 최적 노드와 2위 노드의 차이는 ground truth 간 표준편차보다 훨씬 작습니다.",
+        "→ F4: 실제로는 ground truth로 grid search를 할 수 없습니다. 불확실성이 내장된 GP-MLE가 데이터만으로(marginal likelihood) 정한 파라미터는 어떤가.",
     ],
     "P3": [
         "중앙값은 밀도 20 → 1 %에서 GP-MLE 0.982 → 0.915, oracle kriging 0.957 → 0.930, oracle SGS 0.956 → 0.946입니다.",
@@ -234,12 +229,6 @@ CLAIMS = {
         "GP가 SGS보다 낮은 셀 수는 20 % 16개 → 1 % 61개입니다(100개 중).",
         "⑤의 고리는 'range가 흩어진다'(F3 C, F6)보다 'noise가 0으로 붕괴한다'(F3c, F3d의 짧은 range 셀) 쪽이 데이터와 맞습니다. F6의 range 변동계수는 불안정성 지표로 남기고, calibration 손실과의 연결은 noise로 잡습니다.",
         "→ F3c, F3d: 흔들린 파라미터는 실제로 어떤 map을 만드는가. realization 생성에서는 이 파라미터가 그대로 variogram·분포 모델이 됩니다.",
-    ],
-    "P7": [
-        "truth 하나씩 봐도 MSE 최적 노드와 UMG 최적 노드가 같은 경우는 kriging 1/10, SGS 1/10, RBF+bootstrap 0/10, GP 1/10입니다. F7 평균 면의 결과는 몇 개 truth의 우연이 아닙니다.",
-        "방향은 일정하지 않습니다. MSE 최적의 range가 UMG 최적보다 긴 truth는 kriging 6, SGS 5, RBF 4, GP 4개(10개 중)입니다.",
-        "RBF+bootstrap은 range보다 smoothing λ 방향으로 갈립니다. MSE 최적은 λ 0.03~1, UMG 최적은 λ 10⁻⁴~10⁻²입니다.",
-        "→ F4: 실제로는 ground truth로 grid search를 할 수 없습니다. 불확실성이 내장된 GP-MLE가 데이터만으로(marginal likelihood) 정한 파라미터는 어떤가.",
     ],
 }
 
@@ -261,7 +250,7 @@ PH = {
 SECTIONS = [
     ("문제 제기", "대부분의 정확도 기반 모델은 불확실성을 내장하지 않는다", "⓪. RBF 보간부터 최신 ML 회귀 모델까지 많은 공간 예측 모델은 정확도를 목표로 학습하고 예측 분산을 내놓지 않습니다. 불확실성이 필요하면 bootstrap 같은 사후 방법을 덧붙입니다. 이 논문은 그 가장 단순한 대표로 RBF+bootstrap을 쓰고, 불확실성이 내장된 kriging·SGS(oracle variogram)와 GP-MLE를 비교 대상으로 둡니다. 근거 문헌은 TODO입니다.", []),
     ("전제", "정확도와 불확실성 품질은 따로 움직인다", "①. 논문 전체의 평가 틀입니다. 이후 모든 그림은 MSE와 UMG를 따로 봅니다.", ["F1"]),
-    ("결론 1 (핵심)", "정확도 기반 모델에 사후로 붙인 불확실성은 맞지 않고, 정확도로 고른 파라미터는 UQ 최적과 다르다", "② → ③. 원인(예측 분산이 작음, F2) → ground truth를 아는 grid search에서도 MSE 최적과 UMG 최적 노드가 다름(F7, truth별로도 P7).", ["F2", "F7", "P7"]),
+    ("결론 1 (핵심)", "정확도 기반 모델에 사후로 붙인 불확실성은 맞지 않고, 정확도로 고른 파라미터는 UQ 최적과 다르다", "② → ③. 원인(예측 분산이 작음, F2) → ground truth를 아는 grid search에서도 MSE 최적과 UMG 최적 노드가 다름(F7).", ["F2", "F7"]),
     ("결론 2", "GP-MLE는 잘 calibrate되지만, 현장에서 흔한 희소 데이터에서는 최적화된 파라미터가 흔들리고 이는 realization 생성에 치명적일 수 있다", "④ → ⑤ → ⑥. 데이터가 충분하면 잘 맞음(F4, F3) → 희소할수록 파라미터가 흔들림(F3, F3b, F6) → calibration 꼬리와 noise 붕괴(P3, P4) → 흔들린 파라미터로 만든 map(F3c, F3d) → realization 생성의 variogram·분포 재현(P8, P9 placeholder).", ["F4", "F3", "F3b", "F6", "P3", "P4", "F3c", "F3d", "P8", "P9"]),
     ("시사점", "range·nugget은 데이터 적합 objective가 아니라 공간통계로 정해야 한다", "⑦. 이 논문에서 kriging/SGS는 oracle variogram, 즉 range·nugget을 올바르게 정했을 때의 기준입니다(F3, P3에서 희소 조건에서도 UMG 유지). 데이터에서 variogram을 정하는 경우는 논문 끝 OBM 검증으로 다룹니다(보류 중). 이방성(F5)은 보류 상태이므로 F6와 함께 논의로만 다룹니다.", []),
 ]
@@ -270,7 +259,6 @@ FLOW = [
     ("전제", "F1", "MSE와 UMG, 3개 축, 4개 방법", REAL),
     ("1", "F2", "Calibration 곡선, 예측 분산", REAL),
     ("1", "F7", "정확도와 UMG 반응면, 4개 방법", REAL),
-    ("1", "P7", "truth별 MSE·UMG 최적점", REAL),
     ("2", "F4", "GP가 맞춘 range, nugget 대 실제 값", REAL),
     ("2", "F3", "밀도별 oracle kriging/SGS와 GP-MLE MSE, UMG, GP range", REAL),
     ("2", "F3b", "밀도별 실제 map과 샘플 위치", REAL),
