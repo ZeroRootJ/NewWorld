@@ -16,7 +16,7 @@ def img(stem, alt):
 
 # Figure numbers in reading order (user request 2026-11-20): premise = Fig. 1,
 # conclusion 1 = Fig. 2-3, conclusion 2 = Fig. 4-13 (P1, P7 dropped 2026-11-20). Internal keys / file stems unchanged.
-ORDER = ["F1", "F2", "F7", "F4", "F3", "P3", "P4", "F3c", "F3d", "P8", "P9"]
+ORDER = ["F1", "F2", "F7", "F4", "F3", "P3", "F3c", "F3d", "P8", "P9"]
 NUM = {k: i + 1 for i, k in enumerate(ORDER)}
 # appendix (user request 2026-11-20: F3b moved to the appendix, F6 dropped)
 APPENDIX = ["F3b", "A2"]
@@ -152,7 +152,7 @@ STORY = [
     ("②", "사후로 붙인 불확실성(RBF+bootstrap)은 구간이 체계적으로 좁고, 밀도를 바꿔도 좁혀지지 않는다.", "F2"),
     ("③", "ground truth를 아는 grid search에서도 MSE로 고른 하이퍼파라미터와 UMG로 고른 하이퍼파라미터가 다르다. 4개 방법 모두 그렇다.", "F7"),
     ("④", "불확실성이 내장된 GP-MLE는 데이터가 충분하면 잘 calibrate된다. 실제와 다른 range·noise로도 conventional 이상의 UMG를 낸다.", "F1 · F4 · F3"),
-    ("⑤", "그러나 현장에서 흔한 희소 데이터에서는 marginal likelihood로 최적화한 파라미터가 흔들린다. range가 흩어지고 noise가 하한값으로 붕괴하며, calibration은 평균보다 하위 꼬리에서 먼저 나빠진다.", "F3 · P3 · P4"),
+    ("⑤", "그러나 현장에서 흔한 희소 데이터에서는 marginal likelihood로 최적화한 파라미터가 흔들린다. range가 흩어지고, calibration은 평균보다 하위 꼬리에서 먼저 나빠진다.", "F3 · P3"),
     ("⑥", "realization을 만들 때는 이 파라미터가 그대로 variogram·분포 모델이 된다. 흔들린 파라미터는 variogram과 분포 재현에 치명적일 수 있다.", "F3c · F3d · P8 · P9"),
     ("⑦", "range·nugget을 올바르게 정한 conventional 방법(oracle variogram)은 같은 희소 조건에서 calibration을 유지한다. 데이터에서 variogram을 정하는 경우는 논문 끝 OBM 검증에서 다룬다(보류 중).", "F3 · P3 · OBM(보류)"),
 ]
@@ -235,7 +235,7 @@ CLAIMS = {
         "중앙값은 밀도 20 → 1 %에서 GP-MLE 0.982 → 0.915, oracle kriging 0.957 → 0.930, oracle SGS 0.956 → 0.946입니다.",
         "하위 꼬리가 먼저 갈립니다. 1 %에서 10번째 백분위수는 GP-MLE 0.774, kriging 0.777, SGS 0.842이고, 최솟값은 GP-MLE 0.519, kriging 0.614, SGS 0.685입니다.",
         "셀 간 표준편차는 GP-MLE 0.017 → 0.101, SGS는 0.048~0.068 사이입니다.",
-        "→ P4: GP가 낮은 셀은 어떤 하이퍼파라미터를 가졌는가.",
+        "→ F3c, F3d: 흔들린 파라미터는 실제로 어떤 map을 만드는가. realization 생성에서는 이 파라미터가 그대로 variogram·분포 모델이 됩니다.",
     ],
     "P4": [
         "A: range 오차와 UMG 차이의 순위상관은 희소할수록 약해지고 부호가 바뀝니다. Spearman ρ 20 % +0.457, 10 % +0.366, 5 % +0.115, 2 % −0.126, 1 % −0.046입니다. range가 실제에서 멀다고 GP가 SGS보다 덜 calibrate되지는 않습니다.",
@@ -266,7 +266,7 @@ SECTIONS = [
     ("문제 제기", "대부분의 정확도 기반 모델은 불확실성을 내장하지 않는다", "⓪. RBF 보간부터 최신 ML 회귀 모델까지 많은 공간 예측 모델은 정확도를 목표로 학습하고 예측 분산을 내놓지 않습니다. 불확실성이 필요하면 bootstrap 같은 사후 방법을 덧붙입니다. 이 논문은 그 가장 단순한 대표로 RBF+bootstrap을 쓰고, 불확실성이 내장된 kriging·SGS(oracle variogram)와 GP-MLE를 비교 대상으로 둡니다. 근거 문헌은 TODO입니다.", []),
     ("전제", "정확도와 불확실성 품질은 따로 움직인다", "①. 논문 전체의 평가 틀입니다. 이후 모든 그림은 MSE와 UMG를 따로 봅니다.", ["F1"]),
     ("결론 1 (핵심)", "정확도 기반 모델에 사후로 붙인 불확실성은 맞지 않고, 정확도로 고른 파라미터는 UQ 최적과 다르다", "② → ③. 원인(예측 분산이 작음, F2) → ground truth를 아는 grid search에서도 MSE 최적과 UMG 최적 노드가 다름(F7).", ["F2", "F7"]),
-    ("결론 2", "GP-MLE는 잘 calibrate되지만, 현장에서 흔한 희소 데이터에서는 최적화된 파라미터가 흔들리고 이는 realization 생성에 치명적일 수 있다", "④ → ⑤ → ⑥. 데이터가 충분하면 잘 맞음(F4, F3) → 희소할수록 파라미터가 흔들림(F3) → calibration 꼬리와 noise 붕괴(P3, P4) → 흔들린 파라미터로 만든 map(F3c, F3d) → realization 생성의 variogram·분포 재현(P8, P9 placeholder).", ["F4", "F3", "P3", "P4", "F3c", "F3d", "P8", "P9"]),
+    ("결론 2", "GP-MLE는 잘 calibrate되지만, 현장에서 흔한 희소 데이터에서는 최적화된 파라미터가 흔들리고 이는 realization 생성에 치명적일 수 있다", "④ → ⑤ → ⑥. 데이터가 충분하면 잘 맞음(F4, F3) → 희소할수록 파라미터가 흔들림(F3) → calibration 하위 꼬리(P3) → 흔들린 파라미터로 만든 map(F3c, F3d) → realization 생성의 variogram·분포 재현(P8, P9 placeholder).", ["F4", "F3", "P3", "F3c", "F3d", "P8", "P9"]),
     ("시사점", "range·nugget은 데이터 적합 objective가 아니라 공간통계로 정해야 한다", "⑦. 이 논문에서 kriging/SGS는 oracle variogram, 즉 range·nugget을 올바르게 정했을 때의 기준입니다(F3, P3에서 희소 조건에서도 UMG 유지). 데이터에서 variogram을 정하는 경우는 논문 끝 OBM 검증으로 다룹니다(보류 중). 이방성(F5)은 보류 상태이므로 논의로만 다룹니다.", []),
     ("부록", "밀도별 실제 map과 샘플 위치", "본문 결론 2의 밀도 축 설정(Fig. A1)과 Fig. 4 truth들의 실험 variogram(Fig. A2)입니다(2026-11-20 사용자 결정).", ["F3b", "A2"]),
 ]
@@ -278,7 +278,6 @@ FLOW = [
     ("2", "F4", "GP가 맞춘 range, nugget 대 실제 값", REAL),
     ("2", "F3", "밀도별 oracle kriging/SGS와 GP-MLE MSE, UMG, GP range", REAL),
     ("2", "P3", "셀별 UMG 분포(꼬리)", REAL),
-    ("2", "P4", "GP range 오차·noise vs UMG(GP) − UMG(SGS)", REAL),
     ("2", "F3c", "극단값 2 %: GP range 최소·최대 셀", REAL),
     ("2", "F3d", "극단값 1 %: 같은 구성", REAL),
     ("2", "P8", "GP 파라미터가 뜻하는 variogram 모델, 밀도별 (기존 데이터)", PROP),
