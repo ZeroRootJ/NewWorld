@@ -19,7 +19,7 @@ def img(stem, alt):
 ORDER = ["F1", "F2", "F7", "F4", "F3", "P3", "P4", "F3c", "F3d", "P8", "P9"]
 NUM = {k: i + 1 for i, k in enumerate(ORDER)}
 # appendix (user request 2026-11-20: F3b moved to the appendix, F6 dropped)
-APPENDIX = ["F3b"]
+APPENDIX = ["F3b", "A2"]
 LABEL = {k: "Fig. %d" % n for k, n in NUM.items()}
 LABEL.update({k: "Fig. A%d" % (i + 1) for i, k in enumerate(APPENDIX)})
 _KEY_RE = re.compile(r"(?<![A-Za-z0-9_/-])(F3[bcd]|F[1-7]|P[0-9]b?)(?![A-Za-z0-9_-])")
@@ -95,6 +95,13 @@ FIGS = {
         body=[
             "A는 ground-truth range 대 GP-MLE가 맞춘 practical range, B는 ground-truth nugget 대 GP-MLE가 맞춘 noise로, 둘 다 sill 대비 비율(0~1)입니다(GP는 noise / (signal + noise)). 점선은 y = x입니다.",
             "레벨당 ground-truth realization 50개이고(2026-11-20, 10개에서 확장), 샘플 위치는 모두 같습니다(n = 121). optimizer 경계에 걸린 적합은 A 400개 중 2개(range 100 m, noise 하한), B 300개 중 0개입니다.",
+        ]),
+    "A2": dict(
+        stem="A2_truth_realization_variograms", st=REAL,
+        title="ground truth realization의 실험 variogram",
+        body=[
+            "Fig. 4와 같은 truth(레벨당 50개)의 전체 map(50 × 50셀, 모든 셀 쌍, 20 m bin) 실험 variogram을 모델 sill(9)로 나눈 값입니다. A–H는 range 축(nugget 0.05), I–N은 nugget 축(range 300 m)입니다.",
+            "선 색은 같은 truth의 샘플로 GP-MLE가 맞춘 practical range를 실제 range로 나눈 비율(로그, 0.25–4)이고, 검은 점선은 truth 생성에 쓴 spherical 모델입니다.",
         ]),
     "F5": dict(
         stem="F5_anisotropy", st=PART,
@@ -190,6 +197,10 @@ CLAIMS = {
         "셀 간 UMG 표준편차도 GP-MLE 0.017 → 0.10, SGS 0.054 → 0.068입니다. 평균보다 꼬리가 먼저 벌어집니다.",
         "→ P3: 파라미터가 흔들리는 밀도에서 calibration은 어디서부터 나빠지는가.",
     ],
+    "A2": [
+        "먼 lag(560–700 m) 평균 γ/sill은 range 100 m에서 1.006(표준편차 0.018, 0.97–1.04), 300 m에서 1.070(0.071, 0.95–1.26), 800 m에서 1.187(0.090, 0.98–1.38)입니다.",
+        "nugget 축에서는 nugget 0에서 1.072(0.074, 0.95–1.27), 0.5에서 1.025(0.029, 0.97–1.11)입니다.",
+    ],
     "F3b": [
         "밀도 20, 10, 5, 2, 1 %에서 샘플 위치 수는 442, 244, 120, 48, 25개입니다. 2 %부터 샘플 간격이 실제 range(300 m)에 가까워집니다.",
     ],
@@ -257,7 +268,7 @@ SECTIONS = [
     ("결론 1 (핵심)", "정확도 기반 모델에 사후로 붙인 불확실성은 맞지 않고, 정확도로 고른 파라미터는 UQ 최적과 다르다", "② → ③. 원인(예측 분산이 작음, F2) → ground truth를 아는 grid search에서도 MSE 최적과 UMG 최적 노드가 다름(F7).", ["F2", "F7"]),
     ("결론 2", "GP-MLE는 잘 calibrate되지만, 현장에서 흔한 희소 데이터에서는 최적화된 파라미터가 흔들리고 이는 realization 생성에 치명적일 수 있다", "④ → ⑤ → ⑥. 데이터가 충분하면 잘 맞음(F4, F3) → 희소할수록 파라미터가 흔들림(F3) → calibration 꼬리와 noise 붕괴(P3, P4) → 흔들린 파라미터로 만든 map(F3c, F3d) → realization 생성의 variogram·분포 재현(P8, P9 placeholder).", ["F4", "F3", "P3", "P4", "F3c", "F3d", "P8", "P9"]),
     ("시사점", "range·nugget은 데이터 적합 objective가 아니라 공간통계로 정해야 한다", "⑦. 이 논문에서 kriging/SGS는 oracle variogram, 즉 range·nugget을 올바르게 정했을 때의 기준입니다(F3, P3에서 희소 조건에서도 UMG 유지). 데이터에서 variogram을 정하는 경우는 논문 끝 OBM 검증으로 다룹니다(보류 중). 이방성(F5)은 보류 상태이므로 논의로만 다룹니다.", []),
-    ("부록", "밀도별 실제 map과 샘플 위치", "본문 결론 2의 밀도 축 설정을 보여주는 참고 그림입니다(2026-11-20 사용자 결정으로 부록 이동).", ["F3b"]),
+    ("부록", "밀도별 실제 map과 샘플 위치", "본문 결론 2의 밀도 축 설정(Fig. A1)과 Fig. 4 truth들의 실험 variogram(Fig. A2)입니다(2026-11-20 사용자 결정).", ["F3b", "A2"]),
 ]
 
 FLOW = [
@@ -273,6 +284,7 @@ FLOW = [
     ("2", "P8", "GP 파라미터가 뜻하는 variogram 모델, 밀도별 (기존 데이터)", PROP),
     ("2", "P9", "GP realization의 variogram·히스토그램 재현 (소규모 신규 계산)", PROP),
     ("부록", "F3b", "밀도별 실제 map과 샘플 위치", REAL),
+    ("부록", "A2", "Fig. 4 truth realization의 실험 variogram", REAL),
 ]
 
 TODO = [

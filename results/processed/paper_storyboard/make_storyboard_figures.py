@@ -2625,6 +2625,124 @@ def draw_f7(d):
 
 
 # ---------------------------------------------------------------------------
+# A2 (appendix): experimental variograms of the 50 truths per level, coloured
+# by the GP-MLE practical range fitted on the same truth (user request 2026-11-20)
+# ---------------------------------------------------------------------------
+TRUTH_VARIO = PROCESSED / "truth_variograms_n50" / "variograms.csv"
+TRUTH_VARIO_PROV = PROCESSED / "truth_variograms_n50" / "provenance.json"
+A2_RATIO = (0.25, 4.0)      # colour range: GP practical range / truth range (log)
+A2_CMAP = "viridis"
+A2_PANEL_MM = 31.0          # plot-area height of one panel
+A2_MAX_LAG_M = 700.0
+
+
+def compute_a2():
+    from src.experiments.base_case import NX, NY
+    stem = "A2_truth_realization_variograms"
+    v = pd.read_csv(TRUTH_VARIO)
+    prov = json.loads(TRUTH_VARIO_PROV.read_text(encoding="utf-8"))
+    v = v[v["source"] == "field"].copy()
+    rng = pd.read_csv(RANGE_GP_REAL)[["range_m", "truth_seed", "gp_practical_range_m"]]
+    nug = pd.read_csv(NUGGET_GP_REAL)[["nug_normalized", "truth_seed", "gp_practical_range_m"]]
+    rng = rng.rename(columns={"range_m": "level"}).assign(axis="range")
+    nug = nug.rename(columns={"nug_normalized": "level"}).assign(axis="nugget")
+    gp = pd.concat([rng, nug], ignore_index=True)
+    v = v.merge(gp, on=["axis", "level", "truth_seed"], how="left", validate="many_to_one")
+    if v["gp_practical_range_m"].isna().any():
+        raise ValueError("variogram rows without a matching GP-MLE fit")
+    truth_range = np.where(v["axis"] == "range", v["level"], float(prov["nugget_axis_range_m"]))
+    v["ratio"] = v["gp_practical_range_m"] / truth_range
+    n_per = v.groupby(["axis", "level"])["truth_seed"].nunique()
+    if n_per.nunique() != 1:
+        raise ValueError(f"unequal truths per level: {n_per.to_dict()}")
+    n_truth = int(n_per.iloc[0])
+    ratio = v.drop_duplicates(["axis", "level", "truth_seed"])["ratio"]
+    n_lo, n_hi = int((ratio < A2_RATIO[0]).sum()), int((ratio > A2_RATIO[1]).sum())
+    note = (
+        f"Experimental variogram of each full ground-truth porosity map ({NX} × {NY} cells, all cell pairs, "
+        f"{prov['field_bin_m']:g} m lag bins), semivariance divided by the model sill ({prov['gamma_normalized_by']:g} "
+        f"porosity %²). {n_truth} truths per level, the same truths and samples as Fig. 4 (truth seeds "
+        f"{prov['truth_seeds'][0]}, {prov['truth_seeds'][1]}–{prov['truth_seeds'][-1]}). Line colour = GP-MLE "
+        f"practical range fitted on that truth's {prov['n_samples_requested']}-requested samples divided by the "
+        f"truth range (log scale, clipped to {A2_RATIO[0]:g}–{A2_RATIO[1]:g}: {n_lo} below, {n_hi} above). "
+        f"Dashed = the spherical model used to generate the truth (A–H nugget {prov['range_axis_nugget']:g}; "
+        f"I–N range {prov['nugget_axis_range_m']:g} m)."
+    )
+    lines = _status_file(
+        stem,
+        inputs=[f"{_rel(TRUTH_VARIO)} (source = field)", _rel(TRUTH_VARIO_PROV),
+                f"{_rel(RANGE_GP_REAL)} (gp_practical_range_m)", f"{_rel(NUGGET_GP_REAL)} (gp_practical_range_m)"],
+        panels=[("A-H", "REAL DATA - range axis, one panel per truth range, field variograms of all truths"),
+                ("I-N", "REAL DATA - nugget axis, one panel per truth nugget, field variograms of all truths")],
+        in_figure_note="DATA STATUS: " + note,
+        limits=[f"variograms computed by {prov['code_entrypoint']} at commit {prov['git_commit']}; "
+                "the truths are regenerated with the production truth/sampling call, not read from a raw run."],
+    )
+    return {"note": note, "status_lines": lines,
+            "v": v[["axis", "level", "truth_seed", "lag_m", "gamma_norm", "ratio"]],
+            "range_nugget": float(prov["range_axis_nugget"]), "nugget_range_m": float(prov["nugget_axis_range_m"])}
+
+
+def draw_a2(d):
+    from matplotlib.collections import LineCollection
+    from matplotlib.colors import LogNorm
+    v = d["v"]
+    panels = [("range", lv) for lv in sorted(v.loc[v["axis"] == "range", "level"].unique())]
+    panels += [("nugget", lv) for lv in sorted(v.loc[v["axis"] == "nugget", "level"].unique())]
+    ncol = 4
+    nrow = 2 + int(np.ceil(sum(a == "nugget" for a, _ in panels) / ncol))
+    fig, rect = _new_figure(plot_height_mm=nrow * A2_PANEL_MM + (nrow - 1) * 9.0, status_text=d["note"], top_mm=7.0)
+    gs = fig.add_gridspec(nrow, ncol, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3],
+                          wspace=0.28, hspace=0.62)
+    norm = LogNorm(*A2_RATIO)
+    cmap = plt.get_cmap(A2_CMAP)
+    ymax = max(1.6, float(v["gamma_norm"].max()) * 1.02)
+    hs = np.linspace(0.0, A2_MAX_LAG_M, 141)
+    letters = iter("ABCDEFGHIJKLMNOP")
+    cells = [(r, c) for r in range(2) for c in range(ncol)]
+    n_nug = sum(a == "nugget" for a, _ in panels)
+    cells += [(2 + i // ncol, i % ncol) for i in range(n_nug)]
+    for (axis, lv), (r, c) in zip(panels, cells):
+        ax = fig.add_subplot(gs[r, c])
+        sub = v[(v["axis"] == axis) & (v["level"] == lv)].sort_values(["truth_seed", "lag_m"])
+        segs, cols = [], []
+        for _, g in sub.groupby("truth_seed"):
+            segs.append(np.column_stack([g["lag_m"].values, g["gamma_norm"].values]))
+            cols.append(cmap(norm(np.clip(g["ratio"].iloc[0], *A2_RATIO))))
+        ax.add_collection(LineCollection(segs, colors=cols, linewidths=0.45, alpha=0.75))
+        a = lv if axis == "range" else d["nugget_range_m"]
+        nug = d["range_nugget"] if axis == "range" else lv
+        model = np.where(hs >= a, 1.0, nug + (1 - nug) * (1.5 * hs / a - 0.5 * (hs / a) ** 3))
+        ax.plot(hs, model, color="black", linestyle="--", linewidth=0.9, zorder=3)
+        ax.set_xlim(0, A2_MAX_LAG_M)
+        ax.set_ylim(0, ymax)
+        ax.set_xticks([0, 200, 400, 600])
+        ax.grid(True)
+        ax.set_title(f"Range {lv:g} m" if axis == "range" else f"Nugget {lv:g}", pad=2.0)
+        if c == 0:
+            ax.set_ylabel("γ / sill")
+        if (axis == "range" and r == 1) or axis == "nugget":
+            ax.set_xlabel("Lag (m)")
+        _panel_label(ax, next(letters), dx_pt=-20.0, dy_pt=2.0)
+    # colour bar in the free cells of the last row
+    used = len(cells)
+    free = [(nrow - 1, c) for c in range(ncol) if (nrow - 1, c) not in cells[:used]]
+    if free:
+        cax_parent = fig.add_subplot(gs[free[0][0], free[0][1]:])
+        cax_parent.axis("off")
+        cax = cax_parent.inset_axes([0.08, 0.55, 0.84, 0.10])
+        sm = plt.cm.ScalarMappable(norm=norm, cmap=cmap)
+        cb = fig.colorbar(sm, cax=cax, orientation="horizontal", ticks=[0.25, 0.5, 1, 2, 4])
+        cb.ax.set_xticklabels(["0.25", "0.5", "1", "2", "4"])
+        cb.set_label("GP-MLE practical range / truth range")
+        cb.outline.set_linewidth(0.5)
+        cax_parent.legend(handles=[Line2D([0], [0], color="black", linestyle="--", linewidth=0.9,
+                                          label="Spherical model of the truth")],
+                          loc="upper center", bbox_to_anchor=(0.5, 0.28), frameon=False)
+    return fig
+
+
+# ---------------------------------------------------------------------------
 # Figure registry and command line
 # ---------------------------------------------------------------------------
 THIS_SCRIPT = "results/processed/paper_storyboard/make_storyboard_figures.py"
@@ -2644,6 +2762,7 @@ FIGURES = (
     ("F5", "F5_anisotropy", compute_f5, None, draw_f5),
     ("F6", "F6_hyperparameter_stability_vs_density", compute_f6, "dens", draw_f6),
     ("F7", "F7_response_surfaces_accuracy_vs_uncertainty", compute_f7, None, draw_f7),
+    ("A2", "A2_truth_realization_variograms", compute_a2, None, draw_a2),
 )
 # shared inputs, loaded once per run and only if a selected figure is computed
 SHARED_LOADERS = {

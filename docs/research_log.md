@@ -53,3 +53,5 @@ reproduction 지표) 조사해 references.md에 반영 → 결과를 Sample Dens
 **GP-MLE truth 50개/레벨** — 사용자: Fig. 4 점 개수 레벨당 50개 → GP-MLE만 seed 7110–7149 추가(range 8, nugget 6레벨, 700 적합, 157 s), 기존 10개 재현 ≤1.2e-15, `*_n50.csv`; 실험 대시보드 신설.
 
 **Fig. 4 갱신 + truth variogram** — 사용자: F4를 n50(레벨당 50개)·nugget sill 비율(0–1)로 → V35; realization 변동 확인용 truth 700개 실험 variogram(전체 map·샘플) 계산, 실험 대시보드에 GP range 색으로 표시.
+
+**부록 Fig. A2** — 사용자: truth realization 실험 variogram을 부록에 → A2(레벨별 50개, GP range 비율 색), V36.
