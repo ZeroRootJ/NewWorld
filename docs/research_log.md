@@ -49,3 +49,5 @@ reproduction 지표) 조사해 references.md에 반영 → 결과를 Sample Dens
 **P7(Fig. 4) 삭제** — 사용자 → 스토리보드에서 제외, F7 → Fig. 4(F4) 연결 bullet 이전, T2·③ 문구에서 P7 근거 제거, 번호 Fig. 1–13; V33.
 
 **F6 삭제·F3b 부록** — 사용자 → 파라미터 수 vs 데이터량(F6) 제외, 밀도별 map·샘플 위치(F3b)는 부록 Fig. A1; 본문 Fig. 1–11; V34.
+
+**GP-MLE truth 50개/레벨** — 사용자: Fig. 4 점 개수 레벨당 50개 → GP-MLE만 seed 7110–7149 추가(range 8, nugget 6레벨, 700 적합, 157 s), 기존 10개 재현 ≤1.2e-15, `*_n50.csv`; 실험 대시보드 신설.
