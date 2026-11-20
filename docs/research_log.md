@@ -41,3 +41,5 @@ reproduction 지표) 조사해 references.md에 반영 → 결과를 Sample Dens
 **P7b 제거·결론 2 논조** — 사용자: grid search는 "MSE/UMG 최적이 다르다"까지만(P7b·trade-off 크기 문장 삭제), 결론 2 = 희소 데이터에서 GP 파라미터 흔들림 → realization 생성(variogram·분포 재현)에 치명적 → placeholder P8(implied variogram)·P9(GP realization 재현) 추가; 아티팩트 V30.
 
 **F1 오차막대 제거** — 사용자 요청 → 6개 패널 모두 평균만 표시, status·아티팩트 문구 갱신; V31.
+
+**trade-off 결정 정정** — 사용자: 11-19 결정은 "trade-off 정량화용 별도 실험 불필요"였고 기존 값(RBF UMG 최적 MSE 19.52 등) 언급은 허용 → F7을 "UMG로 최적화해도 답이 아님"(RBF MSE 3.9→19.5) 근거로 쓰는 흐름 제안.
