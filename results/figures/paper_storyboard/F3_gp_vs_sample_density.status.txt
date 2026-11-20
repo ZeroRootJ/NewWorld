@@ -20,7 +20,7 @@ PANELS:
   B-2: REAL DATA - UMG vs density: kriging / SGS re-run with the sample-inferred variogram (hollow markers, dashed line; SGS faded) + GP-MLE (identical to B); y axis equal to B; mean +-1 std over 100 cells per level (user request 2026-11-17)
   C-2: REAL DATA - 90% interval coverage vs density, same series and statistics as B-2; y axis equal to C
 
-DATA STATUS note printed in the figure margin:
+DATA STATUS note (not drawn in the figure; shown as text in the storyboard):
   DATA STATUS: 10 ground-truth realizations × 10 sample sets = 100 cells per level (ground-truth range 300 m); A–C, B-2, C-2: points = mean, bars = ±1 std (ddof = 1) pooled over all cells of a level; row 1 kriging/SGS use the true (oracle) variogram; B-2, C-2: kriging/SGS re-run with the variogram fitted to each cell's samples (spherical, automatic fit, same samples and SGS seed), GP-MLE as in row 1; B-2/C-2 y axes equal B/C; C: fraction of evaluated cells inside the central 90% predictive interval (kriging: normal-score interval back-transformed; SGS, RBF+bootstrap, GP-MLE: Gaussian mean ± z·std interval); B, C: RBF+bootstrap not drawn (values in status file); D: one point per cell per series (100 per level); GP-MLE practical range = RBF-kernel length scale at the 0.05 correlation cutoff; kriging/SGS inferred range = spherical range (correlation 0) – the two range definitions differ; max/min over all points = 17.6×, log y axis. SGS and RBF+bootstrap ensemble N = 50 (batch 1); kriging and GP-MLE have no ensemble.
 
 DATA LIMITATIONS / FACTS ABOUT THE INPUTS:

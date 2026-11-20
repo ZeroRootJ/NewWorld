@@ -14,7 +14,7 @@ PANELS:
   C rbf_bootstrap: 104 nodes, 9 non-dominated (smoothing = param2); MSE range 3.9125-293.7572 (log x), UMG range 0.1653-0.9619. Non-dominated nodes (sorted by MSE): (300 m, 0.3162) MSE 3.9125 UMG 0.4890; (300 m, 0.1) MSE 4.0093 UMG 0.5926; (300 m, 0.03162) MSE 4.4341 UMG 0.7090; (424 m, 0.01) MSE 5.2676 UMG 0.7446; (300 m, 0.01) MSE 5.4139 UMG 0.8362; (424 m, 0.003162) MSE 6.5967 UMG 0.8524; (300 m, 0.003162) MSE 7.8854 UMG 0.9487; (212 m, 0.001) MSE 12.4768 UMG 0.9519; (212 m, 0.0003162) MSE 19.5174 UMG 0.9619
   D gp: 88 nodes, 6 non-dominated (noise_variance_normalized = param2); MSE range 3.8968-287.7384 (log x), UMG range 0.0160-0.9579. Non-dominated nodes (sorted by MSE): (300 m, 0.1695) MSE 3.8968 UMG 0.8828; (212 m, 0.1695) MSE 3.9231 UMG 0.9319; (300 m, 0.5) MSE 4.2044 UMG 0.9417; (150 m, 0.1695) MSE 4.3512 UMG 0.9525; (424 m, 0.5) MSE 4.5458 UMG 0.9541; (106 m, 0.1695) MSE 5.0961 UMG 0.9579
 
-DATA STATUS note printed in the figure margin:
+DATA STATUS note (not drawn in the figure; shown as text in the storyboard):
   DATA STATUS: F7 grid, each point = one grid node, value = mean over 10 ground truths (base case, fixed hyperparameters). Filled points joined by the step line = non-dominated nodes (no other node has MSE ≤ and UMG ≥ with at least one strict). Black ▼ = MSE optimum, black ▲ = UMG optimum (as F7), open circle = true node (300 m, nugget 0.05) for kriging and SGS. x log scale where max/min MSE ≥ 10.
 
 DATA LIMITATIONS / FACTS ABOUT THE INPUTS:

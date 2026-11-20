@@ -36,8 +36,8 @@ Conventions
   7 pt, panel labels A/B/C, no caption inside the artwork, fonts embedded
   (pdf.fonttype 42). The canvas is saved as-is (no bbox_inches="tight") so the
   physical width is exactly the intended one.
-* Every figure carries a small ``DATA STATUS:`` note in the bottom margin,
-  OUTSIDE all axes. Every number in those notes is derived at run time from the
+* Every figure has a ``DATA STATUS:`` note, kept in its .status.txt and shown
+  as text in the storyboard artifact (not drawn in the artwork since 2026-11-20). Every number in those notes is derived at run time from the
   input files / source constants (never typed in by hand).
 * PLACEHOLDER panels (no experiment exists) have a grey background, a
   ``PLACEHOLDER - schematic, no data`` label above the panel, no numeric tick
@@ -50,7 +50,6 @@ Run with:
 
 import json
 import sys
-import textwrap
 from pathlib import Path
 
 import matplotlib
@@ -114,12 +113,10 @@ MM = 1.0 / 25.4
 FULL_WIDTH_MM = 190.0
 PNG_DPI = 300
 FONT_PT = 7
-STATUS_PT = 6          # guideline minimum for small text
 PANEL_LABEL_PT = 9
-STATUS_COLOR = "0.30"
 PLACEHOLDER_FACE = "0.92"
 PLACEHOLDER_TEXT = "PLACEHOLDER – schematic, no data"
-STATUS_WRAP_CHARS = 186  # 190 mm canvas at 6 pt Arial
+BOTTOM_PAD_MM = 1.0     # small bottom margin now that the status strip is gone
 
 # Same cosmetic multiplicative x offset as
 # sample_density_axis/make_sample_density_figures.py (METHOD_X_OFFSET_FRAC).
@@ -264,22 +261,18 @@ def _rel(path: Path) -> str:
 
 def _new_figure(plot_height_mm: float, status_text: str, top_mm: float = 9.0,
                 bottom_axis_mm: float = 11.0, left_mm: float = 13.0, right_mm: float = 3.0):
-    """Canvas at the FINAL 190 mm width. Height = plot area + a bottom strip
-    sized to the wrapped DATA STATUS note. Returns (fig, rect) where rect is the
-    (left, bottom, right, top) figure-fraction box available to the axes."""
-    wrapped = textwrap.fill("DATA STATUS: " + status_text, STATUS_WRAP_CHARS)
-    n_lines = wrapped.count("\n") + 1
-    line_mm = STATUS_PT * 1.25 * (25.4 / 72.0)
-    status_mm = n_lines * line_mm + 3.0
-    height_mm = top_mm + plot_height_mm + bottom_axis_mm + status_mm
+    """Canvas at the FINAL 190 mm width. Height = plot area + axis margins.
+    The DATA STATUS note is NOT drawn in the artwork (user request 2026-11-20);
+    it is kept in the .status.txt file and shown as text in the storyboard.
+    Returns (fig, rect) where rect is the (left, bottom, right, top)
+    figure-fraction box available to the axes."""
+    del status_text  # kept in the signature: callers pass it to _status_file
+    bottom_axis_mm += BOTTOM_PAD_MM
+    height_mm = top_mm + plot_height_mm + bottom_axis_mm
     fig = plt.figure(figsize=(FULL_WIDTH_MM * MM, height_mm * MM))
-    fig.text(
-        1.5 / FULL_WIDTH_MM, (status_mm - 1.2) / height_mm, wrapped,
-        ha="left", va="top", fontsize=STATUS_PT, color=STATUS_COLOR, linespacing=1.25,
-    )
     rect = (
         left_mm / FULL_WIDTH_MM,
-        (status_mm + bottom_axis_mm) / height_mm,
+        bottom_axis_mm / height_mm,
         1.0 - right_mm / FULL_WIDTH_MM,
         1.0 - top_mm / height_mm,
     )
@@ -363,7 +356,7 @@ def _status_file(stem, inputs, panels, in_figure_note, limits=(), needed=()):
     lines += [f"  - {i}" for i in inputs] if inputs else ["  - (none: no data is read for this figure)"]
     lines += ["", "PANELS:"]
     lines += [f"  {k}: {v}" for k, v in panels]
-    lines += ["", "DATA STATUS note printed in the figure margin:", f"  {in_figure_note}"]
+    lines += ["", "DATA STATUS note (not drawn in the figure; shown as text in the storyboard):", f"  {in_figure_note}"]
     if limits:
         lines += ["", "DATA LIMITATIONS / FACTS ABOUT THE INPUTS:"]
         lines += [f"  - {x}" for x in limits]
@@ -874,7 +867,7 @@ def figure_f2(mt):
     note = (
         f"A: base case ({eb['experiment']}) = 1 ground-truth realization (truth seed {eb['truth_seeds'][0]}), "
         f"1 sample set (n = {eb['n_act'][0]} of {eb['n_req'][0]} requested). "
-        f"B: {_mt_axis_text(ed)}; {_mt_bar_text()}. All variances in porosity %² – {mc_txt}. "
+        f"B: {_mt_axis_text(ed)}; points = mean over all cells of a level (no error bars). All variances in porosity %² – {mc_txt}. "
         f"{_mt_ensemble_text(mt)}."
     )
     fig, rect = _new_figure(plot_height_mm=62.0, status_text=note, top_mm=12.0)
@@ -895,7 +888,7 @@ def figure_f2(mt):
     ax_a.set_ylabel("Fraction of truth in interval")
     ax_a.grid(True)
 
-    _plot_density_metric(ax_b, ed["summary"], dens, "variance_mean")
+    _plot_density_metric(ax_b, ed["summary"], dens, "variance_mean", errorbars=False)
     _style_density_axis(ax_b, dens)
     ax_b.set_ylabel("Mean predictive variance (porosity %²)")
     ax_b.grid(True)
@@ -921,8 +914,8 @@ def figure_f2(mt):
         panels=[
             ("A", f"REAL DATA - base-case ({eb['experiment']}) accuracy plot (fraction of truth inside each "
                   f"nominal interval), {n_p} probability levels per method, 1:1 reference line"),
-            ("B", f"REAL DATA - variance_mean vs sample density ({ed['experiment']}), mean +-1 std over "
-                  f"{ed['n_cells']} cells per level"),
+            ("B", f"REAL DATA - variance_mean vs sample density ({ed['experiment']}), mean over "
+                  f"{ed['n_cells']} cells per level (no error bars, user request 2026-11-20)"),
         ],
         in_figure_note="DATA STATUS: " + note,
         limits=_mt_common_limits(mt) + [
@@ -939,8 +932,7 @@ def figure_f2(mt):
             f"approximation: {mc_methods}. Units are not stored in the multi_truth_axes outputs; "
             "porosity %² follows those source definitions.",
             "panel B x positions are the REQUESTED sample fraction (actual n): " + _replicate_n_text(dens) + ".",
-            "panel B y axis is linear and autoscaled; an error bar (mean - 1 std) may extend below 0 "
-            "where std > mean - this is the plotted +-1 std, not a negative variance.",
+            "panel B y axis is linear and autoscaled; means only (std still listed below).",
             "panel B plotted values (level mean+-std): " + _density_table(ed["summary"], "variance_mean"),
         ],
     )
@@ -2367,7 +2359,7 @@ def figure_f7():
         f"{prov['checks']['crosscheck_verdict']})."
     )
     plot_h = 2 * (F7_CBAR_MM + F7_CBAR_GAP_MM + F7_PANEL_MM) + F7_ROW_GAP_MM
-    fig, rect = _new_figure(plot_height_mm=plot_h, status_text=note, top_mm=19.0, left_mm=14.0)
+    fig, rect = _new_figure(plot_height_mm=plot_h, status_text=note, top_mm=23.0, left_mm=14.0)
     ratios = [F7_CBAR_MM, F7_CBAR_GAP_MM, F7_PANEL_MM, F7_ROW_GAP_MM, F7_CBAR_MM, F7_CBAR_GAP_MM, F7_PANEL_MM]
     panel_w = ((rect[2] - rect[0]) * FULL_WIDTH_MM - 3 * F7_COL_GAP_MM) / 4.0
     gs = fig.add_gridspec(7, 4, left=rect[0], bottom=rect[1], right=rect[2], top=rect[3],
@@ -2376,7 +2368,6 @@ def figure_f7():
     letters = iter("ABCDEFGH")
     panel_info = []
     for row, met in enumerate(("mse", "umg")):
-        other = "umg" if met == "mse" else "mse"
         for col, m in enumerate(F7_METHODS):
             cax = fig.add_subplot(gs[4 * row, col])
             ax = fig.add_subplot(gs[4 * row + 2, col])
@@ -2404,11 +2395,14 @@ def figure_f7():
             if row == 1:
                 ax.set_xlabel("Range equivalent (m)")
             # optima (grid nodes)
-            own, oth = opt_row(m, met), opt_row(m, other)
+            # user request 2026-11-20: same marker meaning in every panel -
+            # filled star = MSE-surface optimum, hollow star = UMG-surface optimum
+            own = opt_row(m, met)
+            mse_opt, oth = opt_row(m, "mse"), opt_row(m, "umg")
             ax.plot(oth["range_equiv_m"], oth["param2_value"], linestyle="none", marker="*", markersize=8,
                     markerfacecolor="none", markeredgecolor="black", markeredgewidth=0.8, path_effects=halo,
                     zorder=6, clip_on=False)
-            ax.plot(own["range_equiv_m"], own["param2_value"], linestyle="none", marker="*", markersize=8,
+            ax.plot(mse_opt["range_equiv_m"], mse_opt["param2_value"], linestyle="none", marker="*", markersize=8,
                     markerfacecolor="black", markeredgecolor="white", markeredgewidth=0.4, zorder=7, clip_on=False)
             ax.plot(*_f7_true_point(m), linestyle="none", marker=F7_TRUE_MARKER[m], markersize=4,
                     markerfacecolor="none", markeredgecolor="black", markeredgewidth=0.8, path_effects=halo,
@@ -2437,9 +2431,9 @@ def figure_f7():
     fig.legend(
         handles=[
             Line2D([0], [0], linestyle="none", marker="*", markersize=7, markerfacecolor="black",
-                   markeredgecolor="black", label="Optimum, this surface"),
+                   markeredgecolor="black", label="MSE-surface optimum (min MSE)"),
             Line2D([0], [0], linestyle="none", marker="*", markersize=7, markerfacecolor="none",
-                   markeredgecolor="black", markeredgewidth=0.8, label="Optimum, other surface"),
+                   markeredgecolor="black", markeredgewidth=0.8, label="UMG-surface optimum (max UMG)"),
             Line2D([0], [0], linestyle="none", marker="o", markersize=4, markerfacecolor="none",
                    markeredgecolor="black", markeredgewidth=0.8,
                    label=f"True base case ({truth['hmaj1']:g} m, {truth['nug']:g})"),
@@ -2447,7 +2441,7 @@ def figure_f7():
                    markeredgecolor="black", markeredgewidth=0.8,
                    label="Approx. true-case equivalent (RBF, GP)"),
         ],
-        loc="upper center", bbox_to_anchor=(0.5, 1.0), ncol=4, borderaxespad=0.3,
+        loc="upper center", bbox_to_anchor=(0.5, 1.0), ncol=2, borderaxespad=0.3, columnspacing=3.0,
     )
 
     panels = []
@@ -2456,9 +2450,9 @@ def figure_f7():
             f"{F7_TITLES[m]}, {met.upper()} surface: mean over {n_truths} truths at each of the "
             f"{len(run_cfg['grids'][m]['range_levels_m'])}x{len(run_cfg['grids'][m]['param2_levels'])} grid nodes "
             f"(filled contours, {F7_N_LEVELS} bands, bilinear interpolation between nodes); colour {'log' if use_log else 'linear'} scale "
-            f"{zmin:.4g}-{zmax:.4g}, colormap {F7_CMAP[met]} (bright = better). Filled star = {F7_BEST[met]} node "
-            f"({own['range_equiv_m']:g} m, {own['param2_name']} {own['param2_value']:.4g}, {own['mean']:.4f}); "
-            "hollow star = the other surface's optimum"
+            f"{zmin:.4g}-{zmax:.4g}, colormap {F7_CMAP[met]} (bright = better). This surface's {F7_BEST[met]} node "
+            f"({own['range_equiv_m']:g} m, {own['param2_name']} {own['param2_value']:.4g}, {own['mean']:.4f}). "
+            "In every panel filled star = MSE-surface optimum, hollow star = UMG-surface optimum"
             + ("; open circle = true base-case point." if m in ("kriging", "sgs") else
                f"; open diamond = APPROXIMATE base-case equivalent ({_f7_true_point(m)[0]:g} m, "
                f"{_f7_true_point(m)[1]:.4g}), for visual comparison only.")

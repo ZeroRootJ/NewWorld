@@ -12,10 +12,10 @@ INPUT FILES (read-only):
 
 PANELS:
   A: REAL DATA - base-case (E5) accuracy plot (fraction of truth inside each nominal interval), 20 probability levels per method, 1:1 reference line
-  B: REAL DATA - variance_mean vs sample density (E4), mean +-1 std over 100 cells per level
+  B: REAL DATA - variance_mean vs sample density (E4), mean over 100 cells per level (no error bars, user request 2026-11-20)
 
-DATA STATUS note printed in the figure margin:
-  DATA STATUS: A: base case (E5) = 1 ground-truth realization (truth seed 101), 1 sample set (n = 121 of 125 requested). B: 10 ground-truth realizations × 10 sample sets = 100 cells per level; points = mean, bars = ±1 std (ddof = 1) pooled over all cells of a level. All variances in porosity %² – kriging's is a Monte Carlo back-transform of its normal-score variance, the other three are native. SGS and RBF+bootstrap ensemble N = 50 (batch 1); kriging and GP-MLE have no ensemble.
+DATA STATUS note (not drawn in the figure; shown as text in the storyboard):
+  DATA STATUS: A: base case (E5) = 1 ground-truth realization (truth seed 101), 1 sample set (n = 121 of 125 requested). B: 10 ground-truth realizations × 10 sample sets = 100 cells per level; points = mean over all cells of a level (no error bars). All variances in porosity %² – kriging's is a Monte Carlo back-transform of its normal-score variance, the other three are native. SGS and RBF+bootstrap ensemble N = 50 (batch 1); kriging and GP-MLE have no ensemble.
 
 DATA LIMITATIONS / FACTS ABOUT THE INPUTS:
   - evaluation: src/experiments/evaluate_multi_truth_axes.py at git 8e8c4a6 (git_dirty=True, dirty files ['results/processed/multi_truth_axes/']); 641 cells evaluated, 0 skipped; source results/raw/multi_truth_axes/20261116T222609599808Z (is_production_configuration=True).
@@ -26,5 +26,5 @@ DATA LIMITATIONS / FACTS ABOUT THE INPUTS:
   - panel A: the E5 cell (config_key t101_s20_h300.0x300.0_nug0.05_n125) has the same configuration as E2 level 300 / truth 101 / sample_rep base and identical run folders (run_dir_gp_mle_b, run_dir_kriging_b, run_dir_rbf_bootstrap_b1, run_dir_sgs_b1 all equal, checked at run time).
   - panel B variance sources (VARIANCE_SOURCE_FILES): kriging: kriging_var_map_physical_mc.npy; sgs: sgs_var_map.npy; rbf_bootstrap: bootstrap_var_map.npy; gp_mle: posterior_var_map.npy; SGS / RBF+bootstrap variance recomputed by the evaluator from the N = 50 ensemble (ddof=1) and asserted equal to the saved map. Monte Carlo back-transform approximation: ['kriging']. Units are not stored in the multi_truth_axes outputs; porosity %² follows those source definitions.
   - panel B x positions are the REQUESTED sample fraction (actual n): 20% = n 434-453 (requested 500); 10% = n 227-244 (requested 250); 5% = n 118-124 (requested 125); 2% = n 47-50 (requested 50); 1% = n 24-25 (requested 25).
-  - panel B y axis is linear and autoscaled; an error bar (mean - 1 std) may extend below 0 where std > mean - this is the plotted +-1 std, not a negative variance.
+  - panel B y axis is linear and autoscaled; means only (std still listed below).
   - panel B plotted values (level mean+-std): kriging: 20% 2.22±0.17, 10% 2.68±0.24, 5% 3.45±0.46, 2% 5.14±0.91, 1% 6.93±1.7; sgs: 20% 2.27±0.18, 10% 2.81±0.26, 5% 3.53±0.47, 2% 5.22±0.93, 1% 7.02±1.7; rbf_bootstrap: 20% 0.386±0.17, 10% 0.525±0.2, 5% 0.646±0.31, 2% 1.29±1.6, 1% 1.5±2; gp_mle: 20% 2.45±0.64, 10% 2.85±0.74, 5% 3.5±0.88, 2% 4.73±1.2, 1% 5.38±1.7

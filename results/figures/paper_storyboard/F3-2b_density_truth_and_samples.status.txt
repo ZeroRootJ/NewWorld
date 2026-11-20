@@ -13,7 +13,7 @@ PANELS:
   2%: REAL DATA - truth seed 101 porosity map + rep0 samples (n = 48, requested 50)
   1%: REAL DATA - truth seed 101 porosity map + rep0 samples (n = 25, requested 25)
 
-DATA STATUS note printed in the figure margin:
+DATA STATUS note (not drawn in the figure; shown as text in the storyboard):
   DATA STATUS: one ground-truth realization (truth seed 101; range 300 m, nugget 0.05) shown at every density level; points = the conditioning samples of the rep0 sample set (sample seed 1001) used by kriging and SGS in F3-2; the same truth field in every panel; n = actual number of distinct sample locations. Colour scale = min/max of the truth field.
 
 DATA LIMITATIONS / FACTS ABOUT THE INPUTS:

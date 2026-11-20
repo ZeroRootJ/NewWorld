@@ -11,7 +11,7 @@ PANELS:
   A: REAL DATA - CV (std/mean, ddof=1, 10 replicates) of the isotropic GP-MLE fitted practical range vs sample density
   B: PLACEHOLDER - synthetic illustration, NO DATA. Same axes format for kernels with more hyperparameters. Curves are arbitrary seeded smooth curves (seed 20261118); their shape, crossing and ordering carry no meaning; no numeric ticks.
 
-DATA STATUS note printed in the figure margin:
+DATA STATUS note (not drawn in the figure; shown as text in the storyboard):
   DATA STATUS: A: isotropic GP-MLE (one length scale), 1 ground-truth realization, CV = std/mean (ddof = 1) of the fitted practical range over 10 sample-location replicates per density level. B: PLACEHOLDER – no anisotropic-kernel GP (axis-aligned, or with rotation angle) has been fitted; curve shapes and ordering are arbitrary.
 
 DATA LIMITATIONS / FACTS ABOUT THE INPUTS:

@@ -11,7 +11,7 @@ PANELS:
   B: REAL DATA - experimental vs model variogram, major and minor direction, ratio level '3:1' (thin lines = individual truth x draw combinations, markers = mean over them by lag index)
   C: PLACEHOLDER - synthetic illustration, NO DATA. Two stacked axes (MSE, UMG) vs anisotropy ratio for the 4 methods. Curves are arbitrary seeded smooth curves (seed 20261116, 20261117) with no expected-result meaning; no numeric ticks.
 
-DATA STATUS note printed in the figure margin:
+DATA STATUS note (not drawn in the figure; shown as text in the storyboard):
   DATA STATUS: A: analytic true practical range by azimuth, no prediction method involved; ratio labels and ranges exactly as stored ('1:1' = hmaj1 300 m / hmin1 300 m, '2:1' = hmaj1 300 m / hmin1 150 m, '3:1' = hmaj1 300 m / hmin1 600 m). B: variogram check (5 % sample density, 125 samples requested) for the '3:1' level of a DIFFERENT parameterization (hmaj1 900 m / hmin1 300 m), normal-score variogram standardized to unit sill, 10 ground-truth realizations × 2 sample draws; y axis cut at 2.5: 6 of 640 individual experimental points lie above it (max 8.2), means are computed from all points. C: PLACEHOLDER – the anisotropy-axis experiment (4 methods, MSE and UMG vs anisotropy ratio) has not been run; curve shapes are arbitrary.
 
 DATA LIMITATIONS / FACTS ABOUT THE INPUTS:

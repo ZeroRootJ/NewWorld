@@ -20,7 +20,7 @@ PANELS:
   B: REAL DATA - UMG vs density, same series and statistics; dashed gray line = 1
   C: REAL DATA - GP-MLE practical range, one point per cell (all 100 cells per level), red diamonds; dashed line = oracle (true-variogram) range, fixed 300 m; user-picked and auto-fit ranges NOT drawn (listed below)
 
-DATA STATUS note printed in the figure margin:
+DATA STATUS note (not drawn in the figure; shown as text in the storyboard):
   DATA STATUS: 10 ground-truth realizations × 10 sample sets = 100 cells per level (ground-truth range 300 m); points = level means, no error bars; A, B: kriging and SGS with the oracle (true, 300 m) variogram and GP-MLE, all 100 cells per level (10 realizations × 10 samplings); C: one point per cell (100 GP-MLE per level), dashed line = oracle (true) range, fixed; GP-MLE practical range = RBF-kernel length scale at the 0.05 correlation cutoff; max/min over all points = 13.0×, log y axis. SGS ensemble N = 50; kriging and GP-MLE have no ensemble.
 
 DATA LIMITATIONS / FACTS ABOUT THE INPUTS:

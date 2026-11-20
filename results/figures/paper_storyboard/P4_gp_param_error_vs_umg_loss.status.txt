@@ -25,7 +25,7 @@ PANELS:
   vs simple kriging (not drawn), 1%: n 100; rho(|ln range ratio|, dUMG) +0.070 (p 0.49); rho(noise_norm, dUMG) +0.427 (p 9.3e-06); dUMG mean -0.0099, median +0.0063, min -0.3949, max +0.1457, cells with dUMG < 0: 44
   vs simple kriging (not drawn), all levels pooled: n 500; rho(|ln range ratio|, dUMG) +0.222 (p 5.5e-07); rho(noise_norm, dUMG) +0.517 (p 1.5e-35); dUMG mean +0.0209, median +0.0192, min -0.3949, max +0.1872, cells with dUMG < 0: 166
 
-DATA STATUS note printed in the figure margin:
+DATA STATUS note (not drawn in the figure; shown as text in the storyboard):
   DATA STATUS: E4 (density axis), all 5 levels × 100 cells (10 truths × 10 sample sets). Each point = one cell: GP-MLE and SGS (true variogram) on the SAME truth and sample set. y = UMG(GP-MLE) − UMG(SGS). A: x = |ln(GP practical range / true range 300 m)|, practical range = 2.4477 × fitted length scale. B: x = fitted GP noise variance as a fraction of the sample variance (normalize_y = True), log scale; dashed line = true nugget fraction 0.05 of the model sill. Spearman rho per density in the status file.
 
 DATA LIMITATIONS / FACTS ABOUT THE INPUTS:

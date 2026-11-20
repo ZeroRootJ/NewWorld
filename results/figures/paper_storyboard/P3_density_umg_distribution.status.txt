@@ -24,7 +24,7 @@ PANELS:
   sgs 2%: n 100, min 0.7061, p10 0.8579, p25 0.9153, median 0.9495, p75 0.9829, mean 0.9376, max 0.9939, std(ddof=1) 0.0540, points beyond whiskers 2
   sgs 1%: n 100, min 0.6849, p10 0.8418, p25 0.9029, median 0.9459, p75 0.9784, mean 0.9264, max 0.9951, std(ddof=1) 0.0684, points beyond whiskers 4
 
-DATA STATUS note printed in the figure margin:
+DATA STATUS note (not drawn in the figure; shown as text in the storyboard):
   DATA STATUS: E4 (density axis): per-cell UMG, 10 ground truths × 10 sample sets = 100 cells per density level and method. Simple kriging and SGS use the true (oracle) variogram. Box = 25th-75th percentile, line = median, whiskers = most extreme value within 1.5 × IQR of the box, circles = cells beyond the whiskers, white diamond = mean. x = requested sample fraction of the 50 × 50 grid.
 
 DATA LIMITATIONS / FACTS ABOUT THE INPUTS:

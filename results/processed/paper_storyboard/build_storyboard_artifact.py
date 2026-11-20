@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Build the Paper Storyboard artifact HTML (embeds the storyboard PNGs)."""
 import base64
+import re
 import sys
 from pathlib import Path
 
@@ -11,6 +12,27 @@ OUT = Path(sys.argv[2])
 def img(stem, alt):
     b = base64.b64encode((FIG / (stem + ".png")).read_bytes()).decode()
     return '<div class="plate"><img alt="%s" src="data:image/png;base64,%s"></div>' % (alt, b)
+
+
+# Figure numbers in reading order (user request 2026-11-20): premise = Fig. 1,
+# conclusion 1 = Fig. 2-4, conclusion 2 = Fig. 5-14. Internal keys / file stems unchanged.
+ORDER = ["F1", "F2", "F7", "P7", "F4", "F3", "F3b", "F6", "P3", "P4", "F3c", "F3d", "P8", "P9"]
+NUM = {k: i + 1 for i, k in enumerate(ORDER)}
+_KEY_RE = re.compile(r"(?<![A-Za-z0-9_/-])(F3[bcd]|F[1-7]|P[0-9]b?)(?![A-Za-z0-9_-])")
+
+
+def fnum(text):
+    """Replace internal figure keys with the paper's figure numbers."""
+    return _KEY_RE.sub(lambda m: "Fig. %d" % NUM[m.group(1)] if m.group(1) in NUM else m.group(1), text)
+
+
+def status_note(stem):
+    """DATA STATUS note that used to be drawn under the figure (moved out 2026-11-20)."""
+    lines = (FIG / (stem + ".status.txt")).read_text(encoding="utf-8").splitlines()
+    for i, ln in enumerate(lines):
+        if ln.startswith("DATA STATUS note"):
+            return lines[i + 1].strip().replace("DATA STATUS: ", "", 1)
+    return ""
 
 
 REAL, PART, NONE = "real", "part", "none"
@@ -93,14 +115,7 @@ FIGS = {
             "하이퍼파라미터는 grid 값으로 고정했고 자동 튜닝(CV, marginal likelihood)은 하지 않았습니다. 색은 grid 노드 값 사이를 bilinear 보간한 등고선(14단계)이고, 노드 사이 값은 계산값이 아니라 보간값입니다. 로그 축은 로그 공간에서 보간했고, 바깥 노드 밖으로는 그리지 않았습니다. 동그라미는 실제 base case(300 m, nugget 0.05)입니다. 마름모는 RBF와 GP에 찍은 대략적인 대응점으로, 의미가 정확히 같지는 않고 비교용입니다. GP는 noise = nugget = 0.05, RBF는 λ = nugget/(1 − nugget) ≈ 0.0526(noise 대 signal 비)로 두었습니다. 최적점은 grid 노드 중에서 골랐습니다(MSE 최소, UMG 최대). 색 범위는 패널마다 다르고, 두 면 모두 밝을수록 좋은 쪽입니다. RBF와 GP의 MSE는 로그 색 척도입니다.",
             "grid 크기는 kriging 8×9, SGS 5×5, RBF 8×13, GP 8×11입니다. y축은 kriging과 SGS가 nugget(sill 대비 비율, 선형), RBF가 smoothing λ(로그), GP가 noise variance(정규화 단위의 sill 대비 비율, 로그)입니다. GP는 signal = 1 − noise로 두었습니다(unit sill).",
             "x축 range는 방법마다 같은 규칙으로 맞춘 등가값입니다. kriging과 SGS는 spherical variogram의 range 그대로입니다. RBF는 ε = √(−ln 0.05)/range, GP는 length scale = range/√(−2 ln 0.05)로, Gaussian 커널이 range 거리에서 0.05로 떨어지도록 변환했습니다. 두 covariance 함수가 같다는 뜻은 아닙니다.",
-            "채운 별은 그 면의 최적점, 빈 별은 다른 면의 최적점입니다. kriging과 SGS 패널의 원은 실제 base case 값(300 m, 0.05)입니다.",
-        ]),
-    "P1": dict(
-        stem="P1_range_truth_realization_stats", st=REAL,
-        title="range 축 ground truth realization의 통계와 모델",
-        body=[
-            "range 축(E2) 80셀(range 8개 × ground truth 10개, nugget 0.05). 정답 map은 실험의 생성 함수로 다시 만들었고 저장된 샘플·지표와 같은지 확인했습니다.",
-            "porosity map은 표준정규 시뮬레이션을 평균 15, 분산 9로 정확히 맞춰 변환한 것이라 porosity 단위 분산/sill은 모든 map에서 1입니다. 그래서 A와 B는 변환 전 표준정규 field의 분산(단위 sill 1로 나눔)을 씁니다. C는 porosity map의 실험 variogram(무작위 쌍 200,000개, 25 m 구간)에서 range − 12.5 m 구간 값을 정답 spherical 모델 값으로 나눈 것입니다.",
+            "모든 패널에서 채운 별은 MSE 면의 최적점(MSE 최소), 빈 별은 UMG 면의 최적점(UMG 최대)입니다. kriging과 SGS 패널의 원은 실제 base case 값(300 m, 0.05)입니다.",
         ]),
     "P3": dict(
         stem="P3_density_umg_distribution", st=REAL,
@@ -141,8 +156,8 @@ STORY_END = ("결론: 정확도 기반 모델에 사후로 붙인 불확실성�
              "정확도와 불확실성은 분리해 보고해야 한다.")
 
 TENSION = [
-    ("T1 (확인됨)", "F1 range 축에서 oracle kriging/SGS UMG가 100 → 800 m에서 0.946 → 0.794, 0.954 → 0.808로 내려가고 GP-MLE는 0.953을 유지합니다. "
-           "'kriging/SGS = 정답 기준선'이라는 전제와 부딪혔습니다. P1: range가 길수록 realization 분산이 모델 sill보다 작고(레벨 평균 100 m 1.014 → 800 m 0.675), 셀별 oracle kriging UMG는 이 비와 같이 움직입니다(Spearman ρ 0.73, n = 80).", "P1"),
+    ("T1", "F1 range 축에서 oracle kriging/SGS UMG가 100 → 800 m에서 0.946 → 0.794, 0.954 → 0.808로 내려가고 GP-MLE는 0.953을 유지합니다. "
+           "'kriging/SGS = 정답 기준선'이라는 전제와 부딪힙니다(진단 그림 P1은 2026-11-20 사용자 결정으로 삭제).", "—"),
     ("T2", "F7에서 최적 노드와 2위 노드의 차이(MSE 0.0004~0.034, UMG 0.0006~0.010)가 ground truth 간 표준편차(MSE 1.28~1.33, UMG 0.025~0.029)보다 훨씬 작습니다. "
            "P7: truth 하나씩 봐도 MSE 최적과 UMG 최적은 kriging, SGS, GP 9/10, RBF 10/10에서 다른 노드입니다. 그러나 'MSE 최적은 긴 range, UMG 최적은 짧은 range'라는 방향은 kriging 6/10, SGS 5/10, GP 4/10에서만 성립하므로 F7에서 방향 문장을 뺐습니다.", "P7"),
 ]
@@ -152,7 +167,7 @@ CLAIMS = {
         "MSE: 세 축 모두 4개 방법이 거의 겹칩니다(예: range 300 m에서 kriging 3.89, SGS 3.93, GP-MLE 3.86, RBF+bootstrap 4.17, 레벨 내 표준편차 1.2~1.3). 정확도만으로는 방법을 고를 근거가 없습니다.",
         "UMG: 방법이 뚜렷하게 갈립니다. RBF+bootstrap은 0.37~0.55, 나머지 세 방법은 0.79 이상입니다. 정확도가 같아도 불확실성 품질은 전혀 다를 수 있으므로 둘을 분리해 보고합니다.",
         "range, nugget, 밀도를 하나씩 바꿔도 이 구도는 유지됩니다. ground truth 하나에서만 나온 결과가 아니라는 근거입니다.",
-        "주의(T1): range 축에서 oracle kriging/SGS의 UMG가 긴 range에서 내려갑니다(0.946 → 0.794). → P1: 정답 기준선이 왜 떨어지는가.",
+        "주의(T1): range 축에서 oracle kriging/SGS의 UMG가 긴 range에서 내려갑니다(0.946 → 0.794).",
         "→ F2: RBF+bootstrap의 UMG는 왜 낮은가.",
     ],
     "F2": [
@@ -206,13 +221,6 @@ CLAIMS = {
                 "10개 truth 평균 면에서 MSE 최적은 kriging, SGS 600 m, UMG 최적은 kriging, SGS, GP 106 m입니다. 실제 값(300 m, 0.05)은 kriging MSE 3.887, UMG 0.928입니다.",
         "주의(T2): 최적 노드와 2위 노드의 차이는 ground truth 간 표준편차보다 훨씬 작습니다. → P7: truth마다 따로 봐도 최적점이 갈리는가.",
     ],
-    "P1": [
-        "A: 변환 전 표준정규 field의 분산/모델 sill은 range 100 m에서 평균 1.014, 800 m에서 0.675입니다(최소 0.273, 800 m). range가 영역(1 km)에 가까워질수록 realization 하나가 모델 분산을 다 채우지 못합니다.",
-        "B: 셀별 oracle kriging UMG는 이 분산 비와 같이 움직입니다(Spearman ρ: kriging 0.728, SGS 0.730, n = 80; range 8개 레벨을 합친 값이라 range 효과가 섞여 있고, 레벨별 ρ는 아직 없습니다).",
-        "C: range − 12.5 m 구간의 실험/모델 semivariance는 100 m 0.914에서 800 m 1.220으로 커집니다. C는 분산을 9로 강제한 porosity map 기준이라, 이 증가의 상당 부분은 재스케일에서 생깁니다(A와 기준이 다름, 판단 필요).",
-        "F1에서 oracle kriging/SGS의 UMG가 긴 range에서 떨어지는 것은 정답 모델과 그 realization의 실제 통계가 어긋나는 셀에서 생깁니다(T1). oracle은 앙상블 기준의 정답이지 realization 하나의 정답은 아닙니다.",
-        "→ F2: 이 점을 감안해도 RBF+bootstrap의 UMG(0.37~0.55)는 전혀 다른 범위에 있습니다.",
-    ],
     "P3": [
         "중앙값은 밀도 20 → 1 %에서 GP-MLE 0.982 → 0.915, oracle kriging 0.957 → 0.930, oracle SGS 0.956 → 0.946입니다.",
         "하위 꼬리가 먼저 갈립니다. 1 %에서 10번째 백분위수는 GP-MLE 0.774, kriging 0.777, SGS 0.842이고, 최솟값은 GP-MLE 0.519, kriging 0.614, SGS 0.685입니다.",
@@ -252,7 +260,7 @@ PH = {
 
 SECTIONS = [
     ("문제 제기", "대부분의 정확도 기반 모델은 불확실성을 내장하지 않는다", "⓪. RBF 보간부터 최신 ML 회귀 모델까지 많은 공간 예측 모델은 정확도를 목표로 학습하고 예측 분산을 내놓지 않습니다. 불확실성이 필요하면 bootstrap 같은 사후 방법을 덧붙입니다. 이 논문은 그 가장 단순한 대표로 RBF+bootstrap을 쓰고, 불확실성이 내장된 kriging·SGS(oracle variogram)와 GP-MLE를 비교 대상으로 둡니다. 근거 문헌은 TODO입니다.", []),
-    ("전제", "정확도와 불확실성 품질은 따로 움직인다", "①. 논문 전체의 평가 틀입니다. 이후 모든 그림은 MSE와 UMG를 따로 봅니다.", ["F1", "P1"]),
+    ("전제", "정확도와 불확실성 품질은 따로 움직인다", "①. 논문 전체의 평가 틀입니다. 이후 모든 그림은 MSE와 UMG를 따로 봅니다.", ["F1"]),
     ("결론 1 (핵심)", "정확도 기반 모델에 사후로 붙인 불확실성은 맞지 않고, 정확도로 고른 파라미터는 UQ 최적과 다르다", "② → ③. 원인(예측 분산이 작음, F2) → ground truth를 아는 grid search에서도 MSE 최적과 UMG 최적 노드가 다름(F7, truth별로도 P7).", ["F2", "F7", "P7"]),
     ("결론 2", "GP-MLE는 잘 calibrate되지만, 현장에서 흔한 희소 데이터에서는 최적화된 파라미터가 흔들리고 이는 realization 생성에 치명적일 수 있다", "④ → ⑤ → ⑥. 데이터가 충분하면 잘 맞음(F4, F3) → 희소할수록 파라미터가 흔들림(F3, F3b, F6) → calibration 꼬리와 noise 붕괴(P3, P4) → 흔들린 파라미터로 만든 map(F3c, F3d) → realization 생성의 variogram·분포 재현(P8, P9 placeholder).", ["F4", "F3", "F3b", "F6", "P3", "P4", "F3c", "F3d", "P8", "P9"]),
     ("시사점", "range·nugget은 데이터 적합 objective가 아니라 공간통계로 정해야 한다", "⑦. 이 논문에서 kriging/SGS는 oracle variogram, 즉 range·nugget을 올바르게 정했을 때의 기준입니다(F3, P3에서 희소 조건에서도 UMG 유지). 데이터에서 variogram을 정하는 경우는 논문 끝 OBM 검증으로 다룹니다(보류 중). 이방성(F5)은 보류 상태이므로 F6와 함께 논의로만 다룹니다.", []),
@@ -260,7 +268,6 @@ SECTIONS = [
 
 FLOW = [
     ("전제", "F1", "MSE와 UMG, 3개 축, 4개 방법", REAL),
-    ("전제", "P1", "range별 realization 분산·variogram vs 모델, oracle kriging UMG", REAL),
     ("1", "F2", "Calibration 곡선, 예측 분산", REAL),
     ("1", "F7", "정확도와 UMG 반응면, 4개 방법", REAL),
     ("1", "P7", "truth별 MSE·UMG 최적점", REAL),
@@ -384,7 +391,7 @@ def main():
     h.append('</tbody></table></div></details>')
     h.append('<section><h2>흐름</h2><div class="tablebox"><table><thead><tr><th>단계</th><th>그림</th><th>내용</th><th>상태</th></tr></thead><tbody>')
     for c, f, d, st in FLOW:
-        h.append('<tr><td class="k">%s</td><td class="k"><a href="#%s">%s</a></td><td>%s</td><td>%s</td></tr>' % (c, f.lower(), f, d, chip(st)))
+        h.append('<tr><td class="k">%s</td><td class="k"><a href="#%s">Fig. %d</a></td><td>%s</td><td>%s</td></tr>' % (c, f.lower(), NUM[f], d, chip(st)))
     h.append('</tbody></table></div></section>')
     for tag, claim, lead, keys in SECTIONS:
         h.append('<details class="sec" open><summary><span class="tag">%s</span><span class="claim">%s</span></summary>'
@@ -392,15 +399,15 @@ def main():
         for k in keys:
             if k in PH:
                 p = PH[k]
-                h.append('<article class="fig ph" id="%s"><h3><span class="n">%s</span>%s %s</h3>' % (k.lower(), k, p["title"], chip(PROP)))
+                h.append('<article class="fig ph" id="%s"><h3><span class="n">Fig. %d</span>%s %s</h3>' % (k.lower(), NUM[k], p["title"], chip(PROP)))
                 h.append('<dl class="phd"><dt>논리상 역할</dt><dd>%s</dd><dt>제안 데이터</dt><dd>%s</dd><dt>비용</dt><dd>%s</dd></dl></article>'
                          % (p["why"], p["data"], p["cost"]))
                 continue
             f = FIGS[k]
-            h.append('<article class="fig" id="%s"><h3><span class="n">%s</span>%s %s</h3>' % (k.lower(), k, f["title"], chip(f["st"])))
-            h.append(img(f["stem"], k + " " + f["title"]))
+            h.append('<article class="fig" id="%s"><h3><span class="n">Fig. %d</span>%s %s</h3>' % (k.lower(), NUM[k], f["title"], chip(f["st"])))
+            h.append(img(f["stem"], "Fig. %d %s" % (NUM[k], f["title"])))
             h.append('<ul class="claims">' + "".join('<li%s>%s</li>' % (' class="next"' if c.startswith("→") else "", c) for c in CLAIMS[k]) + '</ul>')
-            h.append('<details class="how"><summary>그림 읽는 법</summary>' + "".join('<p>%s</p>' % p for p in f["body"]) + '</details>')
+            h.append('<details class="how"><summary>그림 읽는 법</summary>' + "".join('<p>%s</p>' % p for p in f["body"]) + '<p>데이터: %s</p>' % status_note(f["stem"]) + '</details>')
             h.append('<div class="file">results/figures/paper_storyboard/%s.pdf</div></article>' % f["stem"])
         h.append('</div></details>')
     h.append('<details class="sec" open><summary><span class="tag">TODO</span><span class="claim">placeholder를 채우는 데 필요한 작업</span></summary>'
@@ -409,7 +416,11 @@ def main():
         h.append('<tr><td class="k">%s</td><td>%s</td><td>%s</td></tr>' % (f, w, cur))
     h.append('</tbody></table></div></div></details>')
     h.append('</div>')
-    OUT.write_text("\n".join(h), encoding="utf-8")
+    html = "\n".join(h)
+    # renumber figure keys in the prose only (not inside base64 image data)
+    parts = re.split(r'(src="data:image/png;base64,[^"]*")', html)
+    html = "".join(x if x.startswith('src="data:') else fnum(x) for x in parts)
+    OUT.write_text(html, encoding="utf-8")
     print(OUT, OUT.stat().st_size)
 
 

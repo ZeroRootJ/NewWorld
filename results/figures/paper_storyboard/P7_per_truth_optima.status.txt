@@ -15,7 +15,7 @@ PANELS:
   C rbf_bootstrap: 10 truths; MSE optimum == UMG optimum (same node) for 0 truths; MSE-optimal range-equivalent > UMG-optimal: 4, equal: 5, smaller: 1. 10-truth-mean optima (optima.csv, not drawn): MSE (300 m, 0.3162), UMG (212 m, 0.0003162). Nodes shared by >= 2 truths (jittered): MSE 1, UMG 4
   D gp: 10 truths; MSE optimum == UMG optimum (same node) for 1 truths; MSE-optimal range-equivalent > UMG-optimal: 4, equal: 2, smaller: 4. 10-truth-mean optima (optima.csv, not drawn): MSE (300 m, 0.1695), UMG (106 m, 0.1695). Nodes shared by >= 2 truths (jittered): MSE 3, UMG 1
 
-DATA STATUS note printed in the figure margin:
+DATA STATUS note (not drawn in the figure; shown as text in the storyboard):
   DATA STATUS: F7 grid (base case: range 300 m, nugget 0.05; 10 ground truths, 1 sample set each, fixed hyperparameters). For each truth ALONE: filled ▼ = node with the lowest MSE, hollow ▲ = node with the highest UMG; small grey dots = all grid nodes. Several truths sharing a node are spread side by side (horizontal jitter only; y exact). Open circle = true base-case point (kriging, SGS). Axes, scales and range-equivalent definition as F7; axis limits extend half a grid step beyond the outer nodes.
 
 DATA LIMITATIONS / FACTS ABOUT THE INPUTS:

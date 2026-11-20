@@ -16,7 +16,7 @@ PANELS:
   E: REAL DATA - UMG vs ground-truth nugget, same statistics as B
   F: REAL DATA - UMG vs sample density, same statistics as C
 
-DATA STATUS note printed in the figure margin:
+DATA STATUS note (not drawn in the figure; shown as text in the storyboard):
   DATA STATUS: Range axis (8 levels) and nugget axis (6 levels): 10 ground-truth realizations × 1 sample set (n = 121 of 125 requested) = 10 cells per level. Density axis: 10 ground-truth realizations × 10 sample sets = 100 cells per level. Points = mean over all cells of a level (no error bars). SGS and RBF+bootstrap ensemble N = 50 (batch 1); kriging and GP-MLE have no ensemble.
 
 DATA LIMITATIONS / FACTS ABOUT THE INPUTS:
